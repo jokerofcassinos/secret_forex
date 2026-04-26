@@ -56,7 +56,7 @@ class AethelgardAGI:
                     df = pd.DataFrame(rates)
                     
                     if not self.regimes_cache:
-                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v64 (Anatômica)...")
+                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
                         for i in range(len(df)):
                             if i < window_calc:
                                 self.regimes_cache.append("0|0")
@@ -67,36 +67,23 @@ class AethelgardAGI:
                             r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                             self.regimes_cache.append(f"{r_score}|{conf}")
                             
-                            # --- LÓGICA v64 (PES - Sniper de Extremidade Histórico) ---
+                            # --- PROTOCOLO SGP v73 (Gênese Inteligente) ---
                             sig = 0
                             if r_score != 0:
-                                curr = slice_df.iloc[-1]
-                                prevs = slice_df.iloc[-5:-1] # Janela de 4 velas anteriores
-                                
                                 is_genesis = (prev_s != r_score)
-                                body = abs(curr['close'] - curr['open'])
-                                l_wick = min(curr['open'], curr['close']) - curr['low']
-                                u_wick = curr['high'] - max(curr['open'], curr['close'])
+                                is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis)
                                 
-                                # Lockout dinâmico
-                                recent = [int(s) for s in self.signals_cache[-6:]]
-                                is_locked = any(s != 0 for s in recent) and not is_genesis
+                                recent = [int(s) for s in self.signals_cache[-15:]]
+                                is_locked = any(s != 0 for s in recent)
 
-                                if not is_locked:
-                                    if r_score == 1: # BULL
-                                        # Gênese ou Rejeição de Fundo (Mínima menor que as 3 anteriores + Pavio)
-                                        if is_genesis or (curr['low'] < prevs['low'].min() and l_wick > body * 0.15):
-                                            sig = 1
-                                    elif r_score == 2: # BEAR
-                                        # Gênese ou Rejeição de Topo
-                                        if is_genesis or (curr['high'] > prevs['high'].max() and u_wick > body * 0.15):
-                                            sig = 2
+                                if is_sovereign and not is_locked:
+                                    sig = r_score
                             
                             self.signals_cache.append(str(sig))
                             prev_s, prev_c = r_score, conf
                             
                         self.last_time = df.iloc[-1]['time']
-                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v64 Concluído.")
+                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v73 Concluído.")
                     
                     else:
                         new_rates = df[df['time'] > self.last_time]
@@ -106,34 +93,33 @@ class AethelgardAGI:
                                 r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                                 self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score}|{conf}")
                                 
-                                # --- LÓGICA v64 (PES - Sniper de Extremidade Live) ---
+                                # --- PROTOCOLO SGP v73 (Live Execution) ---
                                 sig = 0
                                 if r_score != 0:
-                                    curr = slice_df.iloc[-1]
-                                    prevs = slice_df.iloc[-5:-1]
                                     is_genesis = (prev_s != r_score)
+                                    is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis)
                                     
-                                    body = abs(curr['close'] - curr['open'])
-                                    l_wick = min(curr['open'], curr['close']) - curr['low']
-                                    u_wick = curr['high'] - max(curr['open'], curr['close'])
+                                    is_mature = (conf > 50)
+                                    recent_window = 10 if is_genesis else (15 if is_mature else 30)
                                     
-                                    recent = [int(s) for s in self.signals_cache[-8:]]
-                                    is_locked = any(s != 0 for s in recent) and not is_genesis
+                                    recent = [int(s) for s in self.signals_cache[-recent_window:]]
+                                    is_locked = any(s != 0 for s in recent)
                                     
-                                    if not is_locked:
-                                        if r_score == 1: # BULL
-                                            if is_genesis or (curr['low'] < prevs['low'].min() and l_wick > body * 0.1):
-                                                sig = 1
-                                        elif r_score == 2: # BEAR
-                                            if is_genesis or (curr['high'] > prevs['high'].max() and u_wick > body * 0.1):
-                                                sig = 2
+                                    if is_sovereign and not is_locked:
+                                        sig = r_score
+
+
 
                                 self.signals_cache.pop(0); self.signals_cache.append(str(sig))
                                 prev_s, prev_c = r_score, conf
                                 self.last_time = df.loc[idx, 'time']
-                                if sig != 0: print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] !!! PES ATAQUE: EXTREMO CAPTURADO [{sig}] !!!")
+                                if sig != 0: 
+                                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] !!! ARS SINGULARIDADE CAPTURADA: [{sig}] !!!")
+                                    print(f" > Alvo: External Range Liquidity (Top/Bottom Major).")
 
-                    nexus_data_str = f"0;0;v64_PURE_PES;{self.signals_cache[-1]};{','.join(self.regimes_cache)};0.00;1.0;{','.join(self.signals_cache)}"
+                    nexus_data_str = f"0;0;v66_ARS;{self.signals_cache[-1]};{','.join(self.regimes_cache)};0.00;1.0;{','.join(self.signals_cache)}"
+
+
 
                 time.sleep(1)
         except Exception as e:

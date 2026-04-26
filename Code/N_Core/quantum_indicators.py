@@ -125,15 +125,25 @@ class QuantumIndicators:
         bearish_engulfing = is_red and (prev['close'] > prev['open']) and (curr['open'] >= prev['close']) and (curr['close'] < prev['open'])
         bullish_engulfing = is_green and (prev['close'] < prev['open']) and (curr['open'] <= prev['close']) and (curr['close'] > prev['open'])
         
-        # 5. Gatilhos Atômicos (TQFM v58: Sincronia Fractal)
+        # 5. Gatilhos Atômicos (TQFM v66: Singularidade de Fluxo)
         recent_max = df_slice['high'].iloc[-3:-1].max()
         recent_min = df_slice['low'].iloc[-3:-1].min()
         
-        is_abs_top = (recent_max >= abs_high_60 - (atr * 0.1))
-        is_abs_bottom = (recent_min <= abs_low_60 + (atr * 0.1))
+        # Extremos de Longo Prazo e Locais
+        abs_high_120 = df_slice['high'].iloc[-121:-1].max()
+        abs_low_120 = df_slice['low'].iloc[-121:-1].min()
+        local_high_20 = df_slice['high'].iloc[-21:-1].max()
+        local_low_20 = df_slice['low'].iloc[-21:-1].min()
+        
+        is_abs_top = (curr['high'] >= abs_high_120 - (atr * 0.05))
+        is_abs_bottom = (curr['low'] <= abs_low_120 + (atr * 0.05))
         is_local_top = (recent_max >= local_high_20 - (atr * 0.1))
         is_local_bottom = (recent_min <= local_low_20 + (atr * 0.1))
         
+        # SINGULARIDADE ATÔMICA (ARS): Reversão Imediata em Extremos
+        is_atomic_rebound_bull = is_abs_bottom and is_green and (is_atomic or is_strong)
+        is_atomic_rebound_bear = is_abs_top and is_red and (is_atomic or is_strong)
+
         is_bull_ignition = (curr['close'] > high_10) and is_atomic and bull_momentum
         is_bear_ignition = (curr['close'] < low_10) and is_atomic and bear_momentum
 
@@ -156,62 +166,62 @@ class QuantumIndicators:
         is_macro_bull = (ema_fast > ema_macro)
         is_macro_bear = (ema_fast < ema_macro)
 
-        # Gatilhos de INÍCIO
-        can_start_bull = (is_abs_bottom and dist_macro > atr * 1.2) or (is_local_bottom and is_macro_bull) or (is_bull_ignition and is_macro_bull) or is_momentum_explosion_bull
-        start_atomic_bottom = can_start_bull and (not is_overextended) and (is_green and (is_atomic or is_strong) or is_exhaustion_bottom)
+        # Gatilhos de INÍCIO (v74: Rigor Atômico)
+        can_start_bull = is_atomic_rebound_bull or (is_abs_bottom and dist_macro > atr * 1.5) or (is_bull_ignition and is_macro_bull) or is_momentum_explosion_bull
+        start_atomic_bottom = can_start_bull and (not is_overextended) and (is_green and is_atomic or is_exhaustion_bottom)
         
-        can_start_bear = is_abs_top or (is_local_top and is_macro_bear) or (is_bear_ignition and is_macro_bear) or is_momentum_explosion_bear
-        start_atomic_top = can_start_bear and (is_red and (is_atomic or is_strong) or is_exhaustion_top)
+        can_start_bear = is_atomic_rebound_bear or (is_abs_top and dist_macro > atr * 1.5) or (is_bear_ignition and is_macro_bear) or is_momentum_explosion_bear
+        start_atomic_top = can_start_bear and (is_red and is_atomic or is_exhaustion_top)
 
         # Gatilhos de FLIP (Inversão Direta)
-        flip_to_bear = (is_red and is_super_atomic) or (curr['close'] < swing_low_30 and is_red and is_atomic)
-        flip_to_bull = (is_green and is_super_atomic) or (curr['close'] > swing_high_30 and is_green and is_atomic)
+        flip_to_bear = (is_red and is_super_atomic and bear_momentum) or (curr['close'] < swing_low_30 and is_red and is_atomic)
+        flip_to_bull = (is_green and is_super_atomic and bull_momentum) or (curr['close'] > swing_high_30 and is_green and is_atomic)
 
-        # --- MÁQUINA DE ESTADO TQFM v58 (SINCRONIA FRACTAL) ---
+        # --- MÁQUINA DE ESTADO TQFM v74 (BLINDAGEM DE FLUXO) ---
         
         # ESTADO BULL (1)
         if prev_score == 1:
             if flip_to_bear: return 2, 100
-            if is_red and is_super_atomic: return 0, -2
+            if is_red and is_super_atomic and bear_momentum: return 0, -10
             
-            # Se o pivô de 30 velas estiver intacto, mantém BULL
             if curr['close'] >= swing_low_30:
-                return 1, min(prev_conf + 1, 150)
+                return 1, min(prev_conf + 1, 250)
             
-            if (curr['close'] < ema_trend) and (not bull_momentum) and (prev_conf > 30):
-                return 0, -2
+            if (curr['close'] < ema_trend) and (not bull_momentum) and (prev_conf > 40):
+                return 0, -10
             
-            return 1, min(prev_conf + 1, 150)
+            return 1, min(prev_conf + 1, 250)
             
         # ESTADO BEAR (2)
         if prev_score == 2:
             if flip_to_bull: return 1, 100
-            if is_green and is_super_atomic: return 0, -2
+            if is_green and is_super_atomic and bull_momentum: return 0, -10
             
             if curr['close'] <= swing_high_30:
-                return 2, min(prev_conf + 1, 150)
+                return 2, min(prev_conf + 1, 250)
                 
-            if (curr['close'] > ema_trend) and (not bear_momentum) and (prev_conf > 30):
-                return 0, -2
+            if (curr['close'] > ema_trend) and (not bear_momentum) and (prev_conf > 40):
+                return 0, -10
             
-            return 2, min(prev_conf + 1, 150)
+            return 2, min(prev_conf + 1, 250)
 
         # --- ESTADO NEUTRO (0) ---
         if prev_conf < 0: return 0, prev_conf + 1
             
-        if start_atomic_top: return 2, 100
-        if start_atomic_bottom: return 1, 100
+        # Saída do Neutro: Exige Ignição Atômica REAL e Momentum Alinhado
+        if start_atomic_top and bear_momentum: return 2, 20
+        if start_atomic_bottom and bull_momentum: return 1, 20
         
-        # Saída do Neutro: Ignição Simples
-        high_5 = df_slice['high'].iloc[-6:-1].max()
-        low_5 = df_slice['low'].iloc[-6:-1].min()
-        
-        if is_green and is_strong and (curr['close'] > high_5) and bull_momentum: 
-            return 1, 100
-        if is_red and is_strong and (curr['close'] < low_5) and bear_momentum: 
-            return 2, 100
+        if is_green and is_atomic and (curr['close'] > high_10) and is_macro_bull and bull_momentum: 
+            return 1, 20
+        if is_red and is_atomic and (curr['close'] < low_10) and is_macro_bear and bear_momentum: 
+            return 2, 20
 
         return 0, 0
+
+
+
+
 
     @staticmethod
     def calculate_rsi(prices, window=14):

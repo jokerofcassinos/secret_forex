@@ -23,12 +23,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GEMINI.md",
+                "file": "MAPA_NEURAL.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "GEMINI"
+              "title": "MAPA_NEURAL"
             }
           }
         ],
@@ -210,6 +210,16 @@
   },
   "active": "d6aea751eee23f11",
   "lastOpenFiles": [
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V48_SOVEREIGN_FLOW.md",
+    "Code/N_Core/__pycache__/nexus_server.cpython-313.pyc",
+    "Code/N_Core/nexus_server.py",
+    "Code/N_Core/backtest_visualizer.py",
+    "Code/CPP_Engine/bin/quantum_fluid_risk.a",
+    "Code/CPP_Engine/bin/quantum_fluid_risk.dll",
+    "Code/CPP_Engine/quantum_fluid_risk.cpp",
+    "Docs/05_Estrutura_Corporativa/Setores/R_EXEC/ESTRUTURA_DETALHADA.md",
+    "MAPA_NEURAL.md",
+    "GEMINI.md",
     "Docs/Atas_Reuniao/ATA_20260426_TQFM_V52_RCD.md",
     "Docs/Atas_Reuniao/ATA_20260426_TQFM_V47_DELPHI.md",
     "Code/N_Core/__pycache__/quantum_oracle.cpython-313.pyc",
@@ -235,16 +245,6 @@
     "Docs/Atas_Reuniao/ATA_20260426_TQFM_V43_MATRIZ_FLUXO.md",
     "Docs/Atas_Reuniao/ATA_20260426_TQFM_V42_SOBERANIA_SUPREMA.md",
     "Docs/Atas_Reuniao/ATA_20260426_TQFM_V20_MURALHA_TITANIO.md",
-    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V40_VORTICE_ABSOLUTO.md",
-    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V39_SINCRONIA_TOTAL.md",
-    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V38_TSUNAMI_PERSISTENTE.md",
-    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V37_FILTRO_INERCIA.md",
-    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V36_SOBERANIA_DINAMICA.md",
-    "Code/N_Core/__pycache__/swarm_agents_v2.cpython-313.pyc",
-    "Code/N_Core/swarm_agents_v2.py",
-    "Code/N_Core/__pycache__/swarm_agents.cpython-313.pyc",
-    "Code/N_Core/swarm_agents.py",
-    "Code/N_Core/__pycache__/fotismenoi_agent.cpython-313.pyc",
-    "Code/N_Core/fotismenoi_agent.py"
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V40_VORTICE_ABSOLUTO.md"
   ]
 }
