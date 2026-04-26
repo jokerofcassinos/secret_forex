@@ -1,0 +1,242 @@
+{
+  "main": {
+    "id": "921b3ef3a9927bb4",
+    "type": "split",
+    "children": [
+      {
+        "id": "b7951af786f03198",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b8fff723e227ae5c",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "Nova aba"
+            }
+          },
+          {
+            "id": "d6aea751eee23f11",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "061a426ec5d66c4d",
+    "type": "split",
+    "children": [
+      {
+        "id": "6e729d344a72f150",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "71148ddd99f8649e",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "ef4acb671e1ad212",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "d2bf586d4e35e58d",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "d6b340ca48fd097a",
+    "type": "split",
+    "children": [
+      {
+        "id": "e523869d293f8eb0",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "65da90d8e7b68934",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos"
+            }
+          },
+          {
+            "id": "3fb4824ab8fe8620",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída"
+            }
+          },
+          {
+            "id": "285a3628485c695f",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "0ccb9efc1ed8f06f",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "9741e738ae442c5f",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário"
+            }
+          },
+          {
+            "id": "b6a725f05dea6757",
+            "type": "leaf",
+            "state": {
+              "type": "calendar",
+              "state": {},
+              "icon": "calendar-with-checkmark",
+              "title": "Calendar"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 454
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false,
+      "terminal:Open terminal": false,
+      "templater-obsidian:Templater": false,
+      "obsidian-git:Open Git source control": false,
+      "obsidian-kanban:Create new board": false
+    }
+  },
+  "active": "65da90d8e7b68934",
+  "lastOpenFiles": [
+    "Data/nexus_bridge.txt",
+    "Code/MQL5/Nexus_Observer.mq5",
+    "Data/Historical/BTCUSD_D1.parquet",
+    "Code/N_Core/__pycache__/quantum_indicators.cpython-313.pyc",
+    "Code/N_Core/quantum_indicators.py",
+    "Docs/Atas_Reuniao/ATA_20260425_SINCRONIZACAO_SUCESSO.md",
+    "Docs/04_Perfis_Neurais/STATE_BTCUSD.md",
+    "Data/Historical/BTCUSD_H4.parquet",
+    "Data/Historical/BTCUSD_H1.parquet",
+    "Data/Historical/BTCUSD_M30.parquet",
+    "Data/Historical/BTCUSD_M15.parquet",
+    "Data/Historical/BTCUSD_M5.parquet",
+    "Data/Historical/BTCUSD_M1.parquet",
+    "Docs/02_Logica_e_Estrategia/DIMENSOES_TEMPORAIS.md",
+    "Docs/01_Planejamento_Executivo/BLUEPRINT_AETHELGARD.md",
+    "Docs/Atas_Reuniao/ATA_20260425_DEFINICAO_LOGICA.md",
+    "Docs/05_Estrutura_Corporativa/RULES_NEXUS_AGI.md",
+    "Docs/02_Logica_e_Estrategia/CONCEITO_FRACTAL_SRF.md",
+    "Docs/Atas_Reuniao/ATA_014_Estabilizacao_Regimes.md",
+    "Docs/Atas_Reuniao/ATA_013_Terminal_Visual_Quantum.md",
+    "Docs/Atas_Reuniao/ATA_012_Simulacao_Backtest.md",
+    "Docs/Atas_Reuniao/ATA_008_Alpha_Learner_Ativacao.md",
+    "Docs/Atas_Reuniao/ATA_011_Ativacao_Motor_CPP.md",
+    "Docs/Atas_Reuniao/ATA_010_Motor_CPP_Fundacao.md",
+    "Docs/Atas_Reuniao/ATA_009_Deploy_Quantum_Engine.md",
+    "Docs/05_Estrutura_Corporativa/Equipes/Synapse_Quantum/MANIFESTO_EQUIPE.md",
+    "Docs/05_Estrutura_Corporativa/Contratos/N_CORE/CONTRATO_AG_N_GEOM_001.md",
+    "Docs/05_Estrutura_Corporativa/Contratos/N_CORE/CONTRATO_AG_N_ENTROPY_001.md",
+    "Docs/02_Logica_e_Estrategia/RELATORIO_PHD_ALPHA_LEARNER_001.md",
+    "Docs/Atas_Reuniao/ATA_007_Relatorio_Estresse.md",
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RELATORIO_RD_ARQUITETURA_ALTA_FREQUENCIA.md",
+    "Docs/Atas_Reuniao/ATA_006_Deploy_Sinaptico.md",
+    "Docs/02_Logica_e_Estrategia/RELATORIO_MATRIZ_SINAPTICA.md",
+    "Docs/05_Estrutura_Corporativa/Setores/R_EXEC/ESTRUTURA_DETALHADA.md",
+    "Docs/Atas_Reuniao/ATA_005_Matriz_Multidimensional.md",
+    "Docs/Atas_Reuniao/ATA_004_Swarm_Contratacao.md"
+  ]
+}
