@@ -100,58 +100,63 @@ class MSNRAlchemist:
 
     def validate_sovereign_signal(self, df, regime, is_genesis=False):
         """
-        Valida se o sinal é SOBERANO (SRF v85).
-        Protocolo de Ressonância Estrutural: Foco em Sweeps Locais e Expansão.
+        Valida se o sinal é SOBERANO (PSA v90).
+        Master Operability Lock: Sniper apenas em Mercados com Amplitude.
         """
-        dr = self.calculate_dealing_range(df)
+        # 1. Parâmetros de Contexto (2 horas)
+        high_120 = df['high'].iloc[-120:].max()
+        low_120 = df['low'].iloc[-120:].min()
+        total_range = high_120 - low_120
+        
         curr = df.iloc[-1]
         curr_price = curr['close']
-        
-        # 1. Parâmetros de Volatilidade e Força
-        high_low = df['high'] - df['low']
-        atr = high_low.rolling(14).mean().iloc[-1]
+        atr = (df['high'] - df['low']).rolling(14).mean().iloc[-1]
         body = abs(curr['close'] - curr['open'])
         
-        # Força v85 (Adaptada para M1)
-        is_blast = body > (atr * 1.2)
+        # 2. MASTER OPERABILITY LOCK (MOL)
+        # Se o mercado está lateralizado (range < 8x ATR), o RR é lixo. Hibernação.
+        is_market_alive = total_range >= (atr * 8.0)
+        
+        # Níveis de Força
+        is_god_blast = body > (atr * 2.2) # Quebra de Hibernação
+        is_blast = body > (atr * 1.3)
         is_atomic = body > (atr * 1.0)
 
-        # 2. GATILHOS DE LIQUIDEZ LOCAL (Micro-Sweeps 20 candles)
-        # Captura pivôs de tendência que não são recordes de 2h
-        local_high = df['high'].iloc[-20:-1].max()
-        local_low = df['low'].iloc[-20:-1].min()
-        
-        is_local_sweep_top = curr['high'] >= local_high and curr['close'] < local_high
-        is_local_sweep_bottom = curr['low'] <= local_low and curr['close'] > local_low
+        # 3. SINGULARIDADES
+        is_absolute_ext = curr['low'] <= low_120 + (atr * 0.1) or curr['high'] >= high_120 - (atr * 0.1)
 
-        # 3. PROTOCOLO SRF v85 (Gênese Sniper)
+        # 4. PROTOCOLO PSA v90 (Soberania de Contexto)
         if is_genesis:
-            # PRIORIDADE 1: BLAST INSTITUCIONAL (Captura o Início dos Gigantes)
+            # Caso A: God Blast (Sempre válido - rompe a hibernação)
+            if is_god_blast: return True
+            
+            # Se o mercado estiver 'Morto', bloqueia tudo o resto
+            if not is_market_alive: return False
+            
+            # PRIORIDADE 1: EXTREMO ABSOLUTO (Fundo/Topo Real em Mercado Ativo)
+            if is_absolute_ext: return True
+            
+            # PRIORIDADE 2: BLAST INSTITUCIONAL (Captura o início dos Gigantes)
             if is_blast: return True
-            
-            # PRIORIDADE 2: MICRO-SWEEP (Captura o 'Bear Giant' em topo descendente)
-            if regime == 1 and is_local_sweep_bottom: return True
-            if regime == 2 and is_local_sweep_top: return True
-            
-            # CASO C: GÊNESE COMUM -> EXIGE EXTREMO DE VALOR (Proteção contra Ruído)
-            if regime == 1 and curr_price < (dr['low'] + (dr['high'] - dr['low']) * 0.2): return True
-            if regime == 2 and curr_price > (dr['high'] - (dr['high'] - dr['low']) * 0.2): return True
             
             return False
 
-        # 4. FILTRO DE QUARENTENA (Para Re-entradas)
-        box_size = dr['high'] - dr['low']
-        # Só permite re-entrada em boxes com amplitude real (> 3.5x ATR)
-        if box_size < (atr * 3.5): return False
+        # 5. FILTRO DE MAGNITUDE PARA RE-ENTRADAS
+        # Só permite novas ordens se o box já provou ser um monstro de magnitude.
+        if total_range < (atr * 5.0): return False
 
-        # 5. LÓGICA DE RE-ENTRADA (Apenas em Zonas de Valor Profundo)
+        # 6. LÓGICA DE RE-ENTRADA (Extremos de Boxes Maduros)
         if regime == 1: # BULL
-            if curr_price < (dr['low'] + box_size * 0.25) and is_atomic: return True
-            
+            if curr_price < (low_120 + total_range * 0.2) and is_atomic: return True
         if regime == 2: # BEAR
-            if curr_price > (dr['high'] - box_size * 0.25) and is_atomic: return True
+            if curr_price > (high_120 - total_range * 0.2) and is_atomic: return True
             
         return False
+
+
+
+
+
 
 
 
