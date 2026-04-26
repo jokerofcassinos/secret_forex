@@ -6,6 +6,8 @@ Este documento atua como o diretório mestre de conexões neurais. No Obsidian, 
 - [[GEMINI.md|NEXUS (CEO)]]
 
 ## SETORES E LÍDERES (AGENTS)
+- [[Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_Q_ORACLE_001|Setor Oráculo - Agente: Q-Oracle (Monte Carlo)]]
+- [[Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_N_ALCHEMIST_001|Setor Alquimia - Agente: MSNR-Alchemist]]
 - [[Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_Q_NAVSTOKES_001|Setor Termodinâmica - Agente: Navier-Stokes Solver 001]]
 - [[Docs/05_Estrutura_Corporativa/Setores/SETOR_IA_REINFORCEMENT|Setor N-Core - Agente: RL-Master-Alpha]]
 - [[Docs/05_Estrutura_Corporativa/Setores/SETOR_MT5_BRIDGE|Setor R-Exec - Agente: Bridge-Protocol-Zero]]

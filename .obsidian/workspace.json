@@ -21,10 +21,14 @@
             "id": "d6aea751eee23f11",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Visualização em gráfico"
+              "type": "markdown",
+              "state": {
+                "file": "GEMINI.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "GEMINI"
             }
           }
         ],
@@ -101,6 +105,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "GEMINI.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -110,7 +115,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Links inversos"
+              "title": "Links inversos para GEMINI"
             }
           },
           {
@@ -119,11 +124,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "Docs/Atas_Reuniao/ATA_20260425_DEFINICAO_LOGICA.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Links de saída"
+              "title": "Links de saída para ATA_20260425_DEFINICAO_LOGICA"
             }
           },
           {
@@ -161,12 +167,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "Docs/Atas_Reuniao/ATA_20260425_DEFINICAO_LOGICA.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Sumário"
+              "title": "Sumário de ATA_20260425_DEFINICAO_LOGICA"
             }
           },
           {
@@ -183,7 +190,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 454
+    "width": 454,
+    "collapsed": true
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -200,43 +208,43 @@
       "obsidian-kanban:Create new board": false
     }
   },
-  "active": "65da90d8e7b68934",
+  "active": "d6aea751eee23f11",
   "lastOpenFiles": [
-    "Data/nexus_bridge.txt",
-    "Code/MQL5/Nexus_Observer.mq5",
-    "Data/Historical/BTCUSD_D1.parquet",
-    "Code/N_Core/__pycache__/quantum_indicators.cpython-313.pyc",
-    "Code/N_Core/quantum_indicators.py",
-    "Docs/Atas_Reuniao/ATA_20260425_SINCRONIZACAO_SUCESSO.md",
-    "Docs/04_Perfis_Neurais/STATE_BTCUSD.md",
-    "Data/Historical/BTCUSD_H4.parquet",
-    "Data/Historical/BTCUSD_H1.parquet",
-    "Data/Historical/BTCUSD_M30.parquet",
-    "Data/Historical/BTCUSD_M15.parquet",
-    "Data/Historical/BTCUSD_M5.parquet",
-    "Data/Historical/BTCUSD_M1.parquet",
-    "Docs/02_Logica_e_Estrategia/DIMENSOES_TEMPORAIS.md",
-    "Docs/01_Planejamento_Executivo/BLUEPRINT_AETHELGARD.md",
-    "Docs/Atas_Reuniao/ATA_20260425_DEFINICAO_LOGICA.md",
-    "Docs/05_Estrutura_Corporativa/RULES_NEXUS_AGI.md",
-    "Docs/02_Logica_e_Estrategia/CONCEITO_FRACTAL_SRF.md",
-    "Docs/Atas_Reuniao/ATA_014_Estabilizacao_Regimes.md",
-    "Docs/Atas_Reuniao/ATA_013_Terminal_Visual_Quantum.md",
-    "Docs/Atas_Reuniao/ATA_012_Simulacao_Backtest.md",
-    "Docs/Atas_Reuniao/ATA_008_Alpha_Learner_Ativacao.md",
-    "Docs/Atas_Reuniao/ATA_011_Ativacao_Motor_CPP.md",
-    "Docs/Atas_Reuniao/ATA_010_Motor_CPP_Fundacao.md",
-    "Docs/Atas_Reuniao/ATA_009_Deploy_Quantum_Engine.md",
-    "Docs/05_Estrutura_Corporativa/Equipes/Synapse_Quantum/MANIFESTO_EQUIPE.md",
-    "Docs/05_Estrutura_Corporativa/Contratos/N_CORE/CONTRATO_AG_N_GEOM_001.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V52_RCD.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V47_DELPHI.md",
+    "Code/N_Core/__pycache__/quantum_oracle.cpython-313.pyc",
+    "Code/N_Core/__pycache__/msnr_alchemist.cpython-313.pyc",
+    "Code/N_Core/quantum_oracle.py",
+    "Code/N_Core/msnr_alchemist.py",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V46_AERL.md",
+    "Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_Q_ORACLE_001.md",
     "Docs/05_Estrutura_Corporativa/Contratos/N_CORE/CONTRATO_AG_N_ENTROPY_001.md",
-    "Docs/02_Logica_e_Estrategia/RELATORIO_PHD_ALPHA_LEARNER_001.md",
-    "Docs/Atas_Reuniao/ATA_007_Relatorio_Estresse.md",
-    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RELATORIO_RD_ARQUITETURA_ALTA_FREQUENCIA.md",
-    "Docs/Atas_Reuniao/ATA_006_Deploy_Sinaptico.md",
-    "Docs/02_Logica_e_Estrategia/RELATORIO_MATRIZ_SINAPTICA.md",
-    "Docs/05_Estrutura_Corporativa/Setores/R_EXEC/ESTRUTURA_DETALHADA.md",
-    "Docs/Atas_Reuniao/ATA_005_Matriz_Multidimensional.md",
-    "Docs/Atas_Reuniao/ATA_004_Swarm_Contratacao.md"
+    "Docs/05_Estrutura_Corporativa/Contratos/N_CORE/CONTRATO_AG_N_GEOM_001.md",
+    "Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_R_GATE_001.md",
+    "Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_Q_NAVSTOKES_001.md",
+    "Docs/05_Estrutura_Corporativa/Contratos/CONTRATO_AG_FOTIS_001.md",
+    "Docs/05_Estrutura_Corporativa/Setores/N_CORE/ESTRUTURA_DETALHADA.md",
+    "Docs/05_Estrutura_Corporativa/DIRETORIO_FUNCIONARIOS.md",
+    "Docs/05_Estrutura_Corporativa/MANIFESTO_CORPORATIVO.md",
+    "Docs/04_Perfis_Neurais/STATE_BTCUSD.md",
+    "Docs/Atas_Reuniao/ATA_20260425_CONCLUSAO_VISAO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V45_CHOQUE_REVERSAO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V26_BUSSOLA_ABSOLUTA.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V41_ESCUDO_REFRATARIO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V44_GEOMETRIA_FLUXO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V43_MATRIZ_FLUXO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V42_SOBERANIA_SUPREMA.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V20_MURALHA_TITANIO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V40_VORTICE_ABSOLUTO.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V39_SINCRONIA_TOTAL.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V38_TSUNAMI_PERSISTENTE.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V37_FILTRO_INERCIA.md",
+    "Docs/Atas_Reuniao/ATA_20260426_TQFM_V36_SOBERANIA_DINAMICA.md",
+    "Code/N_Core/__pycache__/swarm_agents_v2.cpython-313.pyc",
+    "Code/N_Core/swarm_agents_v2.py",
+    "Code/N_Core/__pycache__/swarm_agents.cpython-313.pyc",
+    "Code/N_Core/swarm_agents.py",
+    "Code/N_Core/__pycache__/fotismenoi_agent.cpython-313.pyc",
+    "Code/N_Core/fotismenoi_agent.py"
   ]
 }

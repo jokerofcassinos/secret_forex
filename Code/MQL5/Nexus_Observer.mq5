@@ -3,7 +3,7 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "11.00"
+#property version   "14.00"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -20,9 +20,7 @@ void UpdateDashboard()
    int res;
    
    res = WebRequest("GET", url, cookie, NULL, 50, post, 0, result, headers);
-   
-   if(res == 200)
-   {
+   if(res == 200) {
       string response = CharArrayToString(result);
       ParseAndDraw(response);
    }
@@ -32,92 +30,82 @@ void ParseAndDraw(string data)
 {
    string parts[];
    StringSplit(data, ';', parts);
-   
-   if(ArraySize(parts) < 5) return;
+   if(ArraySize(parts) < 8) return;
 
-   string historyStr = parts[4];
-   string historyParts[];
-   StringSplit(historyStr, ',', historyParts);
-   int total = ArraySize(historyParts);
+   string historyZonas = parts[4];
+   string historySignals = parts[7];
    
+   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V14", 10, 20, clrCyan, 12);
+
+   // 1. DESENHO DAS ZONAS (Sem esconder as curtas para explicar as setas)
+   string histZ[]; StringSplit(historyZonas, ',', histZ);
+   int totalZ = ArraySize(histZ);
    ObjectsDeleteAll(0, "NEXUS_ZONE_");
    ObjectsDeleteAll(0, "NEXUS_TXT_");
-
-   int i = 0;
-   int boxCount = 0;
    
-   while(i < total && i < iBars(_Symbol, _Period))
-   {
-      string scoreStr = historyParts[total - 1 - i];
-      string subParts[];
-      StringSplit(scoreStr, '|', subParts);
-      int regimeVal = (int)StringToInteger(subParts[0]);
+   int i = 0; int boxCount = 0;
+   while(i < totalZ && i < iBars(_Symbol, _Period)) {
+      string scoreStr = histZ[totalZ - 1 - i];
+      string subP[]; StringSplit(scoreStr, '|', subP);
+      int regimeVal = (int)StringToInteger(subP[0]);
       
-      if(regimeVal != 0)
-      {
-         int startIdx = i;
-         int endIdx = i;
-         
-         while(endIdx + 1 < total && endIdx + 1 < iBars(_Symbol, _Period))
-         {
-            string nextScoreStr = historyParts[total - 1 - (endIdx + 1)];
-            string nextSubParts[];
-            StringSplit(nextScoreStr, '|', nextSubParts);
-            if((int)StringToInteger(nextSubParts[0]) == regimeVal)
-               endIdx++;
-            else
-               break;
+      if(regimeVal != 0) {
+         int startIdx = i; int endIdx = i;
+         while(endIdx + 1 < totalZ && endIdx + 1 < iBars(_Symbol, _Period)) {
+            string nextS = histZ[totalZ - 1 - (endIdx + 1)];
+            string nSub[]; StringSplit(nextS, '|', nSub);
+            if((int)StringToInteger(nSub[0]) == regimeVal) endIdx++; else break;
          }
          
-         // FILTRO MASTER: Mínimo 10 candles para ser uma zona institucional
-         int duration = endIdx - startIdx;
-         if(duration >= 10)
-         {
-            string boxName = "NEXUS_ZONE_" + IntegerToString(boxCount);
-            string txtNameStart = "NEXUS_TXT_S_" + IntegerToString(boxCount);
-            string txtNameEnd = "NEXUS_TXT_E_" + IntegerToString(boxCount);
-            
-            datetime timeStart = iTime(_Symbol, _Period, startIdx);
-            datetime timeEnd = iTime(_Symbol, _Period, endIdx);
-            
-            double highPrice = 0, lowPrice = 9999999;
-            for(int k=startIdx; k<=endIdx; k++) {
-               highPrice = MathMax(highPrice, iHigh(_Symbol, _Period, k));
-               lowPrice = MathMin(lowPrice, iLow(_Symbol, _Period, k));
-            }
-
-            color zoneColor = (regimeVal == 1) ? clrLime : clrRed;
-
-            // Criar Moldura Principal
-            ObjectCreate(0, boxName, OBJ_RECTANGLE, 0, timeStart, highPrice, timeEnd, lowPrice);
-            ObjectSetInteger(0, boxName, OBJPROP_COLOR, zoneColor);
-            ObjectSetInteger(0, boxName, OBJPROP_WIDTH, 2);
-            ObjectSetInteger(0, boxName, OBJPROP_FILL, false);
-            ObjectSetInteger(0, boxName, OBJPROP_BACK, false);
-
-            // Label de Início
-            ObjectCreate(0, txtNameStart, OBJ_TEXT, 0, timeStart, highPrice);
-            string labelS = (regimeVal == 1) ? ">> BULL DOMAIN" : ">> BEAR DOMAIN";
-            ObjectSetString(0, txtNameStart, OBJPROP_TEXT, labelS);
-            ObjectSetInteger(0, txtNameStart, OBJPROP_COLOR, zoneColor);
-            ObjectSetInteger(0, txtNameStart, OBJPROP_FONTSIZE, 9);
-            ObjectSetInteger(0, txtNameStart, OBJPROP_ANCHOR, ANCHOR_LEFT_LOWER);
-
-            // Label de Fim (Duração)
-            ObjectCreate(0, txtNameEnd, OBJ_TEXT, 0, timeEnd, lowPrice);
-            ObjectSetString(0, txtNameEnd, OBJPROP_TEXT, "DUR: " + IntegerToString(duration) + "c");
-            ObjectSetInteger(0, txtNameEnd, OBJPROP_COLOR, clrGray);
-            ObjectSetInteger(0, txtNameEnd, OBJPROP_FONTSIZE, 7);
-            ObjectSetInteger(0, txtNameEnd, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
-
-            boxCount++;
+         // REMOVIDA A TRAVA DE TAMANHO MÍNIMO (Para que a seta nunca fique 'órfã')
+         string bName = "NEXUS_ZONE_" + IntegerToString(boxCount);
+         datetime tS = iTime(_Symbol, _Period, startIdx);
+         datetime tE = iTime(_Symbol, _Period, endIdx);
+         double hP = 0, lP = 9999999;
+         for(int k=startIdx; k<=endIdx; k++) { hP = MathMax(hP, iHigh(_Symbol, _Period, k)); lP = MathMin(lP, iLow(_Symbol, _Period, k)); }
+         
+         color zClr = (regimeVal == 1) ? clrLime : clrRed;
+         
+         // Zonas fracas (menores que 5 candles) terão borda fina, zonas fortes borda grossa
+         int zWidth = ((endIdx - startIdx) < 5) ? 1 : 2;
+         
+         ObjectCreate(0, bName, OBJ_RECTANGLE, 0, tS, hP, tE, lP);
+         ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
+         ObjectSetInteger(0, bName, OBJPROP_WIDTH, zWidth);
+         ObjectSetInteger(0, bName, OBJPROP_FILL, false);
+         
+         // Label só nas zonas fortes para não poluir
+         if((endIdx - startIdx) >= 5) {
+             string tName = "NEXUS_TXT_" + IntegerToString(boxCount);
+             ObjectCreate(0, tName, OBJ_TEXT, 0, tS, hP);
+             ObjectSetString(0, tName, OBJPROP_TEXT, (regimeVal == 1 ? "[ BULL ]" : "[ BEAR ]"));
+             ObjectSetInteger(0, tName, OBJPROP_COLOR, zClr);
+             ObjectSetInteger(0, tName, OBJPROP_FONTSIZE, 9);
+             ObjectSetInteger(0, tName, OBJPROP_ANCHOR, ANCHOR_LEFT_LOWER);
          }
+         boxCount++;
          i = endIdx + 1;
-      }
-      else i++;
+      } else i++;
    }
+
+   // 2. DESENHO DOS SINAIS DE BATALHA (SETAS)
+   string histS[]; StringSplit(historySignals, ',', histS);
+   int totalS = ArraySize(histS);
+   ObjectsDeleteAll(0, "NEXUS_SIG_");
    
-   DrawLabel("NEXUS_TITLE", "AETHELGARD [QUANTUM DOMAIN] V11.0", 10, 20, clrCyan, 12);
+   for(int j=0; j < totalS && j < iBars(_Symbol, _Period); j++) {
+      int signalVal = (int)StringToInteger(histS[totalS - 1 - j]);
+      if(signalVal != 0) {
+         string sName = "NEXUS_SIG_" + IntegerToString(j);
+         datetime sTime = iTime(_Symbol, _Period, j);
+         double sPrice = (signalVal == 1) ? iLow(_Symbol, _Period, j) - 100 * _Point : iHigh(_Symbol, _Period, j) + 100 * _Point;
+         
+         ObjectCreate(0, sName, OBJ_ARROW, 0, sTime, sPrice);
+         ObjectSetInteger(0, sName, OBJPROP_ARROWCODE, (signalVal == 1 ? 233 : 234)); 
+         ObjectSetInteger(0, sName, OBJPROP_COLOR, (signalVal == 1 ? clrDodgerBlue : clrOrangeRed));
+         ObjectSetInteger(0, sName, OBJPROP_WIDTH, 2);
+      }
+   }
 }
 
 void DrawLabel(string name, string text, int x, int y, color clr, int fontSize)
