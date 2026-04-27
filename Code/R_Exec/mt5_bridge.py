@@ -67,6 +67,87 @@ class MT5NeuralBridge:
         tick = mt5.symbol_info_tick(self.symbol)
         return tick._asdict()
 
+    def trailing_sl_tp(self, r_score, ema_trend, ema_macro, atr):
+        """
+        Co-Pilot Management: Gerencia dinamicamente o SL/TP das ordens abertas manualmente.
+        Se o usuário abre a ordem a favor da Caixa (Regime), a máquina defende a posição 
+        usando a EMA Macro ou EMA Trend como escudo termodinâmico.
+        """
+        symbol_info = mt5.symbol_info(self.symbol)
+        if symbol_info is None:
+            return
+            
+        digits = symbol_info.digits
+
+        positions = mt5.positions_get(symbol=self.symbol)
+        if positions is None or len(positions) == 0:
+            return
+        
+        for pos in positions:
+            ticket = pos.ticket
+            order_type = pos.type # 0 = BUY, 1 = SELL
+            current_sl = pos.sl
+            current_tp = pos.tp
+            current_price = pos.price_current
+            
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": ticket,
+                "symbol": self.symbol,
+                "sl": current_sl,
+                "tp": current_tp,
+            }
+            modified = False
+            
+            # --- PROTEÇÃO PARA POSIÇÕES COMPRADAS (BULL) ---
+            if order_type == mt5.ORDER_TYPE_BUY:
+                if r_score == 1:
+                    new_sl = round(ema_trend - (atr * 1.5), digits)
+                    new_tp = round(current_price + (atr * 10.0), digits) # Target Sideral
+                    
+                    if current_sl == 0.0 or new_sl > current_sl:
+                        if current_price > new_sl:
+                            request["sl"] = new_sl
+                            modified = True
+                    
+                    if current_tp == 0.0:
+                        request["tp"] = new_tp
+                        modified = True
+                            
+                elif r_score == 2:
+                    emergency_sl = round(current_price - (atr * 0.5), digits)
+                    if current_sl == 0.0 or emergency_sl > current_sl:
+                        request["sl"] = emergency_sl
+                        modified = True
+
+            # --- PROTEÇÃO PARA POSIÇÕES VENDIDAS (BEAR) ---
+            elif order_type == mt5.ORDER_TYPE_SELL:
+                if r_score == 2:
+                    new_sl = round(ema_trend + (atr * 1.5), digits)
+                    new_tp = round(current_price - (atr * 10.0), digits) # Target Sideral
+                    
+                    if current_sl == 0.0 or new_sl < current_sl:
+                        if current_price < new_sl:
+                            request["sl"] = new_sl
+                            modified = True
+                            
+                    if current_tp == 0.0:
+                        request["tp"] = new_tp
+                        modified = True
+                            
+                elif r_score == 1:
+                    emergency_sl = round(current_price + (atr * 0.5), digits)
+                    if current_sl == 0.0 or emergency_sl < current_sl:
+                        request["sl"] = emergency_sl
+                        modified = True
+                        
+            if modified:
+                result = mt5.order_send(request)
+                if result.retcode != mt5.TRADE_RETCODE_DONE:
+                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] ⚠️ NEXUS DEFENSE REJEITADO: Cód {result.retcode} - Não foi possível setar SL={request['sl']} TP={request['tp']} na Ordem {ticket}")
+                else:
+                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🛡️ NEXUS DEFENSE: Armadura ativada na posição {ticket}. SL={request['sl']} TP={request['tp']}")
+
     def shutdown(self):
         mt5.shutdown()
 

@@ -54,7 +54,8 @@ class AethelgardAGI:
         
         try:
             while self.is_running:
-                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M1, 0, 1000)
+                # Execução em H2 para análise de monólito macro
+                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_H2, 0, 1000)
                 if rates is not None and len(rates) > 0:
                     df = pd.DataFrame(rates)
                     
@@ -84,8 +85,6 @@ class AethelgardAGI:
                                 atr_h = true_range_h.rolling(14).mean().iloc[-1]
                                 
                                 is_genesis_h = (prev_s != r_score)
-                                
-                                # Pensamento da IA: Houve injeção de massa crítica ou é o INÍCIO de um novo regime?
                                 if body_h > (atr_h * 1.5) or is_genesis_h:
                                     sig = 1 if r_score == 1 else 2
                             
@@ -96,7 +95,7 @@ class AethelgardAGI:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v73 Concluído.")
                     
                     else:
-                        # --- PROCESSO DE TICKS EM TEMPO REAL v87 ---
+                        # --- PROCESSO DE TICKS EM TEMPO REAL v410 ---
                         slice_df = df.iloc[-window_calc:]
                         r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                         
@@ -116,6 +115,15 @@ class AethelgardAGI:
                         # Estado em tempo real para o MT5
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
                         
+                        # --- DEFESA CO-PILOTO EM TEMPO REAL (v410) ---
+                        # Escaneia e protege ordens a cada segundo (independente do fechamento do candle)
+                        ema_trend = df['close'].ewm(span=34, adjust=False).mean().iloc[-1]
+                        ema_macro = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+                        atr = (df['high'] - df['low']).rolling(14).mean().iloc[-1]
+                        
+                        if r_score != 0:
+                            self.bridge.trailing_sl_tp(r_score, ema_trend, ema_macro, atr)
+                        
                         # --- RADAR DE ANOMALIAS (PENSAMENTO ANALÍTICO) ---
                         sig = 0
                         new_rates = df[df['time'] > self.last_time]
@@ -123,13 +131,6 @@ class AethelgardAGI:
                             self.genesis_count += 1
                             curr = df.iloc[-1]
                             body = abs(curr['close'] - curr['open'])
-                            
-                            high_low = df['high'] - df['low']
-                            high_close = np.abs(df['high'] - df['close'].shift(1))
-                            low_close = np.abs(df['low'] - df['close'].shift(1))
-                            ranges = pd.concat([high_low, high_close, low_close], axis=1)
-                            true_range = np.max(ranges, axis=1)
-                            atr = true_range.rolling(14).mean().iloc[-1]
                             
                             # Pensamento da IA: Houve injeção de massa crítica ou é o INÍCIO de um novo regime?
                             if body > (atr * 1.5) or is_genesis:
