@@ -3,7 +3,7 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "14.00"
+#property version   "82.00"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -32,12 +32,21 @@ void ParseAndDraw(string data)
    StringSplit(data, ';', parts);
    if(ArraySize(parts) < 8) return;
 
+   string statusTxt = parts[2];
    string historyZonas = parts[4];
    string historySignals = parts[7];
    
-   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V14", 10, 20, clrCyan, 12);
+   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V82", 10, 20, clrCyan, 12);
+   
+   // EXIBIÇÃO DA PREVISÃO / STATUS v82
+   color sClr = clrWhite;
+   if(StringFind(statusTxt, "PREVISAO") >= 0) sClr = clrGold;
+   if(StringFind(statusTxt, "ATIVO") >= 0) sClr = clrSpringGreen;
+   if(StringFind(statusTxt, "ATIVA") >= 0) sClr = clrLime;
+   
+   DrawLabel("NEXUS_STATUS", "PREVISAO: " + statusTxt, 10, 40, sClr, 10);
 
-   // 1. DESENHO DAS ZONAS (Sem esconder as curtas para explicar as setas)
+   // 1. DESENHO DAS ZONAS
    string histZ[]; StringSplit(historyZonas, ',', histZ);
    int totalZ = ArraySize(histZ);
    ObjectsDeleteAll(0, "NEXUS_ZONE_");
@@ -57,7 +66,6 @@ void ParseAndDraw(string data)
             if((int)StringToInteger(nSub[0]) == regimeVal) endIdx++; else break;
          }
          
-         // REMOVIDA A TRAVA DE TAMANHO MÍNIMO (Para que a seta nunca fique 'órfã')
          string bName = "NEXUS_ZONE_" + IntegerToString(boxCount);
          datetime tS = iTime(_Symbol, _Period, startIdx);
          datetime tE = iTime(_Symbol, _Period, endIdx);
@@ -66,29 +74,24 @@ void ParseAndDraw(string data)
          
          color zClr = (regimeVal == 1) ? clrLime : clrRed;
          
-         // Zonas fracas (menores que 5 candles) terão borda fina, zonas fortes borda grossa
-         int zWidth = ((endIdx - startIdx) < 5) ? 1 : 2;
-         
          ObjectCreate(0, bName, OBJ_RECTANGLE, 0, tS, hP, tE, lP);
          ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
-         ObjectSetInteger(0, bName, OBJPROP_WIDTH, zWidth);
+         ObjectSetInteger(0, bName, OBJPROP_WIDTH, 2);
          ObjectSetInteger(0, bName, OBJPROP_FILL, false);
          
-         // Label só nas zonas fortes para não poluir
-         if((endIdx - startIdx) >= 5) {
-             string tName = "NEXUS_TXT_" + IntegerToString(boxCount);
-             ObjectCreate(0, tName, OBJ_TEXT, 0, tS, hP);
-             ObjectSetString(0, tName, OBJPROP_TEXT, (regimeVal == 1 ? "[ BULL ]" : "[ BEAR ]"));
-             ObjectSetInteger(0, tName, OBJPROP_COLOR, zClr);
-             ObjectSetInteger(0, tName, OBJPROP_FONTSIZE, 9);
-             ObjectSetInteger(0, tName, OBJPROP_ANCHOR, ANCHOR_LEFT_LOWER);
-         }
+         string tName = "NEXUS_TXT_" + IntegerToString(boxCount);
+         ObjectCreate(0, tName, OBJ_TEXT, 0, tS, hP);
+         ObjectSetString(0, tName, OBJPROP_TEXT, (regimeVal == 1 ? "[ BULL ]" : "[ BEAR ]"));
+         ObjectSetInteger(0, tName, OBJPROP_COLOR, zClr);
+         ObjectSetInteger(0, tName, OBJPROP_FONTSIZE, 9);
+         ObjectSetInteger(0, tName, OBJPROP_ANCHOR, ANCHOR_LEFT_LOWER);
+         
          boxCount++;
          i = endIdx + 1;
       } else i++;
    }
 
-   // 2. DESENHO DOS SINAIS DE BATALHA (SETAS)
+   // 2. DESENHO DOS SINAIS DE ANOMALIA (TEXTOS)
    string histS[]; StringSplit(historySignals, ',', histS);
    int totalS = ArraySize(histS);
    ObjectsDeleteAll(0, "NEXUS_SIG_");
@@ -98,12 +101,17 @@ void ParseAndDraw(string data)
       if(signalVal != 0) {
          string sName = "NEXUS_SIG_" + IntegerToString(j);
          datetime sTime = iTime(_Symbol, _Period, j);
-         double sPrice = (signalVal == 1) ? iLow(_Symbol, _Period, j) - 100 * _Point : iHigh(_Symbol, _Period, j) + 100 * _Point;
          
-         ObjectCreate(0, sName, OBJ_ARROW, 0, sTime, sPrice);
-         ObjectSetInteger(0, sName, OBJPROP_ARROWCODE, (signalVal == 1 ? 233 : 234)); 
+         // Aumentando o distanciamento para o texto não sobrepor a vela
+         double sPrice = (signalVal == 1) ? iLow(_Symbol, _Period, j) - 40 * _Point : iHigh(_Symbol, _Period, j) + 40 * _Point;
+         
+         ObjectCreate(0, sName, OBJ_TEXT, 0, sTime, sPrice);
+         string textMsg = (signalVal == 1) ? "[BULL_VOLUME]" : "[BEAR_VOLUME]";
+         ObjectSetString(0, sName, OBJPROP_TEXT, textMsg);
+         ObjectSetString(0, sName, OBJPROP_FONT, "Consolas");
+         ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 8);
          ObjectSetInteger(0, sName, OBJPROP_COLOR, (signalVal == 1 ? clrDodgerBlue : clrOrangeRed));
-         ObjectSetInteger(0, sName, OBJPROP_WIDTH, 2);
+         ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (signalVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
       }
    }
 }

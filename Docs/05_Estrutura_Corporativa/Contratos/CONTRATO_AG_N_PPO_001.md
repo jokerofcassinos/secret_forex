@@ -17,7 +17,7 @@ O Agente `Proximal-Policy-Oracle` é o núcleo de tomada de decisão sob incerte
 
 ## 4. KPIs DE PERFORMANCE
 - **R-STABILITY:** Variância da recompensa acumulada < 0.15.
-- **W-RATE:** Taxa de ganho em backtest walk-forward > 62%.
+- **W-RATE:** Taxa de ganho em regime live (Forward Testing) > 62%.
 
 ## 5. CLÁUSULAS DE PRUNING
 - **Degradação de Política:** Se o agente entrar em um loop de feedback negativo que resulte em perda de 2% do capital em 1 hora.

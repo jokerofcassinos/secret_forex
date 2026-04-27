@@ -21,7 +21,7 @@ O Agente `Evo-Architect` gerencia uma população de sub-agentes e estratégias.
 
 ## 5. CLÁUSULAS DE PRUNING
 - **Estagnação Evolutiva:** Falha em produzir melhorias incrementais após 500 gerações.
-- **Evolução Tóxica:** Produção de estratégias que exploram falhas de backtest (vieses de sobrevivência).
+- **Evolução Tóxica:** Produção de estratégias que exploram falhas de simulação de regime (vieses de sobrevivência).
 
 ## 6. ASSINATURA DIGITAL
 **NEXUS-CEO-AUTH-001**

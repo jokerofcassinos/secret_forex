@@ -195,6 +195,17 @@
   },
   "active": "b8fff723e227ae5c",
   "lastOpenFiles": [
+    "Data/Historical/GER40.cash_D1.parquet",
+    "Data/Historical/GER40.cash_H4.parquet",
+    "Data/Historical/GER40.cash_H1.parquet",
+    "Data/Historical/GER40.cash_M30.parquet",
+    "Data/Historical/GER40.cash_M15.parquet",
+    "Data/Historical/GER40.cash_M5.parquet",
+    "Data/Historical/GER40.cash_M1.parquet",
+    "Docs/04_Perfis_Neurais/STATE_GER40_CASH.md",
+    "Docs/04_Perfis_Neurais/ARCHIVE_STATE_BTCUSD.md",
+    "Docs/Atas_Reuniao/ATA_20260427_TQFM_V76_ESTABILIZACAO.md",
+    "Docs/Atas_Reuniao/ATA_20260427_TQFM_V75_COLAPSO_SOMBRA.md",
     "Docs/Audits/TRUTH_AUDIT_20260426_2028.md",
     "Docs/Audits/TRUTH_AUDIT_20260426_1824.md",
     "Docs/Audits/TRUTH_AUDIT_20260427_0325.md",
@@ -217,19 +228,8 @@
     "Docs/Audits/MIRROR_AUDIT_20260426_1632.md",
     "Docs/Audits/MIRROR_AUDIT_20260426_1136.md",
     "Docs/Audits/MIRROR_AUDIT_20260426_0941.md",
-    "Docs/Audits/MIRROR_AUDIT_20260426_0846.md",
-    "Docs/Audits/MIRROR_AUDIT_20260426_0658.md",
-    "Docs/Audits/MIRROR_AUDIT_20260426_0600.md",
-    "Docs/Audits/MIRROR_AUDIT_20260426_0512.md",
-    "Docs/Audits/MIRROR_AUDIT_20260426_0419.md",
     "Docs/Audits",
     "Code/N_Core/__pycache__/thermodynamic_risk.cpython-313.pyc",
-    "Code/N_Core/backtest_engine.py",
-    "Code/N_Core/thermodynamic_risk.py",
-    "Code/N_Core/__pycache__/nexus_server.cpython-313.pyc",
-    "Code/N_Core/nexus_server.py",
-    "Code/N_Core/backtest_visualizer.py",
-    "Code/CPP_Engine/bin/quantum_fluid_risk.a",
-    "Code/CPP_Engine/bin/quantum_fluid_risk.dll"
+    "Code/N_Core/backtest_engine.py"
   ]
 }

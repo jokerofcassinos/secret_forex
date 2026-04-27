@@ -100,58 +100,14 @@ class MSNRAlchemist:
 
     def validate_sovereign_signal(self, df, regime, is_genesis=False):
         """
-        Valida se o sinal é SOBERANO (PSA v90).
-        Master Operability Lock: Sniper apenas em Mercados com Amplitude.
+        TQFM v310 - Sovereign Unchain
+        O Alchemist agora delega a Soberania Total para a Máquina de Estados Quântica (v300).
+        Retorna True para não interferir no display do MT5, garantindo caixas contínuas.
         """
-        # 1. Parâmetros de Contexto (2 horas)
-        high_120 = df['high'].iloc[-120:].max()
-        low_120 = df['low'].iloc[-120:].min()
-        total_range = high_120 - low_120
-        
-        curr = df.iloc[-1]
-        curr_price = curr['close']
-        atr = (df['high'] - df['low']).rolling(14).mean().iloc[-1]
-        body = abs(curr['close'] - curr['open'])
-        
-        # 2. MASTER OPERABILITY LOCK (MOL)
-        # Se o mercado está lateralizado (range < 8x ATR), o RR é lixo. Hibernação.
-        is_market_alive = total_range >= (atr * 8.0)
-        
-        # Níveis de Força
-        is_god_blast = body > (atr * 2.2) # Quebra de Hibernação
-        is_blast = body > (atr * 1.3)
-        is_atomic = body > (atr * 1.0)
-
-        # 3. SINGULARIDADES
-        is_absolute_ext = curr['low'] <= low_120 + (atr * 0.1) or curr['high'] >= high_120 - (atr * 0.1)
-
-        # 4. PROTOCOLO PSA v90 (Soberania de Contexto)
-        if is_genesis:
-            # Caso A: God Blast (Sempre válido - rompe a hibernação)
-            if is_god_blast: return True
-            
-            # Se o mercado estiver 'Morto', bloqueia tudo o resto
-            if not is_market_alive: return False
-            
-            # PRIORIDADE 1: EXTREMO ABSOLUTO (Fundo/Topo Real em Mercado Ativo)
-            if is_absolute_ext: return True
-            
-            # PRIORIDADE 2: BLAST INSTITUCIONAL (Captura o início dos Gigantes)
-            if is_blast: return True
-            
-            return False
-
-        # 5. FILTRO DE MAGNITUDE PARA RE-ENTRADAS
-        # Só permite novas ordens se o box já provou ser um monstro de magnitude.
-        if total_range < (atr * 5.0): return False
-
-        # 6. LÓGICA DE RE-ENTRADA (Extremos de Boxes Maduros)
-        if regime == 1: # BULL
-            if curr_price < (low_120 + total_range * 0.2) and is_atomic: return True
-        if regime == 2: # BEAR
-            if curr_price > (high_120 - total_range * 0.2) and is_atomic: return True
-            
-        return False
+        # A validação de ruído, spread de médias, e choques atômicos 
+        # agora é tratada de forma monolítica pelo `advanced_regime_score`.
+        # O Alchemist aprova incondicionalmente para manter a integridade visual da TQFM v300.
+        return True
 
 
 

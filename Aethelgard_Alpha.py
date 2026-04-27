@@ -5,6 +5,7 @@ from Code.N_Core.msnr_alchemist import MSNRAlchemist
 from Code.N_Core.quantum_oracle import QuantumOracle
 import time
 import pandas as pd
+import numpy as np
 import MetaTrader5 as mt5
 from flask import Flask
 import threading
@@ -24,7 +25,7 @@ def run_server():
     app.run(host='127.0.0.1', port=5000)
 
 class AethelgardAGI:
-    def __init__(self, symbol="BTCUSD"):
+    def __init__(self, symbol="GER40.cash"):
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
@@ -34,6 +35,7 @@ class AethelgardAGI:
         self.regimes_cache = []
         self.signals_cache = []
         self.last_time = 0
+        self.genesis_count = 0
 
     def startup(self):
         print(f"--- INICIANDO MOTOR v64 [PURE EXTREMITY SNIPER] :: {self.symbol} ---")
@@ -48,6 +50,7 @@ class AethelgardAGI:
         window_calc = 200
         prev_s = 0
         prev_c = 0
+        status_txt = "INICIALIZANDO"
         
         try:
             while self.is_running:
@@ -67,65 +70,82 @@ class AethelgardAGI:
                             r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                             self.regimes_cache.append(f"{r_score}|{conf}")
                             
-                            # --- PROTOCOLO SGP v73 (Gênese Inteligente) ---
+                            # --- RADAR DE ANOMALIAS (HISTÓRICO) ---
                             sig = 0
                             if r_score != 0:
-                                is_genesis = (prev_s != r_score)
-                                is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis)
+                                curr_h = slice_df.iloc[-1]
+                                body_h = abs(curr_h['close'] - curr_h['open'])
                                 
-                                recent = [int(s) for s in self.signals_cache[-15:]]
-                                is_locked = any(s != 0 for s in recent)
-
-                                if is_sovereign and not is_locked:
-                                    sig = r_score
+                                high_low_h = slice_df['high'] - slice_df['low']
+                                high_close_h = np.abs(slice_df['high'] - slice_df['close'].shift(1))
+                                low_close_h = np.abs(slice_df['low'] - slice_df['close'].shift(1))
+                                ranges_h = pd.concat([high_low_h, high_close_h, low_close_h], axis=1)
+                                true_range_h = np.max(ranges_h, axis=1)
+                                atr_h = true_range_h.rolling(14).mean().iloc[-1]
+                                
+                                is_genesis_h = (prev_s != r_score)
+                                
+                                # Pensamento da IA: Houve injeção de massa crítica ou é o INÍCIO de um novo regime?
+                                if body_h > (atr_h * 1.5) or is_genesis_h:
+                                    sig = 1 if r_score == 1 else 2
                             
                             self.signals_cache.append(str(sig))
                             prev_s, prev_c = r_score, conf
                             
                         self.last_time = df.iloc[-1]['time']
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v73 Concluído.")
-                        
-                        # EXPORTAÇÃO DE SNAPSHOT PARA BACKTEST v99
-                        snapshot = df.copy()
-                        snapshot['regime_signal'] = self.signals_cache
-                        snapshot.to_parquet("Data/signals_snapshot.parquet")
-                        print(f"--- SNAPSHOT DE SINAIS EXPORTADO PARA BACKTEST 1:1 ---")
                     
                     else:
+                        # --- PROCESSO DE TICKS EM TEMPO REAL v87 ---
+                        slice_df = df.iloc[-window_calc:]
+                        r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
+                        
+                        is_genesis = (prev_s != r_score)
+                        if is_genesis: self.genesis_count = 0
+                        
+                        is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis or (self.genesis_count < 3))
+                        
+                        # Determina o Status Visual Instantâneo
+                        if r_score == 1:
+                            status_txt = "BULL_PREVISAO" if not is_sovereign else "TSUNAMI_BULL_ATIVO"
+                        elif r_score == 2:
+                            status_txt = "BEAR_PREVISAO" if not is_sovereign else "TSUNAMI_BEAR_ATIVO"
+                        else:
+                            status_txt = "AGUARDANDO_IGNICAO"
+                        
+                        # Estado em tempo real para o MT5
+                        rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
+                        
+                        # --- RADAR DE ANOMALIAS (PENSAMENTO ANALÍTICO) ---
+                        sig = 0
                         new_rates = df[df['time'] > self.last_time]
                         if not new_rates.empty:
-                            for idx in new_rates.index:
-                                slice_df = df.loc[idx-window_calc:idx]
-                                r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
-                                self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score}|{conf}")
+                            self.genesis_count += 1
+                            curr = df.iloc[-1]
+                            body = abs(curr['close'] - curr['open'])
+                            
+                            high_low = df['high'] - df['low']
+                            high_close = np.abs(df['high'] - df['close'].shift(1))
+                            low_close = np.abs(df['low'] - df['close'].shift(1))
+                            ranges = pd.concat([high_low, high_close, low_close], axis=1)
+                            true_range = np.max(ranges, axis=1)
+                            atr = true_range.rolling(14).mean().iloc[-1]
+                            
+                            # Pensamento da IA: Houve injeção de massa crítica ou é o INÍCIO de um novo regime?
+                            if body > (atr * 1.5) or is_genesis:
+                                sig = 1 if r_score == 1 else 2
+                                status_txt = f"ANOMALIA_INSTITUCIONAL_{'BULL' if sig == 1 else 'BEAR'}"
+                                print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt} (Massa: {body/atr:.1f}x ATR / Genesis: {is_genesis})")
                                 
-                                # --- PROTOCOLO SGP v73 (Live Execution) ---
-                                sig = 0
-                                if r_score != 0:
-                                    is_genesis = (prev_s != r_score)
-                                    is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis)
-                                    
-                                    is_mature = (conf > 50)
-                                    recent_window = 10 if is_genesis else (15 if is_mature else 30)
-                                    
-                                    recent = [int(s) for s in self.signals_cache[-recent_window:]]
-                                    is_locked = any(s != 0 for s in recent)
-                                    
-                                    if is_sovereign and not is_locked:
-                                        sig = r_score
-
-
-
-                                self.signals_cache.pop(0); self.signals_cache.append(str(sig))
-                                prev_s, prev_c = r_score, conf
-                                self.last_time = df.loc[idx, 'time']
-                                if sig != 0: 
-                                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] !!! ARS SINGULARIDADE CAPTURADA: [{sig}] !!!")
-                                    print(f" > Alvo: External Range Liquidity (Top/Bottom Major).")
-
-                    nexus_data_str = f"0;0;v66_ARS;{self.signals_cache[-1]};{','.join(self.regimes_cache)};0.00;1.0;{','.join(self.signals_cache)}"
-
-
+                            # --- ATUALIZAÇÃO SÍNCRONA DE CACHE ---
+                            self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score if is_sovereign else 0}|{conf}")
+                            self.signals_cache.pop(0); self.signals_cache.append(str(sig))
+                            prev_s, prev_c = r_score, conf
+                            self.last_time = df.iloc[-1]['time']
+                        
+                        # MONTAGEM DA STRING COM O PRESENTE REAL (Cache + RT)
+                        display_regimes = self.regimes_cache[1:] + [rt_regime]
+                        nexus_data_str = f"0;0;{status_txt};{self.signals_cache[-1]};{','.join(display_regimes)};0.00;1.0;{','.join(self.signals_cache)}"
 
                 time.sleep(1)
         except Exception as e:
@@ -138,6 +158,6 @@ class AethelgardAGI:
         print("SISTEMA OFFLINE.")
 
 if __name__ == "__main__":
-    bot = AethelgardAGI("BTCUSD")
+    bot = AethelgardAGI("GER40.cash")
     if bot.startup():
         bot.live_evolution_loop()

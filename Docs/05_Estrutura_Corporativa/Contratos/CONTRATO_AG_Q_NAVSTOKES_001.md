@@ -20,7 +20,7 @@ Este contrato vincula o Agente Digital `Navier-Stokes Solver 001` à função de
 Toda a lógica gerada pertence exclusivamente à Matriz NEXUS. O agente não possui permissão para exportar dados fora do diretório `D:\AI Brain\US30`.
 
 ## 5. PROTOCOLO DE "PRUNING" (RESCISÃO)
-Se o erro de predição exceder 30% por 3 ciclos consecutivos de backtest, o estado de memória deste agente será resetado e seus pesos serão re-inicializados (desativação lógica).
+Se o erro de predição exceder 30% por 3 ciclos consecutivos de ressonância em tempo real, o estado de memória deste agente será resetado e seus pesos serão re-inicializados (desativação lógica).
 
 ---
 **VALIDADO PELO CEO NEURAL**

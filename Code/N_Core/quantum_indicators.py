@@ -79,13 +79,15 @@ class QuantumIndicators:
         ema_mid = df_slice['close'].ewm(span=21, adjust=False).mean().iloc[-1]
         ema_trend = df_slice['close'].ewm(span=34, adjust=False).mean().iloc[-1]
         ema_macro = df_slice['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+        ema_gravity = df_slice['close'].ewm(span=200, adjust=False).mean().iloc[-1]
         
         ema_spread = abs(ema_fast - ema_mid)
         bull_momentum = (ema_fast > ema_mid)
         bear_momentum = (ema_fast < ema_mid)
         
-        macro_bull = curr['close'] > ema_macro
-        macro_bear = curr['close'] < ema_macro
+        # Filtros de Gravidade
+        under_gravity = curr['close'] < ema_gravity
+        above_gravity = curr['close'] > ema_gravity
         
         price_below_fast = curr['close'] < ema_fast
         price_above_fast = curr['close'] > ema_fast
@@ -100,14 +102,12 @@ class QuantumIndicators:
         true_range = np.max(ranges, axis=1)
         atr = true_range.rolling(14).mean().iloc[-1]
 
-        # 3. Estruturas de Liquidez (TQFM v58: Ponto de Equilíbrio)
-        swing_high_30 = df_slice['high'].iloc[-31:-1].max()
-        swing_low_30 = df_slice['low'].iloc[-31:-1].min()
+        # 3. Estruturas de Liquidez (TQFM v75: Colapso de Sombra)
+        swing_high_20 = df_slice['high'].iloc[-21:-1].max()
+        swing_low_20 = df_slice['low'].iloc[-21:-1].min()
         high_10 = df_slice['high'].iloc[-11:-1].max()
         low_10 = df_slice['low'].iloc[-11:-1].min()
         
-        local_high_20 = df_slice['high'].iloc[-21:-1].max()
-        local_low_20 = df_slice['low'].iloc[-21:-1].min()
         abs_high_60 = df_slice['high'].iloc[-61:-1].max()
         abs_low_60 = df_slice['low'].iloc[-61:-1].min()
 
@@ -120,12 +120,12 @@ class QuantumIndicators:
         is_atomic = body > (atr * 1.1)
         is_super_atomic = body > (atr * 1.6)
         
-        # Engulfing e Pivôs (TQFM v58)
+        # Engulfing e Pivôs (TQFM v75)
         prev = df_slice.iloc[-2]
-        bearish_engulfing = is_red and (prev['close'] > prev['open']) and (curr['open'] >= prev['close']) and (curr['close'] < prev['open'])
-        bullish_engulfing = is_green and (prev['close'] < prev['open']) and (curr['open'] <= prev['close']) and (curr['close'] > prev['open'])
+        bearish_engulfing = is_red and (prev['close'] > prev['open']) and (curr['open'] >= prev['close']) and (curr['close'] < prev['open'] - (atr * 0.1))
+        bullish_engulfing = is_green and (prev['close'] < prev['open']) and (curr['open'] <= prev['close']) and (curr['close'] > prev['open'] + (atr * 0.1))
         
-        # 5. Gatilhos Atômicos (TQFM v66: Singularidade de Fluxo)
+        # 5. Gatilhos Atômicos (TQFM v75: Singularidade de Fluxo)
         recent_max = df_slice['high'].iloc[-3:-1].max()
         recent_min = df_slice['low'].iloc[-3:-1].min()
         
@@ -147,75 +147,99 @@ class QuantumIndicators:
         is_bull_ignition = (curr['close'] > high_10) and is_atomic and bull_momentum
         is_bear_ignition = (curr['close'] < low_10) and is_atomic and bear_momentum
 
-        # Rejeição por Sombra
+        # Rejeição por Sombra (Rigor Estabilizado v76)
         upper_wick = curr['high'] - max(curr['open'], curr['close'])
         lower_wick = min(curr['open'], curr['close']) - curr['low']
-        is_exhaustion_top = is_local_top and ((upper_wick > body * 1.5 and is_red) or (upper_wick > body * 3.0))
-        is_exhaustion_bottom = is_local_bottom and ((lower_wick > body * 1.5 and is_green) or (lower_wick > body * 3.0))
+        
+        # Só exaustão se o candle for contrário (Vermelho em Topo, Verde em Fundo) E sombra expressiva
+        is_exhaustion_top = is_local_top and is_red and (upper_wick > body * 2.0 or upper_wick > atr * 0.8)
+        is_exhaustion_bottom = is_local_bottom and is_green and (lower_wick > body * 2.0 or lower_wick > atr * 0.8)
 
         # Trava de Estiramento (Anti-Fomo)
         dist_mid = abs(curr['close'] - ema_mid)
-        is_overextended = dist_mid > (atr * 1.8) # Mais folga para parábolas
+        is_overextended = dist_mid > (atr * 1.8) 
 
         # GATILHOS FINAIS
         dist_macro = abs(curr['close'] - ema_macro)
         is_momentum_explosion_bull = is_super_atomic and is_green and bull_momentum
         is_momentum_explosion_bear = is_super_atomic and is_red and bear_momentum
 
-        # SOBERANIA MACRO (Influência, não proibição)
+        # SOBERANIA MACRO
         is_macro_bull = (ema_fast > ema_macro)
         is_macro_bear = (ema_fast < ema_macro)
 
-        # Gatilhos de INÍCIO (v74: Rigor Atômico)
+        # Gatilhos de INÍCIO (v76: Estabilizado)
         can_start_bull = is_atomic_rebound_bull or (is_abs_bottom and dist_macro > atr * 1.5) or (is_bull_ignition and is_macro_bull) or is_momentum_explosion_bull
         start_atomic_bottom = can_start_bull and (not is_overextended) and (is_green and is_atomic or is_exhaustion_bottom)
         
         can_start_bear = is_atomic_rebound_bear or (is_abs_top and dist_macro > atr * 1.5) or (is_bear_ignition and is_macro_bear) or is_momentum_explosion_bear
         start_atomic_top = can_start_bear and (is_red and is_atomic or is_exhaustion_top)
 
-        # Gatilhos de FLIP (Inversão Direta)
-        flip_to_bear = (is_red and is_super_atomic and bear_momentum) or (curr['close'] < swing_low_30 and is_red and is_atomic)
-        flip_to_bull = (is_green and is_super_atomic and bull_momentum) or (curr['close'] > swing_high_30 and is_green and is_atomic)
+        # Gatilhos de FLIP (Inversão Direta v85)
+        flip_to_bear = (is_red and is_super_atomic and bear_momentum) or (curr['close'] < swing_low_20 and is_red and is_atomic)
+        flip_to_bull = (is_green and is_super_atomic and bull_momentum) or (curr['close'] > swing_high_20 and is_green and is_atomic)
 
-        # --- MÁQUINA DE ESTADO TQFM v74 (BLINDAGEM DE FLUXO) ---
+        # --- MÁQUINA DE ESTADO TQFM v400 (THE ABSOLUTE MACRO MONOLITH) ---
         
+        # O Ruído intradiário (pullbacks) afeta as EMAs curtas (9, 21) constantemente.
+        # Para criar o Monólito Perfeito, a Caixa agora é ancorada diretamente na Gravidade Macro (89).
+
+        # 1. Filtro de Massa de Elite
+        body = abs(curr['close'] - curr['open'])
+        is_significant = body > (atr * 0.8)
+        
+        # 2. O Grande Colisor (MACRO FLIP)
+        # O regime só inverte naturalmente se a Tendência (34) cruzar a Macro (89).
+        # Isso garante que um pullback precisa durar horas para quebrar o monólito.
+        macro_reversal_bull = (ema_trend > ema_macro)
+        macro_reversal_bear = (ema_trend < ema_macro)
+        
+        # 3. Gatilho de Velocidade Sideral (V-Shape Macro)
+        # Se houver um choque violento, antecipamos o flip usando a EMA 21 em vez da 34,
+        # MAS ela ainda deve obrigatoriamente cruzar a MACRO (89).
+        speed_bypass_bull = (ema_mid > ema_macro) and is_green and (body > atr * 1.5)
+        speed_bypass_bear = (ema_mid < ema_macro) and is_red and (body > atr * 1.5)
+
+        # 4. Imunidade de Regime Absoluta
+        # O regime é literalmente cego para oscilações nas primeiras 20 velas.
+        is_mature = (prev_conf > 20)
+
         # ESTADO BULL (1)
         if prev_score == 1:
-            if flip_to_bear: return 2, 100
-            if is_red and is_super_atomic and bear_momentum: return 0, -10
-            
-            if curr['close'] >= swing_low_30:
-                return 1, min(prev_conf + 1, 250)
-            
-            if (curr['close'] < ema_trend) and (not bull_momentum) and (prev_conf > 40):
-                return 0, -10
-            
-            return 1, min(prev_conf + 1, 250)
-            
+            if is_mature:
+                # FLIP MACRO: A maré de longo prazo virou
+                if macro_reversal_bear:
+                    return 2, 100
+                    
+                # FLIP DE VELOCIDADE: Mergulho V-Shape cruzando a Macro
+                if speed_bypass_bear:
+                    return 2, 100
+
+            # Monólito - Imune a todas as médias curtas. Segue a Macro 89.
+            return 1, min(prev_conf + 1, 50000)
+
         # ESTADO BEAR (2)
         if prev_score == 2:
-            if flip_to_bull: return 1, 100
-            if is_green and is_super_atomic and bull_momentum: return 0, -10
-            
-            if curr['close'] <= swing_high_30:
-                return 2, min(prev_conf + 1, 250)
-                
-            if (curr['close'] > ema_trend) and (not bear_momentum) and (prev_conf > 40):
-                return 0, -10
-            
-            return 2, min(prev_conf + 1, 250)
+            if is_mature:
+                # FLIP MACRO: A maré de longo prazo virou
+                if macro_reversal_bull:
+                    return 1, 100
+                    
+                # FLIP DE VELOCIDADE: Rali V-Shape cruzando a Macro
+                if speed_bypass_bull:
+                    return 1, 100
 
-        # --- ESTADO NEUTRO (0) ---
-        if prev_conf < 0: return 0, prev_conf + 1
-            
-        # Saída do Neutro: Exige Ignição Atômica REAL e Momentum Alinhado
-        if start_atomic_top and bear_momentum: return 2, 20
-        if start_atomic_bottom and bull_momentum: return 1, 20
+            # Monólito - Imune a todas as médias curtas. Segue a Macro 89.
+            return 2, min(prev_conf + 1, 50000)
+
+        # NOISE GATE v400
+        if not is_significant: return 0, 0
         
-        if is_green and is_atomic and (curr['close'] > high_10) and is_macro_bull and bull_momentum: 
-            return 1, 20
-        if is_red and is_atomic and (curr['close'] < low_10) and is_macro_bear and bear_momentum: 
-            return 2, 20
+        if macro_reversal_bull: return 1, 50
+        if macro_reversal_bear: return 2, 50
+
+        if speed_bypass_bull: return 1, 100
+        if speed_bypass_bear: return 2, 100
 
         return 0, 0
 
