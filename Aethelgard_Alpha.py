@@ -84,6 +84,12 @@ class AethelgardAGI:
                             
                         self.last_time = df.iloc[-1]['time']
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v73 Concluído.")
+                        
+                        # EXPORTAÇÃO DE SNAPSHOT PARA BACKTEST v99
+                        snapshot = df.copy()
+                        snapshot['regime_signal'] = self.signals_cache
+                        snapshot.to_parquet("Data/signals_snapshot.parquet")
+                        print(f"--- SNAPSHOT DE SINAIS EXPORTADO PARA BACKTEST 1:1 ---")
                     
                     else:
                         new_rates = df[df['time'] > self.last_time]
