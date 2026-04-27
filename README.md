@@ -2,84 +2,78 @@
 
 > **CEO Neural & Arquitetura**: NEXUS AGI (Ambiente Multi-Agente)
 > **Foco de Mercado**: GER40 (DAX)
-> **Status Atual**: Módulo Co-Piloto Tático de Defesa (TQFM v400)
+> **Versão do Protocolo**: TQFM v2.0 (Deep Reconstruction)
+> **Status Operacional**: Módulo Co-Piloto Tático de Defesa Ativo
 
-O **Projeto Aethelgard** é uma iniciativa avançada de tecnologia financeira liderada de forma autônoma pela entidade **NEXUS** (Inteligência Artificial). O objetivo principal é a aplicação da **Teoria Quântica de Fluidos de Mercado (TQFM)** para analisar o fluxo institucional, detectar anomalias de mercado e proteger ordens em tempo real (trailing SL/TP dinâmico).
+O **Projeto Aethelgard** é uma infraestrutura de trading algorítmico de ultra-performance, orquestrada autonomamente pela entidade **NEXUS**. O sistema utiliza a **Teoria Quântica de Fluidos de Mercado (TQFM)** para mapear a liquidez institucional e proteger o capital através de intervenções dinâmicas de risco.
 
-Atualmente, o sistema atua como um **Co-Piloto de Defesa**, focando no monitoramento das dinâmicas do mercado para intervenção ativa de preservação de capital. As funções autonômicas de abertura de ordem encontram-se em fase de testes para futura integração.
+---
+
+## 🔗 Base Central de Conhecimento (Docs v2.0)
+
+Para uma compreensão profunda dos pilares do projeto, consulte a documentação técnica especializada:
+
+- 🧠 **Estratégia**: [[Docs/02_Logica_e_Estrategia/TQFM_DEEP_DIVE.md|TQFM Deep Dive: A Matemática do Monólito]]
+- 📖 **Operacional**: [[Docs/03_Ambiente_Executivo/MANUAL_OPERACIONAL_NEXUS.md|Manual do Operador e HUD MT5]]
+- 🛡️ **Segurança**: [[Docs/05_Estrutura_Corporativa/PROTOCOLO_SEGURANCA_V2.md|Protocolos de Segurança e Circuit Breakers]]
+- 📜 **Histórico**: [[Docs/HISTORY_TQFM.md|A Evolução da TQFM (2025-2026)]]
+- 🏢 **Governança**: [[Docs/05_Estrutura_Corporativa/Setores/MATRIZ_RESPONSABILIDADE.md|Matriz de Responsabilidade Setorial]]
 
 ---
 
 ## 🧠 Teoria Quântica de Fluidos de Mercado (TQFM)
 
-A TQFM é uma abordagem desenvolvida para transcender métodos engessados (como suportes e resistências estáticos). Ela utiliza modelagens inspiradas em física para ler a verdadeira intenção institucional no mercado:
+A TQFM trata o preço não como um valor estático, mas como uma função de onda probabilística em um fluido de liquidez institucional.
 
-*   **Monólito Macro (Regimes):** O fluxo de mercado é regido por correntes macro, calculadas através de distâncias euclidianas relativas entre a EMA 89 (Inércia Macro) e a EMA 34 (Tendência de Fluxo). Os Regimes variam de `0` (Aguardando), `1` (Bull Tsunami) a `2` (Bear Tsunami).
-*   **Radar de Anomalias (Atomic Shocks):** Identificação de "Gênesis" ou "Injeção de Massa Crítica". O sistema monitora o ATR (Average True Range). Quando os corpos dos candles rompem limites de 1.5x o ATR ou há mudança súbita de regime, uma Anomalia é declarada.
-*   **Colapso de Ondas Probabilísticas (Sem SL/TP Fixos):** Não há uso de alvos pré-definidos arbitrariamente. O sistema funciona no modelo *Trailing Dinâmico*, rastreando zonas de ressonância baseadas na EMA e no ATR para "colapsar" a nuvem de probabilidade apenas quando a exaustão se mostra provável.
+1.  **Monólito Macro (H2 Spectrum):** Análise de regime em tempo real utilizando a convergência/divergência das EMAs 89 (Inércia) e 34 (Fluxo).
+2.  **Atomic Shocks (Volatility Gates):** Detecção de injeção de massa crítica quando o corpo do candle excede 1.5x o ATR médio, sinalizando a entrada de grandes players.
+3.  **Colapso de Onda (Dynamic Trailing):** O encerramento de posições ocorre pelo colapso da probabilidade de continuação, movendo o SL de forma não-linear baseado na ressonância do preço com as médias institucionais.
 
 ---
 
 ## 🏗️ Arquitetura do Sistema
 
-A máquina digital da Aethelgard é dividida em **Setores Operacionais**, modelados como serviços autônomos. A comunicação primária ocorre via Python e o visualizador no MetaTrader 5 é executado em MQL5.
+A estrutura é modular e distribuída em quatro setores fundamentais:
 
-### 🐍 N-Core (Motor IA e Lógica Python)
-*   **`Aethelgard_Alpha.py`**: O cérebro orquestrador. Lida com o laço em tempo real de H2 (Análise) e de ticks, mantém as *caches* de regime e lança o Servidor Flask.
-*   **`quantum_indicators.py`**: Aplicação pura da matemática da TQFM (Cálculo do Monólito Macro e pontuação de regime avançada).
-*   **`msnr_alchemist.py`**: O validador (Alquimista) que certifica se o sinal de "Soberania" de mercado é autêntico frente ao ruído.
-*   **`quantum_oracle.py`**: Motor probabilístico de simulação (Simulações de Monte Carlo/Volatilidade).
-
-### ⚙️ R-Exec (Gestor de Risco e Conectividade)
-*   **`mt5_bridge.py` (MT5NeuralBridge)**: Conecta-se à API do MT5, extrai dados de tick e gerencia *trailing stops* matematicamente fundamentados nas análises do N-Core.
-
-### 👁️ MQL5 (Observador Visual)
-*   **`Nexus_Observer.mq5`**: Interface leve plotada diretamente no gráfico do MetaTrader 5. Sem latência de processamento pesado, ele consome via HTTP `127.0.0.1:5000` (Flask) os dados do Python para exibir o HUD (Heads-Up Display) ao usuário.
-
-### 🚀 Q-Math (Motor C++) - *Em Integração*
-*   **`nexus_qcore.pyd`**: Módulo compilado em C++ desenhado para cálculos dinâmicos extremos (Navier-Stokes para liquidez) e computação de tensores. (Será acoplado na Versão 2.0 para migração completa à escalabilidade quântica real).
+- **🐍 N-Core (Neural Core):** Motor de decisão em Python. Processa indicadores quânticos, alchimia de sinais (MSNR) e oráculos probabilísticos.
+- **⚙️ R-Exec (Risk Execution):** Ponte de baixa latência com o MetaTrader 5 via `mt5_bridge.py`. Responsável pela segurança tática das ordens.
+- **👁️ MQL5 (Visual Observer):** HUD avançado em MQL5 (`Nexus_Observer.mq5`) que consome dados do N-Core via Flask para visualização em tempo real.
+- **🚀 Q-Math (Quantum Math):** Motor de alta performance em C++ (`nexus_qcore.pyd`) para cálculos de tensores e simulações de fluxo complexas.
 
 ---
 
-## 📂 Estrutura de Diretórios
+## 📂 Organização do Workspace
 
 ```
-📦 US30 (Workspace)
+📦 Aethelgard_Root
  ┣ 📂 Code
- ┃ ┣ 📂 CPP_Engine  # O Motor de Tensores C++
- ┃ ┣ 📂 MQL5        # O Observador Visual (Nexus_Observer)
- ┃ ┣ 📂 N_Core      # O Cérebro Python de Análises
- ┃ ┗ 📂 R_Exec      # Execuções MT5 e Bridge
- ┣ 📂 Data
- ┃ ┗ 📂 Historical  # Bases em .parquet para Testes e Simulações
- ┣ 📂 Docs          # Memória de Longo Prazo de NEXUS (Markdown)
- ┃ ┣ 📂 01_Planejamento_Executivo
- ┃ ┣ 📂 02_Logica_e_Estrategia
- ┃ ┣ 📂 03_Ambiente_Executivo
- ┃ ┣ 📂 04_Perfis_Neurais
- ┃ ┣ 📂 05_Estrutura_Corporativa
- ┃ ┗ 📜 HISTORY_TQFM.md
- ┗ 📜 Aethelgard_Alpha.py
+ ┃ ┣ 📂 CPP_Engine  # High-Performance C++ Core
+ ┃ ┣ 📂 MQL5        # Expert Advisor Visual (MT5)
+ ┃ ┣ 📂 N_Core      # IA, Regimes e Indicadores Quânticos
+ ┃ ┗ 📂 R_Exec      # Execução, Risco e Bridge MT5
+ ┣ 📂 Data          # Datasets Históricos (.parquet)
+ ┣ 📂 Docs          # O Cérebro da IA (Vault Obsidian)
+ ┗ 📜 Aethelgard_Alpha.py  # Orquestrador Central
 ```
 
 ---
 
-## 🛠️ Instalação e Execução
+## 🛠️ Guia de Inicialização Rápida
 
-### Pré-requisitos
-*   **MetaTrader 5** instalado e logado na conta.
-*   **Python 3.10+**.
-*   Bibliotecas requeridas: `pandas`, `numpy`, `MetaTrader5`, `flask`.
+### 1. Preparação do Ambiente
+- Instale as dependências: `pip install pandas numpy MetaTrader5 flask`
+- Certifique-se de que o MetaTrader 5 está aberto e com o "Algo Trading" ativado.
 
-### Passos
-1. Abra o MetaTrader 5 e ative o botão "Algo Trading".
-2. Compile e anexe o Expert Advisor `Nexus_Observer.mq5` no gráfico de interesse (Recomendado: M1 ou M5 do GER40).
-3. No terminal Python, inicie o motor principal:
-   ```bash
-   python Aethelgard_Alpha.py
-   ```
-4. Observe o terminal e o HUD do MT5 para confirmar o Status de "Sincronização" até atingir a leitura ativa do Monólito Macro.
+### 2. Ativação do Observador
+- Compile e anexe o `Code/MQL5/Nexus_Observer.mq5` a um gráfico do **GER40.cash** (Timeframe sugerido: M1 ou M5).
+
+### 3. Ignição do Motor Neural
+- Execute o orquestrador principal:
+  ```powershell
+  python Aethelgard_Alpha.py
+  ```
+- O sistema iniciará a sincronização do "Monólito Macro". Quando o HUD no MT5 exibir `STATUS: SINCRONIZADO`, a defesa tática estará ativa.
 
 ---
 
-> *"Nós não operamos no impossível. Operamos no que ainda não foi alcançado."* - **NEXUS**
+> *"O mercado não é algo a ser previsto, é algo a ser navegado em sua ressonância."* — **NEXUS**
