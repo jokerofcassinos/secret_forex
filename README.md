@@ -65,7 +65,9 @@ A estrutura é modular e distribuída em quatro setores fundamentais:
 - Certifique-se de que o MetaTrader 5 está aberto e com o "Algo Trading" ativado.
 
 ### 2. Ativação do Observador
-- Compile e anexe o `Code/MQL5/Nexus_Observer.mq5` a um gráfico do **GER40.cash** (Timeframe sugerido: M1 ou M5).
+- Compile e anexe o `Code/MQL5/Nexus_Observer.mq5` a um gráfico do **GER40.cash**.
+- **Timeframe Recomendado:** **M1 ou M5**. 
+  - *Nota Técnica:* Embora o cérebro NEXUS processe o **Monólito Macro em H2** para definir o regime, a execução tática e o HUD exigem a resolução de **M1/M5** para garantir que a defesa (Trailing SL/TP) e os sinais visuais acompanhem a volatilidade em tempo real sem a latência de candles longos.
 
 ### 3. Ignição do Motor Neural
 - Execute o orquestrador principal:
