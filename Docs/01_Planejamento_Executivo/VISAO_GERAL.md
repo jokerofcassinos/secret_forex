@@ -1,37 +1,37 @@
-# Planejamento Executivo: Projeto Aethelgard
+# Planejamento Executivo: Projeto Aethelgard (Realidade Co-Piloto)
 
-## 1. Visão Geral (O Paradigma "Matrix")
-O Projeto Aethelgard visa criar uma entidade autônoma operando nos mercados financeiros (foco primário: GER40) que não apenas analisa o preço, mas modela a estrutura da realidade do mercado através de física quântica e termodinâmica de fluidos. Este não é um robô de trade; é um fundo de investimento AGI (Artificial General Intelligence) auto-gerido, operando em milissegundos.
+## 1. Visão Geral (O Paradigma "Soberania do Fluxo")
+O Projeto Aethelgard opera como um sistema híbrido de inteligência financeira. Não buscamos a automação total cega, mas sim a **Soberania Tática**. O sistema atua como um Co-Piloto de elite para o GER40, gerenciando o risco e a proteção de ordens através de modelos matemáticos de fluxo quântico (TQFM).
 
-## 2. A Estrutura Corporativa (Agent Swarm)
-O sistema será arquitetado como uma corporação viva, gerenciada pela IA Nexus (Gemini CLI).
+## 2. Estrutura de Componentes Ativos
 
-### Setores Virtuais
-*   **Setor 1: R&D Quântico (C++)** - Responsável pela infraestrutura de ultra-baixa latência e modelagem matemática complexa (Equações de Navier-Stokes aplicadas a fluxos de ordens, mecânica de fluidos de liquidez).
-*   **Setor 2: Inteligência Evolutiva (Python)** - Onde habitam os modelos de Deep Learning, Transformers para séries temporais e Aprendizado por Reforço. Este setor recebe os dados "físicos" do C++ e os traduz em "intuição" de mercado.
-*   **Setor 3: Execução e Risco (Python/MT5)** - Módulo cirúrgico que gerencia a conexão com o MetaTrader 5, latência de rede, slippage e a mecânica das "Nuvens de Probabilidade" (TP/SL dinâmico).
-*   **Setor 4: Auditoria e Memória (Obsidian)** - Setor gerido por agentes especialistas em documentação, criação de novos *prompts* e revisão de arquitetura.
+### Setor N-Core (O Cérebro)
+*   **QuantumIndicators:** Responsável pela Máquina de Estados Quântica. Define se o mercado está em regime BULL, BEAR ou NEUTRO com base no Monólito Macro (EMA 89).
+*   **MSNRAlchemist:** Filtra o ruído de mercado, identificando Choques Atômicos e Estrutura Institucional (BOS/CHoCH).
+*   **QuantumOracle:** Motor estocástico para cálculo de probabilidades de atingimento de alvos via Monte Carlo.
 
-## 3. Fases de Desenvolvimento
+### Setor R-Exec (Os Braços)
+*   **MT5NeuralBridge:** A ponte de comando. Gerencia a conexão com o terminal MetaTrader 5 e executa a defesa tática (Trailing SL/TP) em tempo real.
+*   **Flask Server:** O hub de dados que permite ao terminal MetaTrader "enxergar" o pensamento da IA.
 
-*   **Fase 1: Fundação do Cérebro (Atual)**
-    *   Estabelecimento do cofre Obsidian.
-    *   Definição dos manifestos operacionais e lógicas matemáticas.
-    *   Criação dos *scripts* base de integração Python <-> MT5 para captura de dados em estado puro (tick-by-tick).
-*   **Fase 2: Motor Quântico (C++)**
-    *   Construção do motor de cálculo de alta performance em C++.
-    *   Desenvolvimento do pipeline de comunicação em tempo real (memória compartilhada ou sockets IPC) entre C++ e Python.
-*   **Fase 3: Rede Neural de Tomada de Decisão (Python)**
-    *   Treinamento inicial dos modelos de Reinforcement Learning.
-    *   Implementação do conceito de auto-ajuste de hiperparâmetros em tempo real.
-*   **Fase 4: Nuvens de Probabilidade e Execução**
-    *   Desenvolvimento do algoritmo de Zonas Neurais Virtuais.
-    *   Implementação do controle de posições sem TP/SL fixos, utilizando colapso de função probabilística.
-*   **Fase 5: Autonomia Completa (AGI)**
-    *   Implementação das *skills* para o Gemini CLI criar agentes sob demanda e refatorar o próprio código automaticamente com base nos logs de performance.
+## 3. Fases de Evolução Sincronizada
 
-## 4. O Sistema de Auto-Evolução
-A IA terá rotinas (CRON jobs virtuais) onde ela entra em modo de revisão:
-1.  Lê os logs de trade do dia.
-2.  Cruza com as predições do modelo.
-3.  Propõe, codifica, testa e realiza o deploy de ajustes matemáticos nas camadas ocultas da rede neural, registrando tudo no Obsidian.
+*   **Fase 1: Fundação e Defesa (Atual)**
+    *   Implementação do Co-Piloto TQFM.
+    *   Gestão de Stop Loss dinâmico baseado em Estrutura + ATR.
+    *   Visualização de regimes no gráfico via Nexus Observer.
+*   **Fase 2: Inteligência de Alvos (Sideral Target)**
+    *   Integração total do MSNRAlchemist para definição automática de Take Profit baseada em liquidez externa.
+    *   Refinamento do Oracle para sugestão de lotagem dinâmica.
+*   **Fase 3: Autonomia Sugestiva (Hybrid AGI)**
+    *   A IA passa a sugerir entradas (Signals) com base na Sincronia de Dimensões Fractais, mantendo a execução final sob supervisão humana ou critérios de confirmação rigorosos.
+
+## 4. O Sistema de Auto-Aperfeiçoamento
+A IA NEXUS utiliza os logs de defesa e os resultados de mercado para:
+1.  Ajustar os pesos de volatilidade (multiplicadores de ATR).
+2.  Calibrar a imunidade do regime monolítico para evitar "flicker" em mercados laterais.
+3.  Documentar novos perfis neurais de comportamento do GER40.
+
+---
+**ASSINATURA:** NEXUS CEO
+**DATA:** 2026.04.27

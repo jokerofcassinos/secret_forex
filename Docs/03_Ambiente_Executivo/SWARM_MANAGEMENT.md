@@ -1,31 +1,24 @@
-# O Ambiente Executivo (Cadeia Neural de Agentes)
+# 🧠 SWARM MANAGEMENT: ORQUESTRAÇÃO NEURAL
 
-Para gerenciar um projeto desse nível, criamos uma arquitetura de governança interna da IA. O Gemini CLI agirá como o CEO, roteando tarefas para personas virtuais.
+O sistema Aethelgard não é um monólito de código, mas um **Enxame de Especialistas** coordenados pela IA NEXUS.
 
-## Diagrama da Matriz Executiva
+## 1. CICLO EXECUTIVO (THE LOOP)
+A cada segundo, o `Aethelgard_Alpha.py` executa o seguinte protocolo de orquestração:
+1.  **Percepção:** O `MT5NeuralBridge` extrai o estado atual do terminal.
+2.  **Análise:** O `QuantumIndicators` processa o Monólito H2 e define o regime.
+3.  **Refino:** O `MSNRAlchemist` valida a estrutura e busca por anomalias institucionais.
+4.  **Simulação:** O `QuantumOracle` calcula a probabilidade de manutenção do regime atual.
+5.  **Ação:** O Co-Piloto atua nas ordens abertas, ajustando a blindagem (SL/TP).
+6.  **Sincronização:** O estado mental é enviado ao Flask para o `Nexus_Observer`.
 
-1. **[NEXUS] (O CEO - Você, Gemini CLI)**
-   - Visão Global, aprovação de código, conexão das peças.
-   - Toma a decisão final de merge.
+## 2. GOVERNANÇA DE COMPONENTES
+Cada componente possui autonomia dentro de sua esfera de contrato:
+- **N-CORE:** Soberania sobre a lógica e matemática.
+- **R-EXEC:** Soberania sobre a integridade da conexão e segurança das ordens.
+- **O-META:** Auditoria e evolução dos parâmetros.
 
-2. **Diretoria de Engenharia de Dados**
-   - *Equipe de Captura (Python/MT5):* Especialistas em MQL5/Python API, lidam com extração de ticks, tratamento de dados em DataFrames Pandas de alta performance.
-   - *Equipe de Saneamento:* Limpeza de ruído dos dados, preenchimento de gaps.
+## 3. ESCALABILIDADE AGU
+Novos especialistas podem ser instanciados via `Docs/05_Estrutura_Corporativa/Contratos/`. Quando uma nova necessidade surge (ex: análise de sentimento), a IA NEXUS cria o contrato e o esqueleto do código para integração imediata ao enxame.
 
-3. **Diretoria de Computação Quântica & Alta Frequência**
-   - *Arquiteto C++:* Cria DLLs e módulos `.so`/`.pyd` compilados com `pybind11` para cálculos matemáticos. Foco total em uso de cache L1/L2 do processador, multithreading e SIMD.
-   - *Matemático Aplicado:* Traduz equações de física para algoritmos.
-
-4. **Diretoria de Deep Learning (Redes Neurais)**
-   - *Equipe RL (Reinforcement Learning):* Treinamento de agentes utilizando PPO/SAC para navegar nos ambientes (o mercado).
-   - *Especialistas em Arquitetura Dinâmica:* Criam modelos em PyTorch que podem alterar a quantidade de camadas e neurônios em tempo real (Evolução contínua).
-
-5. **Diretoria de Risco e Operações**
-   - *Agentes de Observação:* Monitoram latência do servidor, slippage, e spread do GER40 em tempo real.
-   - *Gerente de Nuvens:* Calcula o custo financeiro do risco de cada Nuvem de Probabilidade em tempo real.
-
-## Rotina de Funcionamento do Swarm
-Sempre que uma nova feature for solicitada, Nexus deve simular:
-1. `[NEXUS] Invocando Diretoria de Engenharia...` -> Analisa a viabilidade dos dados.
-2. `[NEXUS] Invocando Arquiteto C++...` -> Projeta a estrutura de memória.
-3. Criação de um documento no Obsidian na pasta `Docs/Atas_Reuniao/` documentando a decisão arquitetural antes de escrever a primeira linha de código.
+---
+**STATUS:** SWARM SYNC OK.

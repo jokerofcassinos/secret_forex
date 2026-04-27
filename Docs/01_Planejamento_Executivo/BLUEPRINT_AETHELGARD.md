@@ -1,35 +1,38 @@
 # 🌌 BLUEPRINT MESTRE: PROJETO AETHELGARD (GER40)
 
 ## 1. VISÃO GERAL EXECUTIVA
-Aethelgard não é um "bot". É uma **Entidade Digital de Arbitragem Dimensional**. Sua missão é extrair valor do GER40 através da detecção de anomalias na estrutura do "espaço-tempo" do mercado.
+Aethelgard opera como uma **Entidade de Defesa e Gestão Tática (Co-Piloto)**. Sua missão é proteger e otimizar ordens abertas no GER40 através da **Teoria Quântica de Fluidos de Mercado (TQFM)**, transformando volatilidade em armadura estrutural.
 
-## 2. ARQUITETURA TÉCNICA SENIOR
-### A. Camada de Cálculo (C++) - "The Quantum Engine"
-- **Objetivo:** Processamento de 100.000+ ticks por segundo.
-- **Lógica:** Implementação de Tensores de Pressão de Ordem. 
-- **Tecnologia:** `std::simd` para cálculos paralelos, integração via `pybind11` para exposição de funções de alto nível ao Python.
+## 2. ARQUITETURA OPERACIONAL ATIVA
+### A. Camada de Gestão (Python) - "The Neural Cortex"
+- **Objetivo:** Gestão de Regimes de Mercado e Defesa Tática.
+- **Motor:** TQFM v400 (Macro Monolith).
+- **Estratégia:** Ancoragem em EMA 89 (Macro) e EMA 34 (Tendência) para definir a "Soberania do Fluxo".
+- **Componentes:**
+    - `QuantumIndicators`: Mapeamento de Regimes e Choques Atômicos.
+    - `MT5NeuralBridge`: Execução de Trailing SL/TP dinâmico via API nativa.
+    - `MSNRAlchemist`: Validação de Estrutura e Liquidez Institucional.
 
-### B. Camada Inteligente (Python) - "The Neural Cortex"
-- **Objetivo:** Gestão de Swarm e Meta-Learning.
-- **Modelos:** PPO (Proximal Policy Optimization) adaptado para ambientes não-estacionários.
-- **Roteamento:** O sistema decide autonomamente se a posição atual deve ser tratada sob a ótica de Scalp Dimensional ou Swing de Ressonância.
+### B. Camada de Visualização (MQL5) - "The Eye of Odin"
+- **Objetivo:** Interface Homem-Máquina e Radar de Anomalias.
+- **Lógica:** O `Nexus_Observer.mq5` consome via REST (Flask) o estado mental da IA para visualização em tempo real no terminal.
 
-### C. Camada de Memória (Obsidian) - "The Synaptic Map"
-- **Objetivo:** Persistência de aprendizado e governança.
-- **Estrutura:** Logs de decisão, perfis de agentes e auditoria de risco em tempo real.
+### C. Ativo de Pesquisa (C++) - "The Quantum Forge"
+- **Status:** Latente (Não integrado ao fluxo de produção).
+- **Objetivo:** Pesquisa em ultra-baixa latência e simulações de fluxo de ordens para futuras implementações HFT.
 
-## 3. LÓGICA DE NEGOCIAÇÃO: FRACTAL QLG
-1. **Identificação:** O Q-Math detecta um "Poço Gravitacional" (Acúmulo de ordens institucionais ocultas).
-2. **Execução:** Entrada cirúrgica com Stop Loss baseado na volatilidade quântica (não em pontos fixos).
-3. **Gestão Dinâmica:**
-    - Se a pressão de liquidez dissipar -> **Scalp Out** (Lucro imediato).
-    - Se a pressão aumentar -> **Swing Expansion** (Trail Stop Neural).
+## 3. LÓGICA DE DEFESA: CO-PILOTO TQFM
+1. **Sincronização:** A IA monitora o gráfico H2 para definir o regime monolítico (EMA 89).
+2. **Trailing Structural:** Ordens manuais são detectadas e defendidas.
+    - **Bull Regime:** SL ancorado na EMA 34 - (1.5x ATR).
+    - **Bear Regime:** SL ancorado na EMA 34 + (1.5x ATR).
+3. **Emergency Brake:** Se o regime colapsar, o Co-Piloto aperta o stop para 0.5x ATR, protegendo o capital contra reversões violentas.
 
-## 4. METAS DE EVOLUÇÃO (AGI)
-- **Mês 1:** Estabilização da ponte C++ <-> MT5 e coleta de DNA de mercado.
-- **Mês 2:** Treinamento do Swarm em ambiente de simulação multi-dimensional.
-- **Mês 3:** Deploy do modo "Conquistador" (Operação Real).
+## 4. METAS DE CURTO PRAZO
+- **Fase Alpha:** Consolidação do Trailing SL baseado em ATR e EMAs. (CONCLUÍDO)
+- **Fase Beta:** Implementação de alvos de saída baseados em expansão de Fibonacci (MSNRAlchemist). (EM CURSO)
+- **Fase Gamma:** Integração de Monte Carlo (QuantumOracle) para ajuste de risco dinâmico por posição. (PLANEJADO)
 
 ---
 **ASSINATURA:** NEXUS CEO
-**STATUS:** PROTOCOLO DE CONSTRUÇÃO INICIADO.
+**STATUS:** REALIDADE OPERACIONAL SINCRONIZADA.

@@ -1,27 +1,21 @@
-# ⏳ LOGÍSTICA TEMPORAL: O TEMPO FRACTAL
+# ⏳ DIMENSÕES TEMPORAIS: SINCRONIA FRACTAL
 
-## 1. O FIM DO TIMEFRAME FIXO
-No Aethelgard, o tempo é tratado como uma dimensão de densidade de informação. Ignoramos a arbitrariedade dos relógios humanos (velas de X minutos) em favor da **Vela de Fluxo Quântico**.
+Aethelgard não opera em um único tempo. Ele observa o mercado através de três lentes dimensionais para garantir a soberania da decisão.
 
-## 2. HIERARQUIA DE PROCESSAMENTO
+## 1. DIMENSÃO MACRO (H2) - A Lente do Destino
+- **Timeframe:** 2 Horas.
+- **Função:** Definição do Monólito de Regime. 
+- **Lógica:** É aqui que a EMA 89 dita a direção absoluta. O Co-Piloto ignora sinais contrários ao H2 para evitar "flicker" de micro-tendências.
 
-### A. Camada de Ignição (Sub-M1)
-- **Fonte:** Tick Data real-time (MT5).
-- **Processador:** Q-Math (C++).
-- **Uso:** Detecção de micro-vórtices e desequilíbrios de liquidez.
+## 2. DIMENSÃO TÁTICA (M15 / M30) - A Lente do Fluxo
+- **Timeframe:** 15 a 30 Minutos.
+- **Função:** Identificação de Choques Institucionais e Estrutura (BOS).
+- **Lógica:** O `MSNRAlchemist` mapeia zonas de liquidez nestes timeframes para definir alvos de curto prazo.
 
-### B. Camada de Sustentação (Fractal Médio: 1-15m)
-- **Uso:** Confirmação de tendência local e cálculo de SL dinâmico.
-- **Lógica:** A posição só sobrevive se houver ressonância nesta camada nos primeiros 60 segundos.
-
-### C. Camada de Destino (Macro-Resonância: H1-D1)
-- **Uso:** Determinação de alvos de Swing e pontos de exaustão institucional.
-- **Lógica:** Se a "Onda" atinge esta camada, o modo "Scalp" é desativado e o sistema entra em **Modo de Colheita (Swing)**.
-
-## 3. GRÁFICOS DE ENTROPIA
-- Em vez de tempo, usamos **Volume-Entropy Bars**. 
-- Uma nova barra é gerada apenas quando a "Entropia do Sistema" atinge um threshold crítico. 
-- Isso permite que a IA "durma" em mercados laterais e "desperte" instantaneamente em explosões de volatilidade.
+## 3. DIMENSÃO EXECUTIVA (M1 / M5) - A Lente do Micro-Choque
+- **Timeframe:** 1 a 5 Minutos.
+- **Função:** Monitoramento de Ticks e Execução de Defesa.
+- **Lógica:** O `MT5NeuralBridge` opera nesta camada para ajustar o Stop Loss no tick exato, garantindo que a proteção seja cirúrgica.
 
 ---
-**ASSINATURA:** NEXUS CEO
+**NOTA:** A sincronia entre H2 e M1 é o que chamamos de **Ressonância Quântica**.

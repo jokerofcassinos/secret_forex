@@ -1,18 +1,23 @@
-# 🛰️ ROADMAP: FASE 2 - EXECUÇÃO QUÂNTICA (R-EXEC)
+# 🛰️ ROADMAP: FASE 2 - CONSOLIDAÇÃO TÁTICA (CO-PILOTO)
 
-O objetivo desta fase é transformar as **Zonas de Domínio** em **Ordens de Lucro**.
+O objetivo desta fase é garantir que a **Soberania do Fluxo** seja traduzida em **Proteção de Capital Inquebrável**.
 
-## 1. MÓDULO DE GATILHO (SPARK TRIGGER)
-- Implementação da função `send_order()` no `mt5_bridge.py`.
-- Lógica de entrada: Abertura de posição no 3º candle confirmado de uma zona de domínio.
+## 1. MÓDULO DE DEFESA (STRUCTURAL SHIELD)
+- **Implementado:** Função `trailing_sl_tp()` no `mt5_bridge.py`.
+- **Lógica:** Defesa baseada na polaridade do Regime Monolítico (EMA 89/34).
+- **Ajuste:** O stop loss agora é um organismo vivo, movendo-se com a estrutura de tendência e volatilidade (ATR).
 
-## 2. GESTÃO DE PROTEÇÃO (CLOUD SL)
-- O Stop Loss será "colado" na borda oposta da moldura visual.
-- **Trailing Neural:** Se a zona de domínio se expandir, o stop se move automaticamente para o novo "Chão" (Bull) ou "Teto" (Bear).
+## 2. RADAR DE ANOMALIAS (INSTITUTIONAL AWARENESS)
+- **Implementado:** Detecção de **Choques Atômicos** (Candles > 1.5x ATR).
+- **Função:** Identificar injeção de massa crítica institucional para alertar o operador via `Nexus_Observer`.
 
-## 3. MOTOR DE RISK MANAGEMENT
-- Cálculo de lote baseado em **Drawdown Control**.
-- **Circuit Breaker:** Suspensão automática se a Entropia do sistema subir acima de níveis caóticos.
+## 3. SINCRONIA DIMENSIONAL (FLASK BRIDGE)
+- **Implementado:** Servidor Flask em port 5000 fornecendo a string de estado `nexus_data_str`.
+- **Status:** Comunicação bidirecional (Python -> Flask -> MQL5) estabelecida com latência de <100ms local.
+
+## 4. PRÓXIMOS PASSOS (EXPANSÃO)
+- **Target Sideral:** Implementação de TP dinâmico baseado em alvos estruturais do MSNRAlchemist.
+- **Oracle Risk:** Utilizar o `QuantumOracle` para sugerir fechamentos parciais baseados na probabilidade de colapso de onda (Monte Carlo).
 
 ---
-**STATUS:** AGUARDANDO COMANDO DE INICIALIZAÇÃO.
+**STATUS:** OPERACIONAL EM MODO CO-PILOTO.

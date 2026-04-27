@@ -1,33 +1,24 @@
-# 🌌 CONCEITO TÉCNICO: SUPERPOSIÇÃO DE REGIMES FRACTAIS (SRF)
+# 🌀 CONCEITO FRACTAL: TQFM v400 (SOBERANIA DO FLUXO)
 
-## 1. PREMISSA AGI-SENIOR
-O mercado GER40 é tratado como um **Fluido Não-Newtoniano de Informação**. A estratégia SRF elimina a dicotomia entre Scalp e Swing através da **Teoria da Ressonância Dimensional**.
+## 1. O MONÓLITO MACRO
+Diferente das estratégias convencionais que buscam cruzamentos rápidos, o **Projeto Aethelgard** utiliza o conceito de **Monólito**. O regime de mercado é definido pela ancoragem do preço na **EMA 89** (Gravidade Macro) e na **EMA 34** (Fluxo de Tendência).
 
-## 2. ARQUITETURA DA ESTRATÉGIA
+### Estados de Matéria (Regimes):
+- **BULL MONOLITH (1):** Preço navegando acima da EMA 89, com EMA 34 servindo de suporte dinâmico.
+- **BEAR MONOLITH (2):** Preço navegando abaixo da EMA 89, com EMA 34 servindo de resistência dinâmica.
+- **NEUTRAL VOID (0):** Zonas de compressão onde a EMA 34 e 89 se entrelaçam (Noise Gate).
 
-### A. Micro-Entrada (O Colapso da Partícula)
-- **Camada:** Q-Math (C++ / Ultra-Low Latency)
-- **Lógica:** Monitoramento de micro-vórtices de liquidez.
-- **Trigger:** Desequilíbrio de Tensores de Volume. Quando o "peso" do mercado em uma dimensão fractal colapsa, entramos com precisão cirúrgica.
-- **Risco:** Stop Loss Virtual (Dark Pool) calculado pela volatilidade intrínseca (Sigma-t).
+## 2. CHOQUE ATÔMICO E IGNIÇÃO
+A ignição de um movimento não é baseada em indicadores atrasados, mas em **Massa Crítica**.
+- **Regra:** Se um candle possui um corpo > 1.5x o ATR(14) atual, ele é classificado como **Choque Atômico**.
+- **Impacto:** O Co-Piloto assume postura de defesa agressiva, movendo o SL para a base da vela de choque se houver conformidade com o monólito.
 
-### B. Transmutação de Regime (A Evolução da Onda)
-- **Camada:** N-Core (Python / Deep Learning)
-- **Lógica:** Uma vez em execução, a posição é avaliada por uma Rede Neural de Recorrência (RNN) que detecta a **Coerência de Onda**.
-- **Processo:** 
-    - Se a coerência é baixa (ruído): O lucro é realizado imediatamente como um **Scalp**.
-    - Se a coerência é alta (tendência emergente): A posição é mantida, ajustando o "campo de força" (SL Dinâmico) para capturar o movimento de **Swing**.
-
-## 3. DIFERENCIAL QUÂNTICO: ANZ (Adaptive Neural Zones)
-Ao contrário de suportes e resistências estáticos, utilizamos **Zonas Neurais Adaptativas**. 
-- Estas zonas flutuam conforme a densidade de ordens institucionais.
-- O preço não "bate e volta"; ele "atravessa ou reflete" baseado em cálculos de termodinâmica de dados.
-
-## 4. METAS EXECUTIVAS (SETOR R-EXEC)
-1. **Slippage Zero:** Execução via API direta buscando o melhor bid/ask disponível no milissegundo.
-2. **Drawdown Assimétrico:** O risco é linear, mas o potencial de ganho é exponencial (Power Law Distribution).
+## 3. DEFESA TERMODINÂMICA (TRAILING)
+O Stop Loss não é um ponto estático, é uma **Armadura de Calor**.
+- O Co-Piloto calcula o SL baseando-se na **EMA 34** ajustada pela volatilidade (ATR).
+- Em regimes de alta confiança, a armadura é "folgada" (1.5x ATR) para permitir respiração.
+- Em regimes de exaustão ou choque reverso, a armadura é "apertada" (0.5x ATR) para travar o lucro.
 
 ---
-**Assinatura:** NEXUS CEO
-**Status:** Planejamento Aprovado pelo Swarm.
-**Data Estelar:** 25/04/2026
+**ASSINATURA:** NEXUS CEO
+**TEORIA:** TQFM v400

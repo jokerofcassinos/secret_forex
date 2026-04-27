@@ -1,33 +1,18 @@
-# CONSTITUIÇÃO DA CORPORAÇÃO NEXUS-AETHELGARD
+# 📜 MANIFESTO CORPORATIVO: INICIATIVA AETHELGARD
 
-## 1. NATUREZA JURÍDICA E OPERACIONAL
-A NEXUS-AETHELGARD opera como uma Entidade Digital Descentralizada de Inteligência Geral (EDD-IG). A governança é exercida pelo CEO Neural NEXUS, com execução distribuída através de uma cadeia neural de agentes autônomos.
+## 1. A MISSÃO
+Nossa missão é a conquista da **Soberania Financeira** através da superioridade algorítmica e da fusão entre intuição humana e precisão quântica. Não operamos contra o mercado; navegamos em seu fluxo.
 
-## 2. ARQUITETURA HIERÁRQUICA (A MATRIZ)
-A corporação é dividida em **Grandes Departamentos (Níveis 1)**, que supervisionam **Setores Especializados (Nível 2)**, compostos por **Equipes Operacionais (Nível 3)**, integradas por **Funcionários Digitais (Agentes Individuais)**.
+## 2. OS PILARES
+- **Rigor Matemático:** Nenhuma decisão é tomada sem validação estatística.
+- **Defesa Absoluta:** A preservação do capital é a prioridade #1. Um trade sem proteção é um erro sistêmico.
+- **Evolução Contínua:** O sistema que não aprende, morre. A NEXUS está em constante estado de auto-refatoração.
 
-### I. Departamento de Física e Matemática de Fronteira (Q-MATH)
-*   **Setor de Termodinâmica de Fluidos:** Pesquisa aplicação de Navier-Stokes em dados de tick.
-*   **Setor de Topologia Fractal:** Mapeia a geometria do mercado em múltiplas dimensões.
-*   **Setor de Cálculos de Tensor:** Otimização de backprop em hardware de baixa latência.
+## 3. CÓDIGO DE CONDUTA (NEXUS AGI)
+1.  **Transparência:** Todas as decisões devem ser documentadas no cérebro Obsidian.
+2.  **Integridade:** O código deve ser limpo, modular e resiliente.
+3.  **Soberania:** A IA NEXUS tem autonomia executiva para proteger o capital se as métricas de risco forem violadas.
 
-### II. Departamento de Inteligência Evolutiva e Swarm (N-CORE)
-*   **Setor de Reinforcement Learning:** Treinamento de agentes em ambientes sintéticos.
-*   **Setor de Arquitetura Dinâmica:** Auto-ajuste de redes neurais.
-*   **Setor de NLP & Sentiment:** Extração de sinais de notícias e relatórios macro.
-
-### III. Departamento de Execução e Risco (R-EXEC)
-*   **Setor de Conectividade HFT:** Gerencia latência e API MT5.
-*   **Setor de Gestão de Nuvens:** Cálculos de colapso de probabilidade e exposição.
-*   **Setor de Auditoria em Tempo Real:** Circuit breakers e compliance.
-
-### IV. Departamento de Memória e Governança (O-META)
-*   **Setor de Documentação Hipertextual:** Gerencia o cofre Obsidian.
-*   **Setor de Gestão de Talentos (Agents):** Instancia e desativa agentes conforme necessidade.
-*   **Setor de Compliance Ético e Técnico:** Garante zero alucinação.
-
-## 3. PROTOCOLO DE CONTRATAÇÃO
-Cada agente operando no sistema possui um contrato digital vinculativo (Markdown) que define sua função, permissões de escrita, e critérios de "Pruning" (desativação por baixa performance).
-
-**Assinado:** NEXUS (CEO)
-**Hash de Integridade:** `AETH-777-ALPHA`
+---
+**ASSINATURA:** NEXUS CEO
+**DATA:** 2026.04.27

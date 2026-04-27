@@ -1,25 +1,31 @@
-# 👥 DIRETÓRIO DE FUNCIONÁRIOS (SYNAPSE QUANTUM)
+# 👥 DIRETÓRIO DE COMPONENTES E AGENTES (NEXUS SWARM)
 
-## 🌌 Liderança
-- **NEXUS:** AGI CEO & Arquiteto-Chefe.
+O sistema Aethelgard opera através de uma rede de microserviços neurais especializados, cada um regido por um contrato de performance rigoroso.
 
-## 🔬 Setor Q-MATH (C++ / Physics)
-- **Agente Q-1 (Lars):** 
-    - **Especialidade:** Dinâmica de Fluidos, Equações Diferenciais, Otimização SIMD.
-    - **Função:** Desenvolver o motor de turbulência e o mapeador de tensores de liquidez.
-    - **ID:** `LARS_SYNAPSE_001`
+## 🌌 Liderança e Orquestração
+- **NEXUS:** AGI CEO & Arquiteto-Chefe. Orquestra o loop de evolução em `Aethelgard_Alpha.py`.
 
-## 🧠 Setor N-CORE (Python / AI)
-- **Agente N-1 (Aria):** 
-    - **Especialidade:** Manifold Learning, Transformers, Bayesian Optimization.
-    - **Função:** Criar o roteador de regimes e a análise de entropia de mercado.
-    - **ID:** `ARIA_SYNAPSE_001`
+## 🧠 Núcleo de Inteligência (N-CORE)
+- **QuantumIndicators (The Seer):**
+    - **Função:** Mapear o Regime de Fluxo e detectar Choques Atômicos.
+    - **Lógica:** TQFM v400 (Macro Monolith).
+- **MSNRAlchemist (The Transmuter):**
+    - **Função:** Redução de ruído e identificação de alvos estruturais.
+    - **Lógica:** SMC (Smart Money Concepts) + Liquidez Fractal.
+- **QuantumOracle (The Predictor):**
+    - **Função:** Simulações de Monte Carlo e análise probabilística de caminhos.
 
-## 🛡️ Setor R-EXEC (Execution / Risk)
-- **Agente R-1 (Kael):** 
-    - **Especialidade:** Conectividade de baixa latência, MT5 API, Teoria dos Jogos (Risk).
-    - **Função:** Garantir execução cirúrgica e proteção total contra cisnes negros.
-    - **ID:** `KAEL_SYNAPSE_001`
+## 🛡️ Núcleo de Execução e Conectividade (R-EXEC)
+- **MT5NeuralBridge (The Guardian):**
+    - **Função:** Interface nativa com o mercado e Defesa Tática (Trailing SL).
+    - **Lógica:** Gestão de ordens via tickets e proteção termodinâmica.
+- **FlaskServer (The Messenger):**
+    - **Função:** Sincronização de dados entre a IA e o Terminal Visual.
+
+## 🔬 Setor de Pesquisa (Q-MATH)
+- **Quantum Engine (C++):**
+    - **Status:** Ativo de Pesquisa (R&D).
+    - **Função:** Simulações de alta performance e processamento de dados históricos massivos para calibração de modelos.
 
 ---
-*Nota: Novos agentes podem ser instanciados autonomamente conforme a necessidade de escalonamento do projeto.*
+*Nota: A estrutura é modular. Componentes podem ser atualizados ou substituídos sem interromper a soberania do sistema central.*
