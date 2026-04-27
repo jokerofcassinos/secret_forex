@@ -33,6 +33,7 @@ class AethelgardAGI:
         self.is_running = False
         self.regimes_cache = []
         self.signals_cache = []
+        self.dots_cache = []
         self.last_time = 0
         self.genesis_count = 0
 
@@ -60,15 +61,19 @@ class AethelgardAGI:
                     
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
+                        
+                        scores_hist = []
                         for i in range(len(df)):
                             if i < window_calc:
                                 self.regimes_cache.append("0|0")
                                 self.signals_cache.append("0")
+                                scores_hist.append(0)
                                 continue
                             
                             slice_df = df.iloc[i-window_calc:i+1]
                             r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                             self.regimes_cache.append(f"{r_score}|{conf}")
+                            scores_hist.append(r_score)
                             
                             # --- RADAR DE ANOMALIAS (HISTÓRICO) ---
                             sig = 0
@@ -89,7 +94,8 @@ class AethelgardAGI:
                             
                             self.signals_cache.append(str(sig))
                             prev_s, prev_c = r_score, conf
-                            
+                        
+                        self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df, scores_hist)]
                         self.last_time = df.iloc[-1]['time']
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v73 Concluído.")
                     
@@ -131,21 +137,27 @@ class AethelgardAGI:
                             curr = df.iloc[-1]
                             body = abs(curr['close'] - curr['open'])
                             
-                            # Pensamento da IA: Houve injeção de massa crítica ou é o INÍCIO de um novo regime?
                             if body > (atr * 1.5) or is_genesis:
                                 sig = 1 if r_score == 1 else 2
                                 status_txt = f"ANOMALIA_INSTITUCIONAL_{'BULL' if sig == 1 else 'BEAR'}"
-                                print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt} (Massa: {body/atr:.1f}x ATR / Genesis: {is_genesis})")
+                                print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt}")
                                 
-                            # --- ATUALIZAÇÃO SÍNCRONA DE CACHE ---
+                            # Atualização Síncrona
                             self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score if is_sovereign else 0}|{conf}")
                             self.signals_cache.pop(0); self.signals_cache.append(str(sig))
+                            
+                            # Re-calcula dots para todo o DF
+                            scores_list = [(int(r.split('|')[0])) for r in self.regimes_cache]
+                            self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df.tail(len(self.regimes_cache)), scores_list)]
+                            
                             prev_s, prev_c = r_score, conf
                             self.last_time = df.iloc[-1]['time']
                         
-                        # MONTAGEM DA STRING COM O PRESENTE REAL (Cache + RT)
+                        # Preço Médio Institucional (EMA 89)
+                        inst_avg = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+                        
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_txt};{self.signals_cache[-1]};{','.join(display_regimes)};0.00;1.0;{','.join(self.signals_cache)}"
+                        nexus_data_str = f"0;0;{status_txt};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};1.0;{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f}"
 
                 time.sleep(1)
         except Exception as e:

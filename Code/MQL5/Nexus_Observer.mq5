@@ -3,7 +3,7 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "82.00"
+#property version   "85.00"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -30,23 +30,26 @@ void ParseAndDraw(string data)
 {
    string parts[];
    StringSplit(data, ';', parts);
-   if(ArraySize(parts) < 8) return;
+   if(ArraySize(parts) < 10) return;
 
    string statusTxt = parts[2];
    string historyZonas = parts[4];
+   double instAvgPrice = StringToDouble(parts[5]);
    string historySignals = parts[7];
+   string historyDots = parts[8];
    
-   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V82", 10, 20, clrCyan, 12);
+   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V85", 10, 20, clrCyan, 12);
    
-   // EXIBIÇÃO DA PREVISÃO / STATUS v82
+   // EXIBIÇÃO DA PREVISÃO / STATUS
    color sClr = clrWhite;
    if(StringFind(statusTxt, "PREVISAO") >= 0) sClr = clrGold;
    if(StringFind(statusTxt, "ATIVO") >= 0) sClr = clrSpringGreen;
    if(StringFind(statusTxt, "ATIVA") >= 0) sClr = clrLime;
    
    DrawLabel("NEXUS_STATUS", "PREVISAO: " + statusTxt, 10, 40, sClr, 10);
+   DrawLabel("NEXUS_INST_AVG", "INST_AVG_PRICE: " + DoubleToString(instAvgPrice, 2), 10, 60, clrGray, 9);
 
-   // 1. DESENHO DAS ZONAS
+   // 1. DESENHO DAS ZONAS (RETAGULOS)
    string histZ[]; StringSplit(historyZonas, ',', histZ);
    int totalZ = ArraySize(histZ);
    ObjectsDeleteAll(0, "NEXUS_ZONE_");
@@ -101,9 +104,7 @@ void ParseAndDraw(string data)
       if(signalVal != 0) {
          string sName = "NEXUS_SIG_" + IntegerToString(j);
          datetime sTime = iTime(_Symbol, _Period, j);
-         
-         // Aumentando o distanciamento para o texto não sobrepor a vela
-         double sPrice = (signalVal == 1) ? iLow(_Symbol, _Period, j) - 40 * _Point : iHigh(_Symbol, _Period, j) + 40 * _Point;
+         double sPrice = (signalVal == 1) ? iLow(_Symbol, _Period, j) - 80 * _Point : iHigh(_Symbol, _Period, j) + 80 * _Point;
          
          ObjectCreate(0, sName, OBJ_TEXT, 0, sTime, sPrice);
          string textMsg = (signalVal == 1) ? "[BULL_VOLUME]" : "[BEAR_VOLUME]";
@@ -113,6 +114,28 @@ void ParseAndDraw(string data)
          ObjectSetInteger(0, sName, OBJPROP_COLOR, (signalVal == 1 ? clrDodgerBlue : clrOrangeRed));
          ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (signalVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
       }
+   }
+
+   // 3. DESENHO DOS TACTICAL DOTS (BOLINHAS)
+   string histD[]; StringSplit(historyDots, ',', histD);
+   int totalD = ArraySize(histD);
+   ObjectsDeleteAll(0, "NEXUS_DOT_");
+   
+   for(int d=0; d < totalD && d < iBars(_Symbol, _Period); d++) {
+      int dotVal = (int)StringToInteger(histD[totalD - 1 - d]);
+      string dName = "NEXUS_DOT_" + IntegerToString(d);
+      datetime dTime = iTime(_Symbol, _Period, d);
+      double dPrice = iLow(_Symbol, _Period, d) - 20 * _Point;
+      
+      color dClr = clrGray;
+      if(dotVal == 1) dClr = clrSpringGreen;
+      if(dotVal == 2) dClr = clrOrangeRed;
+      
+      ObjectCreate(0, dName, OBJ_ARROW, 0, dTime, dPrice);
+      ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, 159); // Círculo cheio
+      ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
+      ObjectSetInteger(0, dName, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, dName, OBJPROP_ANCHOR, ANCHOR_TOP);
    }
 }
 

@@ -254,3 +254,97 @@ class QuantumIndicators:
         loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
         rs = gain / (loss + 1e-9)
         return 100 - (100 / (1 + rs))
+
+    @staticmethod
+    def calculate_tactical_dots(df, regime_score):
+        """
+        Gera sinais visuais (dots) ultra-dinâmicos com filtros de exaustão e gravidade.
+        0: Neutro (Cinza) - Fase de transição ou exaustão.
+        1: Compra Sniper (Verde) - Regime Bull + Correção Saudável + Momentum de Retorno.
+        2: Venda Sniper (Vermelho) - Regime Bear + Repique de Exaustão + Momentum de Queda.
+        """
+        if len(df) < 50: return [0] * len(df)
+        
+        # 1. Camadas de Inteligência
+        ema_fast = df['close'].ewm(span=9, adjust=False).mean()
+        ema_mid = df['close'].ewm(span=21, adjust=False).mean()
+        ema_trend = df['close'].ewm(span=34, adjust=False).mean()
+        ema_macro = df['close'].ewm(span=89, adjust=False).mean()
+        rsi = QuantumIndicators.calculate_rsi(df['close'], 14)
+        
+        # Cálculo de Volatilidade para Trava de Gravidade
+        high_low = df['high'] - df['low']
+        high_close = np.abs(df['high'] - df['close'].shift(1))
+        low_close = np.abs(df['low'] - df['close'].shift(1))
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = np.max(ranges, axis=1)
+        atr = true_range.rolling(14).mean()
+        
+        dots = []
+        for i in range(len(df)):
+            if i < 14:
+                dots.append(0)
+                continue
+                
+            curr_regime = regime_score[i]
+            c = df['close'].iloc[i]
+            o = df['open'].iloc[i]
+            h = df['high'].iloc[i]
+            l = df['low'].iloc[i]
+            
+            curr_rsi = rsi.iloc[i]
+            prev_rsi = rsi.iloc[i-1]
+            curr_e9 = ema_fast.iloc[i]
+            curr_e21 = ema_mid.iloc[i]
+            curr_e34 = ema_trend.iloc[i]
+            curr_e89 = ema_macro.iloc[i]
+            curr_atr = atr.iloc[i]
+            
+            # --- FILTROS DE SEGURANÇA NEXUS v2.1 ---
+            
+            # 1. Trava de Gravidade (Anti-Estiramento)
+            # Se o preço estiver a mais de 2.0 ATRs da média 89, está "caro" demais.
+            dist_macro = abs(c - curr_e89)
+            is_overextended = dist_macro > (curr_atr * 2.0)
+            
+            # 2. Filtro de Momentum (Velas)
+            is_green_candle = c > o
+            is_red_candle = c < o
+            
+            # 3. Filtro de Exaustão RSI
+            rsi_rising = curr_rsi > prev_rsi
+            rsi_falling = curr_rsi < prev_rsi
+            
+            dot = 0 # Neutro (Cinza)
+            
+            # --- LÓGICA DE COMPRA SNIPER (GREEN DOT) ---
+            if curr_regime == 1: # Tsunami Bull
+                # Condições: 
+                # A) Não pode estar sobre-estendido (caro)
+                # B) Deve estar em fase de correção (perto da EMA 21 ou 34)
+                # C) O RSI deve estar voltando a subir (gatilho de momentum) ou em sobrevenda técnica (<45)
+                # D) O candle atual deve mostrar força compradora (verde)
+                
+                near_support = (c <= curr_e21 * 1.001) # Perto ou abaixo da EMA 21
+                if not is_overextended and near_support:
+                    if (curr_rsi < 50 and rsi_rising) or (curr_rsi < 40):
+                        if is_green_candle:
+                            dot = 1 # VERDE: Compra de Alta Probabilidade
+            
+            # --- LÓGICA DE VENDA SNIPER (RED DOT) ---
+            elif curr_regime == 2: # Tsunami Bear
+                # Condições:
+                # A) Não pode estar sobre-estendido (longe da 89 p/ baixo)
+                # B) Deve estar em fase de repique (perto da EMA 21 ou 34)
+                # C) RSI voltando a cair ou em sobrecompra técnica (>55)
+                # D) Candle atual deve ser vermelho
+                
+                near_resistance = (c >= curr_e21 * 0.999) # Perto ou acima da EMA 21
+                if not is_overextended and near_resistance:
+                    if (curr_rsi > 50 and rsi_falling) or (curr_rsi > 60):
+                        if is_red_candle:
+                            dot = 2 # VERMELHO: Venda de Alta Probabilidade
+            
+            dots.append(dot)
+        
+        return dots
