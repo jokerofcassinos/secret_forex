@@ -108,6 +108,8 @@ void ParseAndDraw(string data)
       }
       
       color dClr = clrBlack;
+      bool isAbove = (dotVal == 2 || dotVal == 21 || dotVal == 22 || dotVal == 23);
+
       if(dotVal == 1) dClr = clrSpringGreen;
       else if(dotVal == 11) dClr = clrMediumSeaGreen;
       else if(dotVal == 12) dClr = clrForestGreen;
@@ -117,14 +119,19 @@ void ParseAndDraw(string data)
       else if(dotVal == 22) dClr = clrFireBrick;
       else if(dotVal == 23) dClr = clrMaroon;
 
+      if(dClr == clrBlack) { ObjectDelete(0, dName); continue; }
+
       if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_ARROW, 0, 0, 0);
-      double dPrice = (dotVal < 20) ? iLow(_Symbol, _Period, d) - 40*_Point : iHigh(_Symbol, _Period, d) + 40*_Point;
+      
+      double offset = 100 * _Point;
+      double dPrice = isAbove ? iHigh(_Symbol, _Period, d) + offset : iLow(_Symbol, _Period, d) - offset;
       
       ObjectSetInteger(0, dName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
       ObjectSetDouble(0, dName, OBJPROP_PRICE, dPrice);
       ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, 159);
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
       ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 2 : 1));
+      ObjectSetInteger(0, dName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
    }
 
    // 3. ATUALIZAÇÃO DOS SINAIS DE VOLUME
