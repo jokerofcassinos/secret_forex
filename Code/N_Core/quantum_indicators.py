@@ -271,47 +271,71 @@ class QuantumIndicators:
     @staticmethod
     def calculate_tactical_dots(df, regime_score):
         """
-        Gera sinais visuais (dots) v27.0 (Gradient Sniper).
-        Foco: Sinais coloridos com desbotamento (gradient) em 3 candles. Sem cinzas.
+        Gera sinais visuais (dots) v27.1 (The Entropy Guard - Strict).
+        Foco: Silêncio total em zonas de exaustão e transição.
         """
-        if len(df) < 50: return [0] * len(df)
+        if len(df) < 60: return [0] * len(df)
         
+        # Camadas de Comando
         ema_9 = df['close'].ewm(span=9, adjust=False).mean()
-        raw_dots = [0] * len(df)
-        lookback = 8
+        ema_21 = df['close'].ewm(span=21, adjust=False).mean()
+        ema_34 = df['close'].ewm(span=34, adjust=False).mean()
+        ema_89 = df['close'].ewm(span=89, adjust=False).mean()
         
+        high_low = df['high'] - df['low']
+        atr = high_low.rolling(14).mean()
+        
+        dots = []
+        lookback = 8
         for i in range(len(df)):
-            if i < lookback: continue
+            if i < 20:
+                dots.append(0); continue
                 
             curr_r = regime_score[i]
-            c = df['close'].iloc[i]; o = df['open'].iloc[i]
-            h = df['high'].iloc[i]; l = df['low'].iloc[i]
+            c = df['close'].iloc[i]
+            o = df['open'].iloc[i]
+            h = df['high'].iloc[i]
+            l = df['low'].iloc[i]
             e9 = ema_9.iloc[i]
+            e21 = ema_21.iloc[i]
+            e34 = ema_34.iloc[i]
+            e89 = ema_89.iloc[i]
+            curr_atr = atr.iloc[i]
             
-            body = abs(c - o); l_wick = min(c, o) - l; u_wick = h - max(c, o); c_range = h - l + 1e-9
-            l_max = df['high'].iloc[i-lookback:i+1].max(); l_min = df['low'].iloc[i-lookback:i+1].min()
-            median = (l_max + l_min) / 2
-            is_decisive = body > (c_range * 0.2)
+            # --- CÁLCULO DE ENTROPIA LOCAL ---
+            gap_macro = abs(e34 - e89) / (curr_atr + 1e-9)
+            gap_fast = abs(e9 - e21) / (curr_atr + 1e-9)
             
-            dot = 0
-            if curr_r == 1: # Bull
-                if c < median and is_decisive and (l <= e9 * 1.001) and (c > o) and (u_wick < body):
+            # TRAVA DE SEGURANÇA Ph.D.
+            # Se a saúde macro é baixa (<20%) ou as médias estão coladas, SILÊNCIO.
+            is_exhausted = (gap_macro < 0.6) or (gap_fast < 0.1)
+            
+            dot = 0 # Default: Cinza (Será filtrado pelo gradiente)
+            
+            if not is_exhausted:
+                l_max = df['high'].iloc[i-lookback:i+1].max()
+                l_min = df['low'].iloc[i-lookback:i+1].min()
+                p_rel = (c - l_min) / (l_max - l_min + 1e-9)
+                
+                # --- LÓGICA BASE ---
+                if curr_r == 1 and p_rel < 0.50 and (l <= e9 * 1.001) and (c > o):
                     dot = 1
-            elif curr_r == 2: # Bear
-                if c > median and is_decisive and (h >= e9 * 0.999) and (c < o) and (l_wick < body):
+                elif curr_r == 2 and p_rel > 0.50 and (h >= e9 * 0.999) and (c < o):
                     dot = 2
-            raw_dots[i] = dot
             
-        gradient_dots = [0] * len(raw_dots)
-        for i in range(len(raw_dots)):
-            if raw_dots[i] == 1:
+            dots.append(dot)
+            
+        # --- GRADIENTE PASS ---
+        gradient_dots = [0] * len(dots)
+        for i in range(len(dots)):
+            if dots[i] == 1:
                 gradient_dots[i] = 1
-                if i+1 < len(raw_dots): gradient_dots[i+1] = 11
-                if i+2 < len(raw_dots): gradient_dots[i+2] = 12
-                if i+3 < len(raw_dots): gradient_dots[i+3] = 13
-            elif raw_dots[i] == 2:
+                if i+1 < len(dots): gradient_dots[i+1] = 11
+                if i+2 < len(dots): gradient_dots[i+2] = 12
+                if i+3 < len(dots): gradient_dots[i+3] = 13
+            elif dots[i] == 2:
                 gradient_dots[i] = 2
-                if i+1 < len(raw_dots): gradient_dots[i+1] = 21
-                if i+2 < len(raw_dots): gradient_dots[i+2] = 22
-                if i+3 < len(raw_dots): gradient_dots[i+3] = 23
+                if i+1 < len(dots): gradient_dots[i+1] = 21
+                if i+2 < len(dots): gradient_dots[i+2] = 22
+                if i+3 < len(dots): gradient_dots[i+3] = 23
         return gradient_dots

@@ -3,8 +3,11 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "112.00"
+#property version   "113.00"
 #property strict
+
+// Memória de Estado
+string last_payload = "";
 
 //+------------------------------------------------------------------+
 int OnInit() { EventSetTimer(1); return(INIT_SUCCEEDED); }
@@ -22,7 +25,10 @@ void UpdateDashboard()
    res = WebRequest("GET", url, cookie, NULL, 50, post, 0, result, headers);
    if(res == 200) {
       string response = CharArrayToString(result);
-      ParseAndDraw(response);
+      if(response != last_payload) { // Só processa se houver mudança real
+         ParseAndDraw(response);
+         last_payload = response;
+      }
    }
 }
 
@@ -39,22 +45,17 @@ void ParseAndDraw(string data)
    string historySignals = parts[7];
    string historyDots = parts[8];
    
-   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V112", 10, 20, clrCyan, 12);
+   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V113", 10, 20, clrCyan, 12);
    
-   color sClr = clrWhite;
-   if(health < 0.3) sClr = clrRed;
-   else if(health < 0.6) sClr = clrGold;
-   else sClr = clrSpringGreen;
-   
+   color sClr = (health < 0.3) ? clrRed : (health < 0.6 ? clrGold : clrSpringGreen);
    DrawLabel("NEXUS_STATUS", "STATUS: " + statusTxt, 10, 40, sClr, 10);
    DrawLabel("NEXUS_INST_AVG", "INST_AVG_PRICE: " + DoubleToString(instAvgPrice, 2), 10, 60, clrGray, 9);
 
-   // 1. DESENHO DAS CAIXAS
+   // 1. ATUALIZAÇÃO DAS CAIXAS (SEM DELETAR TUDO)
    string hReg[]; StringSplit(historyRegimes, ',', hReg);
    int totalR = ArraySize(hReg);
-   ObjectsDeleteAll(0, "NEXUS_ZONE_");
    
-   int i = 0; int boxCount = 0;
+   int i = 0; int boxIdx = 0;
    while(i < totalR && i < iBars(_Symbol, _Period)) {
       string val = hReg[totalR - 1 - i];
       string sub[]; StringSplit(val, '|', sub);
@@ -74,66 +75,82 @@ void ParseAndDraw(string data)
             minL = MathMin(minL, iLow(_Symbol, _Period, k));
          }
          
-         string bName = "NEXUS_ZONE_" + IntegerToString(boxCount);
+         string bName = "NEXUS_ZONE_" + IntegerToString(boxIdx);
          color zClr = (r == 1) ? clrLime : clrRed;
-         ObjectCreate(0, bName, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, start), maxH, iTime(_Symbol, _Period, end), minL);
+         
+         // ObjectCreate em objeto existente apenas atualiza as coordenadas (Sem Flicker)
+         if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
+         ObjectSetInteger(0, bName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, start));
+         ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, maxH);
+         ObjectSetInteger(0, bName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, end));
+         ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, minL);
          ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
          ObjectSetInteger(0, bName, OBJPROP_WIDTH, 2);
-         ObjectSetInteger(0, bName, OBJPROP_FILL, false);
-         boxCount++;
+         ObjectSetInteger(0, bName, OBJPROP_BACK, true);
+         
+         boxIdx++;
          i = end + 1;
       } else i++;
    }
+   // Limpa caixas excedentes da memória
+   for(int k=boxIdx; k<100; k++) ObjectDelete(0, "NEXUS_ZONE_"+IntegerToString(k));
 
-   // 2. DESENHO DOS SINAIS DE VOLUME (RESTAURADO)
-   string hSig[]; StringSplit(historySignals, ',', hSig);
-   ObjectsDeleteAll(0, "NEXUS_SIG_");
-   
-   for(int j=0; j < ArraySize(hSig) && j < iBars(_Symbol, _Period); j++) {
-      int sigVal = (int)StringToInteger(hSig[ArraySize(hSig) - 1 - j]);
-      if(sigVal != 0) {
-         string sName = "NEXUS_SIG_" + IntegerToString(j);
-         datetime sTime = iTime(_Symbol, _Period, j);
-         double sPrice = (sigVal == 1) ? iLow(_Symbol, _Period, j) - 80 * _Point : iHigh(_Symbol, _Period, j) + 80 * _Point;
-         
-         ObjectCreate(0, sName, OBJ_TEXT, 0, sTime, sPrice);
-         string textMsg = (sigVal == 1) ? "[BULL_VOLUME]" : "[BEAR_VOLUME]";
-         ObjectSetString(0, sName, OBJPROP_TEXT, textMsg);
-         ObjectSetInteger(0, sName, OBJPROP_COLOR, (sigVal == 1 ? clrDodgerBlue : clrOrangeRed));
-         ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 8);
-         ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sigVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
-      }
-   }
-
-   // 3. DESENHO DOS TACTICAL DOTS (GRADIENTE)
+   // 2. ATUALIZAÇÃO DOS TACTICAL DOTS (GRADIENTE PERSISTENTE)
    string hDots[]; StringSplit(historyDots, ',', hDots);
-   ObjectsDeleteAll(0, "NEXUS_DOT_");
+   int totalD = ArraySize(hDots);
    
-   for(int d=0; d < ArraySize(hDots) && d < iBars(_Symbol, _Period); d++) {
-      int dotVal = (int)StringToInteger(hDots[ArraySize(hDots) - 1 - d]);
-      if(dotVal == 0) continue;
+   for(int d=0; d < totalD && d < iBars(_Symbol, _Period); d++) {
+      int dotVal = (int)StringToInteger(hDots[totalD - 1 - d]);
+      string dName = "NEXUS_DOT_" + IntegerToString(d);
+      
+      if(dotVal == 0) {
+         ObjectDelete(0, dName); continue;
+      }
       
       color dClr = clrBlack;
       if(dotVal == 1) dClr = clrSpringGreen;
-      if(dotVal == 11) dClr = clrMediumSeaGreen;
-      if(dotVal == 12) dClr = clrForestGreen;
-      if(dotVal == 13) dClr = clrDarkGreen;
-      if(dotVal == 2) dClr = clrRed;
-      if(dotVal == 21) dClr = clrCrimson;
-      if(dotVal == 22) dClr = clrFireBrick;
-      if(dotVal == 23) dClr = clrMaroon;
-      
-      if(dClr == clrBlack) continue;
+      else if(dotVal == 11) dClr = clrMediumSeaGreen;
+      else if(dotVal == 12) dClr = clrForestGreen;
+      else if(dotVal == 13) dClr = clrDarkGreen;
+      else if(dotVal == 2) dClr = clrRed;
+      else if(dotVal == 21) dClr = clrCrimson;
+      else if(dotVal == 22) dClr = clrFireBrick;
+      else if(dotVal == 23) dClr = clrMaroon;
 
-      string dName = "NEXUS_DOT_" + IntegerToString(d);
-      datetime dTime = iTime(_Symbol, _Period, d);
+      if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_ARROW, 0, 0, 0);
       double dPrice = (dotVal < 20) ? iLow(_Symbol, _Period, d) - 40*_Point : iHigh(_Symbol, _Period, d) + 40*_Point;
       
-      ObjectCreate(0, dName, OBJ_ARROW, 0, dTime, dPrice);
+      ObjectSetInteger(0, dName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
+      ObjectSetDouble(0, dName, OBJPROP_PRICE, dPrice);
       ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, 159);
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
       ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 2 : 1));
    }
+
+   // 3. ATUALIZAÇÃO DOS SINAIS DE VOLUME
+   string hSig[]; StringSplit(historySignals, ',', hSig);
+   int totalS = ArraySize(hSig);
+   
+   for(int j=0; j < totalS && j < iBars(_Symbol, _Period); j++) {
+      int sVal = (int)StringToInteger(hSig[totalS - 1 - j]);
+      string sName = "NEXUS_SIG_" + IntegerToString(j);
+      
+      if(sVal == 0) {
+         ObjectDelete(0, sName); continue;
+      }
+      
+      if(ObjectFind(0, sName) < 0) ObjectCreate(0, sName, OBJ_TEXT, 0, 0, 0);
+      double sPrice = (sVal == 1) ? iLow(_Symbol, _Period, j) - 80 * _Point : iHigh(_Symbol, _Period, j) + 80 * _Point;
+      
+      ObjectSetInteger(0, sName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
+      ObjectSetDouble(0, sName, OBJPROP_PRICE, sPrice);
+      ObjectSetString(0, sName, OBJPROP_TEXT, (sVal == 1 ? "[BULL_VOLUME]" : "[BEAR_VOLUME]"));
+      ObjectSetInteger(0, sName, OBJPROP_COLOR, (sVal == 1 ? clrDodgerBlue : clrOrangeRed));
+      ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 8);
+      ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
+   }
+   
+   ChartRedraw(0);
 }
 
 void DrawLabel(string name, string text, int x, int y, color clr, int fontSize)
