@@ -147,7 +147,7 @@ class AethelgardAGI:
                             self.signals_cache.pop(0); self.signals_cache.append(str(sig))
                             
                             # Re-calcula dots para todo o DF
-                            scores_list = [(int(r.split('|')[0])) for r in self.regimes_cache]
+                            scores_list = [int(r.split('|')[0]) for r in self.regimes_cache]
                             self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df.tail(len(self.regimes_cache)), scores_list)]
                             
                             prev_s, prev_c = r_score, conf
@@ -155,9 +155,12 @@ class AethelgardAGI:
                         
                         # Preço Médio Institucional (EMA 89)
                         inst_avg = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+                        # Saúde do Regime (v27.0)
+                        health = self.q_logic.calculate_regime_health(df)
+                        status_final = f"{status_txt} | SAÚDE: {health}%"
                         
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_txt};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};1.0;{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f}"
 
                 time.sleep(1)
         except Exception as e:

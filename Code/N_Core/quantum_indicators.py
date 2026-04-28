@@ -243,9 +243,22 @@ class QuantumIndicators:
 
         return 0, 0
 
-
-
-
+    @staticmethod
+    def calculate_regime_health(df):
+        """
+        Calcula a saúde da tendência (0-100%).
+        Baseado na divergência entre EMA 34 (Tendência) e EMA 89 (Macro).
+        """
+        if len(df) < 90: return 100
+        ema_34 = df['close'].ewm(span=34, adjust=False).mean()
+        ema_89 = df['close'].ewm(span=89, adjust=False).mean()
+        
+        high_low = df['high'] - df['low']
+        atr = high_low.rolling(14).mean().iloc[-1]
+        
+        gap = abs(ema_34.iloc[-1] - ema_89.iloc[-1])
+        health = min(100, (gap / (atr * 4.0)) * 100)
+        return int(health)
 
     @staticmethod
     def calculate_rsi(prices, window=14):
@@ -258,93 +271,47 @@ class QuantumIndicators:
     @staticmethod
     def calculate_tactical_dots(df, regime_score):
         """
-        Gera sinais visuais (dots) ultra-dinâmicos com filtros de exaustão e gravidade.
-        0: Neutro (Cinza) - Fase de transição ou exaustão.
-        1: Compra Sniper (Verde) - Regime Bull + Correção Saudável + Momentum de Retorno.
-        2: Venda Sniper (Vermelho) - Regime Bear + Repique de Exaustão + Momentum de Queda.
+        Gera sinais visuais (dots) v27.0 (Gradient Sniper).
+        Foco: Sinais coloridos com desbotamento (gradient) em 3 candles. Sem cinzas.
         """
         if len(df) < 50: return [0] * len(df)
         
-        # 1. Camadas de Inteligência
-        ema_fast = df['close'].ewm(span=9, adjust=False).mean()
-        ema_mid = df['close'].ewm(span=21, adjust=False).mean()
-        ema_trend = df['close'].ewm(span=34, adjust=False).mean()
-        ema_macro = df['close'].ewm(span=89, adjust=False).mean()
-        rsi = QuantumIndicators.calculate_rsi(df['close'], 14)
+        ema_9 = df['close'].ewm(span=9, adjust=False).mean()
+        raw_dots = [0] * len(df)
+        lookback = 8
         
-        # Cálculo de Volatilidade para Trava de Gravidade
-        high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift(1))
-        low_close = np.abs(df['low'] - df['close'].shift(1))
-        ranges = pd.concat([high_low, high_close, low_close], axis=1)
-        true_range = np.max(ranges, axis=1)
-        atr = true_range.rolling(14).mean()
-        
-        dots = []
         for i in range(len(df)):
-            if i < 14:
-                dots.append(0)
-                continue
+            if i < lookback: continue
                 
-            curr_regime = regime_score[i]
-            c = df['close'].iloc[i]
-            o = df['open'].iloc[i]
-            h = df['high'].iloc[i]
-            l = df['low'].iloc[i]
+            curr_r = regime_score[i]
+            c = df['close'].iloc[i]; o = df['open'].iloc[i]
+            h = df['high'].iloc[i]; l = df['low'].iloc[i]
+            e9 = ema_9.iloc[i]
             
-            curr_rsi = rsi.iloc[i]
-            prev_rsi = rsi.iloc[i-1]
-            curr_e9 = ema_fast.iloc[i]
-            curr_e21 = ema_mid.iloc[i]
-            curr_e34 = ema_trend.iloc[i]
-            curr_e89 = ema_macro.iloc[i]
-            curr_atr = atr.iloc[i]
+            body = abs(c - o); l_wick = min(c, o) - l; u_wick = h - max(c, o); c_range = h - l + 1e-9
+            l_max = df['high'].iloc[i-lookback:i+1].max(); l_min = df['low'].iloc[i-lookback:i+1].min()
+            median = (l_max + l_min) / 2
+            is_decisive = body > (c_range * 0.2)
             
-            # --- FILTROS DE SEGURANÇA NEXUS v2.1 ---
+            dot = 0
+            if curr_r == 1: # Bull
+                if c < median and is_decisive and (l <= e9 * 1.001) and (c > o) and (u_wick < body):
+                    dot = 1
+            elif curr_r == 2: # Bear
+                if c > median and is_decisive and (h >= e9 * 0.999) and (c < o) and (l_wick < body):
+                    dot = 2
+            raw_dots[i] = dot
             
-            # 1. Trava de Gravidade (Anti-Estiramento)
-            # Se o preço estiver a mais de 2.0 ATRs da média 89, está "caro" demais.
-            dist_macro = abs(c - curr_e89)
-            is_overextended = dist_macro > (curr_atr * 2.0)
-            
-            # 2. Filtro de Momentum (Velas)
-            is_green_candle = c > o
-            is_red_candle = c < o
-            
-            # 3. Filtro de Exaustão RSI
-            rsi_rising = curr_rsi > prev_rsi
-            rsi_falling = curr_rsi < prev_rsi
-            
-            dot = 0 # Neutro (Cinza)
-            
-            # --- LÓGICA DE COMPRA SNIPER (GREEN DOT) ---
-            if curr_regime == 1: # Tsunami Bull
-                # Condições: 
-                # A) Não pode estar sobre-estendido (caro)
-                # B) Deve estar em fase de correção (perto da EMA 21 ou 34)
-                # C) O RSI deve estar voltando a subir (gatilho de momentum) ou em sobrevenda técnica (<45)
-                # D) O candle atual deve mostrar força compradora (verde)
-                
-                near_support = (c <= curr_e21 * 1.001) # Perto ou abaixo da EMA 21
-                if not is_overextended and near_support:
-                    if (curr_rsi < 50 and rsi_rising) or (curr_rsi < 40):
-                        if is_green_candle:
-                            dot = 1 # VERDE: Compra de Alta Probabilidade
-            
-            # --- LÓGICA DE VENDA SNIPER (RED DOT) ---
-            elif curr_regime == 2: # Tsunami Bear
-                # Condições:
-                # A) Não pode estar sobre-estendido (longe da 89 p/ baixo)
-                # B) Deve estar em fase de repique (perto da EMA 21 ou 34)
-                # C) RSI voltando a cair ou em sobrecompra técnica (>55)
-                # D) Candle atual deve ser vermelho
-                
-                near_resistance = (c >= curr_e21 * 0.999) # Perto ou acima da EMA 21
-                if not is_overextended and near_resistance:
-                    if (curr_rsi > 50 and rsi_falling) or (curr_rsi > 60):
-                        if is_red_candle:
-                            dot = 2 # VERMELHO: Venda de Alta Probabilidade
-            
-            dots.append(dot)
-        
-        return dots
+        gradient_dots = [0] * len(raw_dots)
+        for i in range(len(raw_dots)):
+            if raw_dots[i] == 1:
+                gradient_dots[i] = 1
+                if i+1 < len(raw_dots): gradient_dots[i+1] = 11
+                if i+2 < len(raw_dots): gradient_dots[i+2] = 12
+                if i+3 < len(raw_dots): gradient_dots[i+3] = 13
+            elif raw_dots[i] == 2:
+                gradient_dots[i] = 2
+                if i+1 < len(raw_dots): gradient_dots[i+1] = 21
+                if i+2 < len(raw_dots): gradient_dots[i+2] = 22
+                if i+3 < len(raw_dots): gradient_dots[i+3] = 23
+        return gradient_dots

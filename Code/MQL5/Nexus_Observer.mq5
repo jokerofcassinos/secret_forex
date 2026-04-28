@@ -3,7 +3,7 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "85.00"
+#property version   "112.00"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -33,109 +33,106 @@ void ParseAndDraw(string data)
    if(ArraySize(parts) < 10) return;
 
    string statusTxt = parts[2];
-   string historyZonas = parts[4];
+   string historyRegimes = parts[4]; 
    double instAvgPrice = StringToDouble(parts[5]);
+   double health = StringToDouble(parts[6]);
    string historySignals = parts[7];
    string historyDots = parts[8];
    
-   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V85", 10, 20, clrCyan, 12);
+   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V112", 10, 20, clrCyan, 12);
    
-   // EXIBIÇÃO DA PREVISÃO / STATUS
    color sClr = clrWhite;
-   if(StringFind(statusTxt, "PREVISAO") >= 0) sClr = clrGold;
-   if(StringFind(statusTxt, "ATIVO") >= 0) sClr = clrSpringGreen;
-   if(StringFind(statusTxt, "ATIVA") >= 0) sClr = clrLime;
+   if(health < 0.3) sClr = clrRed;
+   else if(health < 0.6) sClr = clrGold;
+   else sClr = clrSpringGreen;
    
-   DrawLabel("NEXUS_STATUS", "PREVISAO: " + statusTxt, 10, 40, sClr, 10);
+   DrawLabel("NEXUS_STATUS", "STATUS: " + statusTxt, 10, 40, sClr, 10);
    DrawLabel("NEXUS_INST_AVG", "INST_AVG_PRICE: " + DoubleToString(instAvgPrice, 2), 10, 60, clrGray, 9);
 
-   // 1. DESENHO DAS ZONAS (RETAGULOS)
-   string histZ[]; StringSplit(historyZonas, ',', histZ);
-   int totalZ = ArraySize(histZ);
+   // 1. DESENHO DAS CAIXAS
+   string hReg[]; StringSplit(historyRegimes, ',', hReg);
+   int totalR = ArraySize(hReg);
    ObjectsDeleteAll(0, "NEXUS_ZONE_");
-   ObjectsDeleteAll(0, "NEXUS_TXT_");
    
    int i = 0; int boxCount = 0;
-   while(i < totalZ && i < iBars(_Symbol, _Period)) {
-      string scoreStr = histZ[totalZ - 1 - i];
-      string subP[]; StringSplit(scoreStr, '|', subP);
-      int regimeVal = (int)StringToInteger(subP[0]);
+   while(i < totalR && i < iBars(_Symbol, _Period)) {
+      string val = hReg[totalR - 1 - i];
+      string sub[]; StringSplit(val, '|', sub);
+      int r = (int)StringToInteger(sub[0]);
       
-      if(regimeVal != 0) {
-         int startIdx = i; int endIdx = i;
-         while(endIdx + 1 < totalZ && endIdx + 1 < iBars(_Symbol, _Period)) {
-            string nextS = histZ[totalZ - 1 - (endIdx + 1)];
-            string nSub[]; StringSplit(nextS, '|', nSub);
-            if((int)StringToInteger(nSub[0]) == regimeVal) endIdx++; else break;
+      if(r != 0) {
+         int start = i; int end = i;
+         while(end + 1 < totalR && end + 1 < iBars(_Symbol, _Period)) {
+            string nextVal = hReg[totalR - 1 - (end + 1)];
+            string nSub[]; StringSplit(nextVal, '|', nSub);
+            if((int)StringToInteger(nSub[0]) == r) end++; else break;
+         }
+         
+         double maxH = 0; double minL = 9999999;
+         for(int k=start; k<=end; k++) {
+            maxH = MathMax(maxH, iHigh(_Symbol, _Period, k));
+            minL = MathMin(minL, iLow(_Symbol, _Period, k));
          }
          
          string bName = "NEXUS_ZONE_" + IntegerToString(boxCount);
-         datetime tS = iTime(_Symbol, _Period, startIdx);
-         datetime tE = iTime(_Symbol, _Period, endIdx);
-         double hP = 0, lP = 9999999;
-         for(int k=startIdx; k<=endIdx; k++) { hP = MathMax(hP, iHigh(_Symbol, _Period, k)); lP = MathMin(lP, iLow(_Symbol, _Period, k)); }
-         
-         color zClr = (regimeVal == 1) ? clrLime : clrRed;
-         
-         ObjectCreate(0, bName, OBJ_RECTANGLE, 0, tS, hP, tE, lP);
+         color zClr = (r == 1) ? clrLime : clrRed;
+         ObjectCreate(0, bName, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, start), maxH, iTime(_Symbol, _Period, end), minL);
          ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
          ObjectSetInteger(0, bName, OBJPROP_WIDTH, 2);
          ObjectSetInteger(0, bName, OBJPROP_FILL, false);
-         
-         string tName = "NEXUS_TXT_" + IntegerToString(boxCount);
-         ObjectCreate(0, tName, OBJ_TEXT, 0, tS, hP);
-         ObjectSetString(0, tName, OBJPROP_TEXT, (regimeVal == 1 ? "[ BULL ]" : "[ BEAR ]"));
-         ObjectSetInteger(0, tName, OBJPROP_COLOR, zClr);
-         ObjectSetInteger(0, tName, OBJPROP_FONTSIZE, 9);
-         ObjectSetInteger(0, tName, OBJPROP_ANCHOR, ANCHOR_LEFT_LOWER);
-         
          boxCount++;
-         i = endIdx + 1;
+         i = end + 1;
       } else i++;
    }
 
-   // 2. DESENHO DOS SINAIS DE ANOMALIA (TEXTOS)
-   string histS[]; StringSplit(historySignals, ',', histS);
-   int totalS = ArraySize(histS);
+   // 2. DESENHO DOS SINAIS DE VOLUME (RESTAURADO)
+   string hSig[]; StringSplit(historySignals, ',', hSig);
    ObjectsDeleteAll(0, "NEXUS_SIG_");
    
-   for(int j=0; j < totalS && j < iBars(_Symbol, _Period); j++) {
-      int signalVal = (int)StringToInteger(histS[totalS - 1 - j]);
-      if(signalVal != 0) {
+   for(int j=0; j < ArraySize(hSig) && j < iBars(_Symbol, _Period); j++) {
+      int sigVal = (int)StringToInteger(hSig[ArraySize(hSig) - 1 - j]);
+      if(sigVal != 0) {
          string sName = "NEXUS_SIG_" + IntegerToString(j);
          datetime sTime = iTime(_Symbol, _Period, j);
-         double sPrice = (signalVal == 1) ? iLow(_Symbol, _Period, j) - 80 * _Point : iHigh(_Symbol, _Period, j) + 80 * _Point;
+         double sPrice = (sigVal == 1) ? iLow(_Symbol, _Period, j) - 80 * _Point : iHigh(_Symbol, _Period, j) + 80 * _Point;
          
          ObjectCreate(0, sName, OBJ_TEXT, 0, sTime, sPrice);
-         string textMsg = (signalVal == 1) ? "[BULL_VOLUME]" : "[BEAR_VOLUME]";
+         string textMsg = (sigVal == 1) ? "[BULL_VOLUME]" : "[BEAR_VOLUME]";
          ObjectSetString(0, sName, OBJPROP_TEXT, textMsg);
-         ObjectSetString(0, sName, OBJPROP_FONT, "Consolas");
+         ObjectSetInteger(0, sName, OBJPROP_COLOR, (sigVal == 1 ? clrDodgerBlue : clrOrangeRed));
          ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 8);
-         ObjectSetInteger(0, sName, OBJPROP_COLOR, (signalVal == 1 ? clrDodgerBlue : clrOrangeRed));
-         ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (signalVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
+         ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sigVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
       }
    }
 
-   // 3. DESENHO DOS TACTICAL DOTS (BOLINHAS)
-   string histD[]; StringSplit(historyDots, ',', histD);
-   int totalD = ArraySize(histD);
+   // 3. DESENHO DOS TACTICAL DOTS (GRADIENTE)
+   string hDots[]; StringSplit(historyDots, ',', hDots);
    ObjectsDeleteAll(0, "NEXUS_DOT_");
    
-   for(int d=0; d < totalD && d < iBars(_Symbol, _Period); d++) {
-      int dotVal = (int)StringToInteger(histD[totalD - 1 - d]);
+   for(int d=0; d < ArraySize(hDots) && d < iBars(_Symbol, _Period); d++) {
+      int dotVal = (int)StringToInteger(hDots[ArraySize(hDots) - 1 - d]);
+      if(dotVal == 0) continue;
+      
+      color dClr = clrBlack;
+      if(dotVal == 1) dClr = clrSpringGreen;
+      if(dotVal == 11) dClr = clrMediumSeaGreen;
+      if(dotVal == 12) dClr = clrForestGreen;
+      if(dotVal == 13) dClr = clrDarkGreen;
+      if(dotVal == 2) dClr = clrRed;
+      if(dotVal == 21) dClr = clrCrimson;
+      if(dotVal == 22) dClr = clrFireBrick;
+      if(dotVal == 23) dClr = clrMaroon;
+      
+      if(dClr == clrBlack) continue;
+
       string dName = "NEXUS_DOT_" + IntegerToString(d);
       datetime dTime = iTime(_Symbol, _Period, d);
-      double dPrice = iLow(_Symbol, _Period, d) - 20 * _Point;
-      
-      color dClr = clrGray;
-      if(dotVal == 1) dClr = clrSpringGreen;
-      if(dotVal == 2) dClr = clrOrangeRed;
+      double dPrice = (dotVal < 20) ? iLow(_Symbol, _Period, d) - 40*_Point : iHigh(_Symbol, _Period, d) + 40*_Point;
       
       ObjectCreate(0, dName, OBJ_ARROW, 0, dTime, dPrice);
-      ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, 159); // Círculo cheio
+      ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, 159);
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dName, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, dName, OBJPROP_ANCHOR, ANCHOR_TOP);
+      ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 2 : 1));
    }
 }
 
