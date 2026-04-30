@@ -208,13 +208,18 @@ class AethelgardAGI:
                         # Estado em tempo real para o MT5
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
                         
-                        # --- DEFESA CO-PILOTO EM TEMPO REAL (v410) ---
-                        ema_trend = df['close'].ewm(span=34, adjust=False).mean().iloc[-1]
-                        ema_macro = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+                        # --- DEFESA CO-PILOTO QUÂNTICA EM TEMPO REAL (R-EXEC) ---
                         atr = (df['high'] - df['low']).rolling(14).mean().iloc[-1]
                         
                         if r_score != 0:
-                            self.bridge.trailing_sl_tp(r_score, ema_trend, ema_macro, atr)
+                            self.bridge.thermodynamic_sl_tp(
+                                r_score=r_score, 
+                                current_price=df['close'].iloc[-1], 
+                                atr=atr, 
+                                plasma_zones=self.plasma_zones, 
+                                schrodinger_density=density_schrod, 
+                                cloud_tracker=self.cloud_tracker
+                            )
                         
                         # --- RADAR DE ANOMALIAS (PENSAMENTO ANALÍTICO) ---
                         sig = 0
