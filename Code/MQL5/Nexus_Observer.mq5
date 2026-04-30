@@ -242,6 +242,20 @@ void ParseAndDraw(string data)
           if(ObjectFind(0, z_label) >= 0) ObjectDelete(0, z_label);
       }
    }
+
+   // 7. ATUALIZAÇÃO DO FILTRO RMT SPECTRAL (RUÍDO VS INSTITUCIONAL)
+   if(ArraySize(parts) > 13 && parts[13] != "") {
+      string rmt_signal = parts[13];
+      string rmt_label = "NEXUS_RMT_WARNING";
+      
+      if(rmt_signal != "NOISE") {
+          color rmtClr = clrLime;
+          string rmtTxt = "🔬 RMT: " + rmt_signal + " (SINAL INSTITUCIONAL VERIFICADO)";
+          DrawLabel(rmt_label, rmtTxt, 10, 130, rmtClr, 12); 
+      } else {
+          if(ObjectFind(0, rmt_label) >= 0) ObjectDelete(0, rmt_label);
+      }
+   }
    
    ChartRedraw(0);
 }

@@ -5,6 +5,7 @@ from Code.N_Core.quantum_oracle import QuantumOracle
 from Code.N_Core.quantum_clouds import QuantumCloudTracker
 from Code.N_Core.fluid_dynamics import LBMFluidDynamics
 from Code.N_Core.plasma_market import PlasmaMarketTracker
+from Code.N_Core.random_matrix import RandomMatrixTracker
 import time
 import pandas as pd
 import numpy as np
@@ -36,6 +37,7 @@ class AethelgardAGI:
         self.cloud_tracker = None
         self.lbm_tracker = None
         self.plasma_tracker = None
+        self.rmt_tracker = None
         self.plasma_zones = None
         self.is_running = False
         self.regimes_cache = []
@@ -83,6 +85,10 @@ class AethelgardAGI:
                     if self.plasma_tracker is None:
                         self.plasma_tracker = PlasmaMarketTracker()
                         self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
+
+                    # Inicialização do RMT Spectral Filter
+                    if self.rmt_tracker is None:
+                        self.rmt_tracker = RandomMatrixTracker(time_steps=100)
 
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
@@ -155,13 +161,18 @@ class AethelgardAGI:
                         curr_candle = df.iloc[-1]
                         prev_candle = df.iloc[-2]
                         
-                        # Re-escaneia zonas a cada 100 velas
                         if self.genesis_count % 100 == 0:
                              self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
 
                         z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, self.plasma_zones)
                         if z_idx > 90.0:
                             z_pinch_signal = f"Z_PINCH_{z_type}"
+
+                        # Processa RMT Spectral Filter
+                        rmt_signal = "NOISE"
+                        _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df)
+                        if is_pure:
+                            rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
 
                         # Determina o Status Visual Instantâneo
                         if r_score == 1:
@@ -171,21 +182,22 @@ class AethelgardAGI:
                         else:
                             status_txt = "AGUARDANDO_IGNICAO"
                             
-                        # Anexa Alerta LBM ao Status (Se for Squeeze)
+                        # Modificadores de Status Quântico
                         if lbm_signal == "FLUID_RUPTURE_BULL":
                             status_txt += " | [SQUEEZE LBM BULL]"
                         elif lbm_signal == "FLUID_RUPTURE_BEAR":
                             status_txt += " | [SQUEEZE LBM BEAR]"
                             
-                        # Anexa Alerta Z-Pinch
                         if z_pinch_signal != "NEUTRAL":
-                            status_txt += f" | [⚠️ Z-PINCH DETECTADO: {z_type}]"
+                            status_txt += f" | [⚠️ Z-PINCH: {z_type}]"
+                            
+                        if rmt_signal != "NOISE":
+                            status_txt += f" | [RMT PURE]"
 
                         # Estado em tempo real para o MT5
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
                         
                         # --- DEFESA CO-PILOTO EM TEMPO REAL (v410) ---
-                        # Escaneia e protege ordens a cada segundo (independente do fechamento do candle)
                         ema_trend = df['close'].ewm(span=34, adjust=False).mean().iloc[-1]
                         ema_macro = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
                         atr = (df['high'] - df['low']).rolling(14).mean().iloc[-1]
@@ -203,7 +215,6 @@ class AethelgardAGI:
                             
                             if body > (atr * 1.5) or is_genesis:
                                 sig = 1 if r_score == 1 else 2
-                                status_txt = f"ANOMALIA_INSTITUCIONAL_{'BULL' if sig == 1 else 'BEAR'}"
                                 print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt}")
                                 
                             # Atualização Síncrona
@@ -224,7 +235,7 @@ class AethelgardAGI:
                         status_final = f"{status_txt} | SAÚDE: {health}%"
                         
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal}"
 
                 time.sleep(1)
         except Exception as e:
