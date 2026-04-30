@@ -2,6 +2,7 @@ from Code.R_Exec.mt5_bridge import MT5NeuralBridge
 from Code.N_Core.quantum_indicators import QuantumIndicators
 from Code.N_Core.msnr_alchemist import MSNRAlchemist
 from Code.N_Core.quantum_oracle import QuantumOracle
+from Code.N_Core.quantum_clouds import QuantumCloudTracker
 import time
 import pandas as pd
 import numpy as np
@@ -30,6 +31,7 @@ class AethelgardAGI:
         self.q_logic = QuantumIndicators()
         self.alchemist = MSNRAlchemist()
         self.oracle = QuantumOracle(simulations=5000)
+        self.cloud_tracker = None
         self.is_running = False
         self.regimes_cache = []
         self.signals_cache = []
@@ -54,11 +56,18 @@ class AethelgardAGI:
         
         try:
             while self.is_running:
-                # Execução em H2 para análise de monólito macro
-                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_H2, 0, 1000)
+                # Execução em M15 para sincronia quântica melhor (ajustado de H2)
+                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M15, 0, 1000)
                 if rates is not None and len(rates) > 0:
                     df = pd.DataFrame(rates)
                     
+                    # Inicialização do Quantum Cloud Tracker dinâmico
+                    if self.cloud_tracker is None:
+                        p_min = df['low'].min() - 100
+                        p_max = df['high'].max() + 100
+                        self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=50) # 50 bins para MT5
+                        self.cloud_tracker.initialize_wave(df['close'].iloc[0], sigma=(self.cloud_tracker.dx * 10))
+
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
                         
@@ -109,6 +118,17 @@ class AethelgardAGI:
                         
                         is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis or (self.genesis_count < 3))
                         
+                        # Processa a Malha Quântica (Lado Python -> C++)
+                        density = self.cloud_tracker.step(slice_df, dt=1.0)
+                        cloud_str = ""
+                        if density is not None:
+                            # Pega os 50 bins e formata: price_idx|density,price_idx|density...
+                            cloud_arr = []
+                            for i, d in enumerate(density):
+                                p = self.cloud_tracker.index_to_price(i)
+                                cloud_arr.append(f"{p:.2f}|{d:.4f}")
+                            cloud_str = ",".join(cloud_arr)
+
                         # Determina o Status Visual Instantâneo
                         if r_score == 1:
                             status_txt = "BULL_PREVISAO" if not is_sovereign else "TSUNAMI_BULL_ATIVO"
@@ -160,7 +180,7 @@ class AethelgardAGI:
                         status_final = f"{status_txt} | SAÚDE: {health}%"
                         
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str}"
 
                 time.sleep(1)
         except Exception as e:

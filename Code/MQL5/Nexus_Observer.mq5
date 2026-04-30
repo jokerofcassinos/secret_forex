@@ -157,6 +157,63 @@ void ParseAndDraw(string data)
       ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
    }
    
+   // 4. ATUALIZAÇÃO DA NUVEM QUÂNTICA DE SCHRÖDINGER
+   if(ArraySize(parts) > 10 && parts[10] != "") {
+      string cloudBins[]; StringSplit(parts[10], ',', cloudBins);
+      int tCloud = ArraySize(cloudBins);
+      
+      // Encontrar a densidade máxima para normalizar a largura (histograma)
+      double maxDensity = 0.0001;
+      for(int b=0; b<tCloud; b++) {
+         string cVal[]; StringSplit(cloudBins[b], '|', cVal);
+         if(ArraySize(cVal) == 2) {
+             double den = StringToDouble(cVal[1]);
+             if(den > maxDensity) maxDensity = den;
+         }
+      }
+      
+      datetime tStart = iTime(_Symbol, _Period, 0);
+      datetime tEnd = tStart + PeriodSeconds() * 10; // Avança visualmente 10 candles pra direita
+      
+      for(int b=0; b<tCloud; b++) {
+         string cVal[]; StringSplit(cloudBins[b], '|', cVal);
+         if(ArraySize(cVal) != 2) continue;
+         
+         double pLevel = StringToDouble(cVal[0]);
+         double den = StringToDouble(cVal[1]);
+         
+         string bName = "NEXUS_QC_" + IntegerToString(b);
+         if(den < maxDensity * 0.05) { // Ignora bins com densidade muito baixa para salvar performance
+             ObjectDelete(0, bName);
+             continue;
+         }
+         
+         if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_TREND, 0, 0, 0, 0, 0);
+         
+         // A largura da linha representa a densidade da nuvem naquele preço
+         double ratio = den / maxDensity;
+         datetime tCloudEnd = tStart + (int)(PeriodSeconds() * 10 * ratio);
+         
+         // Gradiente de cor baseado na densidade (Laranja Escuro para Amarelo Brilhante)
+         color qColor = clrOrangeRed;
+         if(ratio > 0.8) qColor = clrYellow;
+         else if(ratio > 0.5) qColor = clrOrange;
+         
+         ObjectSetInteger(0, bName, OBJPROP_TIME, 0, tStart);
+         ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, pLevel);
+         ObjectSetInteger(0, bName, OBJPROP_TIME, 1, tCloudEnd);
+         ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, pLevel);
+         
+         ObjectSetInteger(0, bName, OBJPROP_COLOR, qColor);
+         ObjectSetInteger(0, bName, OBJPROP_WIDTH, 4); // Espessura da linha horizontal
+         ObjectSetInteger(0, bName, OBJPROP_RAY_RIGHT, false);
+         ObjectSetInteger(0, bName, OBJPROP_BACK, true); // Desenha atrás dos candles
+      }
+      
+      // Limpa bins extras que podem ter sobrado se o grid diminuir
+      for(int k=tCloud; k<200; k++) ObjectDelete(0, "NEXUS_QC_"+IntegerToString(k));
+   }
+   
    ChartRedraw(0);
 }
 
