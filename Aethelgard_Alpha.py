@@ -56,8 +56,8 @@ class AethelgardAGI:
         
         try:
             while self.is_running:
-                # Execução em M15 para sincronia quântica melhor (ajustado de H2)
-                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M15, 0, 1000)
+                # Execução em H2 para análise de monólito macro
+                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_H2, 0, 1000)
                 if rates is not None and len(rates) > 0:
                     df = pd.DataFrame(rates)
                     
