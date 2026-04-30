@@ -8,21 +8,31 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Code.N_Core.plasma_market import PlasmaMarketTracker
 
 def test_mhd_zpinch():
-    print("Iniciando simulação visual: MHD Plasma Market (Z-Pinch)")
+    print("Iniciando simulação visual: MHD Plasma Market (Z-Pinch) - Timeframe H2")
     
-    data_path = os.path.join("Data", "Historical", "GER40.cash_M15.parquet")
+    data_path = os.path.join("Data", "Historical", "GER40.cash_H2.parquet")
     if not os.path.exists(data_path):
-        print(f"Erro: Base de dados {data_path} não encontrada. Usando dados sintéticos.")
-        dates = pd.date_range('2023-01-01', periods=500, freq='15min')
-        prices = 18000 + np.cumsum(np.random.randn(500) * 10)
-        # Forçar um stop hunt no final
-        prices[-20:] = prices[-20] + np.arange(20) * 5
-        prices[-1] -= 30
-        
-        highs = prices + np.random.rand(500) * 5
-        lows = prices - np.random.rand(500) * 5
-        volumes = np.random.randint(100, 1000, 500)
-        df = pd.DataFrame({'time': dates, 'open': prices, 'high': highs, 'low': lows, 'close': prices, 'tick_volume': volumes})
+        print(f"Erro: Base de dados {data_path} não encontrada. Tentando H1 ou sintético.")
+        # Se H2 não existir, tenta H1 para compor ou falha pro sintético (já que a ponte mt5 só salva H1 e H4 por padrão)
+        data_path_h1 = os.path.join("Data", "Historical", "GER40.cash_H1.parquet")
+        if os.path.exists(data_path_h1):
+             print(f"Carregando {data_path_h1} e re-amostrando para H2...")
+             df_h1 = pd.read_parquet(data_path_h1)
+             # Simplificando a re-amostragem para teste visual
+             df = df_h1.iloc[::2].reset_index(drop=True)
+             df = df.tail(1000).reset_index(drop=True)
+        else:
+             print("Usando dados sintéticos (H2).")
+             dates = pd.date_range('2023-01-01', periods=500, freq='2h')
+             prices = 18000 + np.cumsum(np.random.randn(500) * 15)
+             # Forçar um stop hunt massivo de H2 no final
+             prices[-20:] = prices[-20] + np.arange(20) * 8
+             prices[-1] -= 50
+             
+             highs = prices + np.random.rand(500) * 10
+             lows = prices - np.random.rand(500) * 10
+             volumes = np.random.randint(500, 5000, 500)
+             df = pd.DataFrame({'time': dates, 'open': prices, 'high': highs, 'low': lows, 'close': prices, 'tick_volume': volumes})
     else:
         print(f"Carregando {data_path}...")
         df = pd.read_parquet(data_path)
