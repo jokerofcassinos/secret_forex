@@ -6,6 +6,7 @@ from Code.N_Core.quantum_clouds import QuantumCloudTracker
 from Code.N_Core.fluid_dynamics import LBMFluidDynamics
 from Code.N_Core.plasma_market import PlasmaMarketTracker
 from Code.N_Core.random_matrix import RandomMatrixTracker
+from Code.N_Core.quantum_walk import QRWTracker
 import time
 import pandas as pd
 import numpy as np
@@ -38,6 +39,7 @@ class AethelgardAGI:
         self.lbm_tracker = None
         self.plasma_tracker = None
         self.rmt_tracker = None
+        self.qrw_tracker = None
         self.plasma_zones = None
         self.is_running = False
         self.regimes_cache = []
@@ -68,27 +70,27 @@ class AethelgardAGI:
                 if rates is not None and len(rates) > 0:
                     df = pd.DataFrame(rates)
                     
-                    # Inicialização do Quantum Cloud Tracker dinâmico
+                    # Inicializações Quânticas
                     if self.cloud_tracker is None:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
-                        self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=50) # 50 bins para MT5
+                        self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=50)
                         self.cloud_tracker.initialize_wave(df['close'].iloc[0], sigma=(self.cloud_tracker.dx * 10))
 
-                    # Inicialização do LBM Fluid Dynamics Tracker
                     if self.lbm_tracker is None:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
                         self.lbm_tracker = LBMFluidDynamics(price_min=p_min, price_max=p_max, bins=50, tau=0.8)
 
-                    # Inicialização do MHD Plasma Market (Z-Pinch)
                     if self.plasma_tracker is None:
                         self.plasma_tracker = PlasmaMarketTracker()
                         self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
 
-                    # Inicialização do RMT Spectral Filter
                     if self.rmt_tracker is None:
                         self.rmt_tracker = RandomMatrixTracker(time_steps=100)
+                        
+                    if self.qrw_tracker is None:
+                        self.qrw_tracker = QRWTracker(positions=201)
 
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
@@ -173,6 +175,12 @@ class AethelgardAGI:
                         _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df)
                         if is_pure:
                             rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
+                            
+                        # Processa QRW (Quantum Random Walk) - Decodificação de Range
+                        qrw_signal = "NEUTRAL"
+                        qrw_lookback = 20
+                        if self.qrw_tracker.is_in_range(df, lookback=qrw_lookback):
+                            _, qrw_signal = self.qrw_tracker.process_qrw_skewness(df, lookback=qrw_lookback)
 
                         # Determina o Status Visual Instantâneo
                         if r_score == 1:
@@ -193,6 +201,9 @@ class AethelgardAGI:
                             
                         if rmt_signal != "NOISE":
                             status_txt += f" | [RMT PURE]"
+                            
+                        if qrw_signal != "NEUTRAL":
+                            status_txt += f" | [QRW: {qrw_signal}]"
 
                         # Estado em tempo real para o MT5
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
@@ -235,7 +246,7 @@ class AethelgardAGI:
                         status_final = f"{status_txt} | SAÚDE: {health}%"
                         
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal}"
 
                 time.sleep(1)
         except Exception as e:

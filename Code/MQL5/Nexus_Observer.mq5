@@ -256,6 +256,20 @@ void ParseAndDraw(string data)
           if(ObjectFind(0, rmt_label) >= 0) ObjectDelete(0, rmt_label);
       }
    }
+
+   // 8. ATUALIZAÇÃO DO DECODER QRW (QUANTUM RANDOM WALK)
+   if(ArraySize(parts) > 14 && parts[14] != "") {
+      string qrw_signal = parts[14];
+      string qrw_label = "NEXUS_QRW_WARNING";
+      
+      if(qrw_signal != "NEUTRAL") {
+          color qrwClr = (qrw_signal == "HIDDEN_ACCUMULATION_BULL") ? clrCyan : clrOrange;
+          string qrwTxt = "🎲 QRW DECODER: " + qrw_signal + " (INTERFERÊNCIA DETECTADA)";
+          DrawLabel(qrw_label, qrwTxt, 10, 150, qrwClr, 12); 
+      } else {
+          if(ObjectFind(0, qrw_label) >= 0) ObjectDelete(0, qrw_label);
+      }
+   }
    
    ChartRedraw(0);
 }
