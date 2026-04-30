@@ -4,6 +4,7 @@ from Code.N_Core.msnr_alchemist import MSNRAlchemist
 from Code.N_Core.quantum_oracle import QuantumOracle
 from Code.N_Core.quantum_clouds import QuantumCloudTracker
 from Code.N_Core.fluid_dynamics import LBMFluidDynamics
+from Code.N_Core.plasma_market import PlasmaMarketTracker
 import time
 import pandas as pd
 import numpy as np
@@ -34,6 +35,8 @@ class AethelgardAGI:
         self.oracle = QuantumOracle(simulations=5000)
         self.cloud_tracker = None
         self.lbm_tracker = None
+        self.plasma_tracker = None
+        self.plasma_zones = None
         self.is_running = False
         self.regimes_cache = []
         self.signals_cache = []
@@ -75,6 +78,11 @@ class AethelgardAGI:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
                         self.lbm_tracker = LBMFluidDynamics(price_min=p_min, price_max=p_max, bins=50, tau=0.8)
+
+                    # Inicialização do MHD Plasma Market (Z-Pinch)
+                    if self.plasma_tracker is None:
+                        self.plasma_tracker = PlasmaMarketTracker()
+                        self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
 
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
@@ -130,7 +138,6 @@ class AethelgardAGI:
                         density_schrod = self.cloud_tracker.step(slice_df, dt=1.0)
                         cloud_str = ""
                         if density_schrod is not None:
-                            # Pega os 50 bins e formata: price_idx|density,price_idx|density...
                             cloud_arr = []
                             for i, d in enumerate(density_schrod):
                                 p = self.cloud_tracker.index_to_price(i)
@@ -143,6 +150,19 @@ class AethelgardAGI:
                         if lbm_density is not None and lbm_velocity is not None:
                             lbm_signal = self.lbm_tracker.detect_squeeze_rupture(df['close'].iloc[-1], lbm_density, lbm_velocity)
 
+                        # Processa MHD Plasma Z-Pinch
+                        z_pinch_signal = "NEUTRAL"
+                        curr_candle = df.iloc[-1]
+                        prev_candle = df.iloc[-2]
+                        
+                        # Re-escaneia zonas a cada 100 velas
+                        if self.genesis_count % 100 == 0:
+                             self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
+
+                        z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, self.plasma_zones)
+                        if z_idx > 90.0:
+                            z_pinch_signal = f"Z_PINCH_{z_type}"
+
                         # Determina o Status Visual Instantâneo
                         if r_score == 1:
                             status_txt = "BULL_PREVISAO" if not is_sovereign else "TSUNAMI_BULL_ATIVO"
@@ -153,9 +173,13 @@ class AethelgardAGI:
                             
                         # Anexa Alerta LBM ao Status (Se for Squeeze)
                         if lbm_signal == "FLUID_RUPTURE_BULL":
-                            status_txt += " | [SQUEEZE LBM BULL DETECTADO]"
+                            status_txt += " | [SQUEEZE LBM BULL]"
                         elif lbm_signal == "FLUID_RUPTURE_BEAR":
-                            status_txt += " | [SQUEEZE LBM BEAR DETECTADO]"
+                            status_txt += " | [SQUEEZE LBM BEAR]"
+                            
+                        # Anexa Alerta Z-Pinch
+                        if z_pinch_signal != "NEUTRAL":
+                            status_txt += f" | [⚠️ Z-PINCH DETECTADO: {z_type}]"
 
                         # Estado em tempo real para o MT5
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
@@ -200,7 +224,7 @@ class AethelgardAGI:
                         status_final = f"{status_txt} | SAÚDE: {health}%"
                         
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal}"
 
                 time.sleep(1)
         except Exception as e:

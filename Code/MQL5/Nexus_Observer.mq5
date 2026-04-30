@@ -229,6 +229,20 @@ void ParseAndDraw(string data)
       }
    }
    
+   // 6. ATUALIZAÇÃO DO ALARME MHD Z-PINCH (PLASMA)
+   if(ArraySize(parts) > 12 && parts[12] != "") {
+      string z_signal = parts[12];
+      string z_label = "NEXUS_ZPINCH_WARNING";
+      
+      if(z_signal != "NEUTRAL") {
+          color zClr = clrGold;
+          string zTxt = "⚡ Z-PINCH ATINGIDO: " + z_signal + " (REVERSÃO ATÔMICA IMINENTE!)";
+          DrawLabel(z_label, zTxt, 10, 110, zClr, 16); 
+      } else {
+          if(ObjectFind(0, z_label) >= 0) ObjectDelete(0, z_label);
+      }
+   }
+   
    ChartRedraw(0);
 }
 
