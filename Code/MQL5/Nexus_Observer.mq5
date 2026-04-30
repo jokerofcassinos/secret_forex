@@ -214,6 +214,21 @@ void ParseAndDraw(string data)
       for(int k=tCloud; k<200; k++) ObjectDelete(0, "NEXUS_QC_"+IntegerToString(k));
    }
    
+   // 5. ATUALIZAÇÃO DO ALARME LBM FLUID RUPTURE
+   if(ArraySize(parts) > 11 && parts[11] != "") {
+      string lbm_signal = parts[11];
+      string lbm_label = "NEXUS_LBM_WARNING";
+      
+      if(lbm_signal == "FLUID_RUPTURE_BULL" || lbm_signal == "FLUID_RUPTURE_BEAR") {
+          color wClr = (lbm_signal == "FLUID_RUPTURE_BULL") ? clrDeepSkyBlue : clrMagenta;
+          string wTxt = (lbm_signal == "FLUID_RUPTURE_BULL") ? "⚠️ LBM SQUEEZE: ALTA COMPRESSÃO BULLISH!" : "⚠️ LBM SQUEEZE: ALTA COMPRESSÃO BEARISH!";
+          DrawLabel(lbm_label, wTxt, 10, 90, wClr, 14); // Fonte maior, cor chamativa
+      } else {
+          // LAMINAR_FLOW -> Apaga o aviso ou deixa neutro
+          if(ObjectFind(0, lbm_label) >= 0) ObjectDelete(0, lbm_label);
+      }
+   }
+   
    ChartRedraw(0);
 }
 
