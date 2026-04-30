@@ -44,6 +44,9 @@ class AethelgardAGI:
         self.is_running = False
         self.regimes_cache = []
         self.signals_cache = []
+        self.lbm_cache = []
+        self.z_pinch_cache = []
+        self.qrw_cache = []
         self.dots_cache = []
         self.last_time = 0
         self.genesis_count = 0
@@ -100,6 +103,9 @@ class AethelgardAGI:
                             if i < window_calc:
                                 self.regimes_cache.append("0|0")
                                 self.signals_cache.append("0")
+                                self.lbm_cache.append("0")
+                                self.z_pinch_cache.append("0")
+                                self.qrw_cache.append("0")
                                 scores_hist.append(0)
                                 continue
                             
@@ -126,6 +132,9 @@ class AethelgardAGI:
                                     sig = 1 if r_score == 1 else 2
                             
                             self.signals_cache.append(str(sig))
+                            self.lbm_cache.append("0")
+                            self.z_pinch_cache.append("0")
+                            self.qrw_cache.append("0")
                             prev_s, prev_c = r_score, conf
                         
                         self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df, scores_hist)]
@@ -157,6 +166,8 @@ class AethelgardAGI:
                         lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(slice_df.tail(10), steps=5)
                         if lbm_density is not None and lbm_velocity is not None:
                             lbm_signal = self.lbm_tracker.detect_squeeze_rupture(df['close'].iloc[-1], lbm_density, lbm_velocity)
+                            if lbm_signal == "FLUID_RUPTURE_BULL": self.lbm_cache[-1] = "1"
+                            elif lbm_signal == "FLUID_RUPTURE_BEAR": self.lbm_cache[-1] = "2"
 
                         # Processa MHD Plasma Z-Pinch
                         z_pinch_signal = "NEUTRAL"
@@ -169,6 +180,8 @@ class AethelgardAGI:
                         z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, self.plasma_zones)
                         if z_idx > 90.0:
                             z_pinch_signal = f"Z_PINCH_{z_type}"
+                            if z_type == "BOTTOM_SWEEP": self.z_pinch_cache[-1] = "1"
+                            elif z_type == "TOP_SWEEP": self.z_pinch_cache[-1] = "2"
 
                         # Processa RMT Spectral Filter
                         rmt_signal = "NOISE"
@@ -181,6 +194,8 @@ class AethelgardAGI:
                         qrw_lookback = 20
                         if self.qrw_tracker.is_in_range(df, lookback=qrw_lookback):
                             _, qrw_signal = self.qrw_tracker.process_qrw_skewness(df, lookback=qrw_lookback)
+                            if qrw_signal == "HIDDEN_ACCUMULATION_BULL": self.qrw_cache[-1] = "1"
+                            elif qrw_signal == "HIDDEN_DISTRIBUTION_BEAR": self.qrw_cache[-1] = "2"
 
                         # Determina o Status Visual Instantâneo
                         if r_score == 1:
@@ -236,6 +251,9 @@ class AethelgardAGI:
                             # Atualização Síncrona
                             self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score if is_sovereign else 0}|{conf}")
                             self.signals_cache.pop(0); self.signals_cache.append(str(sig))
+                            self.lbm_cache.pop(0); self.lbm_cache.append("0")
+                            self.z_pinch_cache.pop(0); self.z_pinch_cache.append("0")
+                            self.qrw_cache.pop(0); self.qrw_cache.append("0")
                             
                             # Re-calcula dots para todo o DF
                             scores_list = [int(r.split('|')[0]) for r in self.regimes_cache]
@@ -251,7 +269,7 @@ class AethelgardAGI:
                         status_final = f"{status_txt} | SAÚDE: {health}%"
                         
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)}"
 
                 time.sleep(1)
         except Exception as e:

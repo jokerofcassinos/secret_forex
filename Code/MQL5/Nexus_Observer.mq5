@@ -270,6 +270,60 @@ void ParseAndDraw(string data)
           if(ObjectFind(0, qrw_label) >= 0) ObjectDelete(0, qrw_label);
       }
    }
+
+   // 9. ATUALIZAÇÃO DO HISTÓRICO LBM (MARCADORES PERMANENTES)
+   if(ArraySize(parts) > 15 && parts[15] != "") {
+      string hLbm[]; StringSplit(parts[15], ',', hLbm);
+      int tLbm = ArraySize(hLbm);
+      for(int j=0; j < tLbm && j < iBars(_Symbol, _Period); j++) {
+         int v = (int)StringToInteger(hLbm[tLbm - 1 - j]);
+         string name = "NEXUS_LBM_HIST_" + IntegerToString(j);
+         if(v == 0) { ObjectDelete(0, name); continue; }
+         if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_ARROW, 0, 0, 0);
+         double p = (v == 1) ? iLow(_Symbol, _Period, j) - 150 * _Point : iHigh(_Symbol, _Period, j) + 150 * _Point;
+         ObjectSetInteger(0, name, OBJPROP_TIME, iTime(_Symbol, _Period, j));
+         ObjectSetDouble(0, name, OBJPROP_PRICE, p);
+         ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 108); // Diamond
+         ObjectSetInteger(0, name, OBJPROP_COLOR, (v == 1) ? clrDeepSkyBlue : clrMagenta);
+         ObjectSetInteger(0, name, OBJPROP_ANCHOR, (v == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+      }
+   }
+   
+   // 10. ATUALIZAÇÃO DO HISTÓRICO Z-PINCH
+   if(ArraySize(parts) > 16 && parts[16] != "") {
+      string hZP[]; StringSplit(parts[16], ',', hZP);
+      int tZP = ArraySize(hZP);
+      for(int j=0; j < tZP && j < iBars(_Symbol, _Period); j++) {
+         int v = (int)StringToInteger(hZP[tZP - 1 - j]);
+         string name = "NEXUS_ZP_HIST_" + IntegerToString(j);
+         if(v == 0) { ObjectDelete(0, name); continue; }
+         if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_ARROW, 0, 0, 0);
+         double p = (v == 1) ? iLow(_Symbol, _Period, j) - 250 * _Point : iHigh(_Symbol, _Period, j) + 250 * _Point;
+         ObjectSetInteger(0, name, OBJPROP_TIME, iTime(_Symbol, _Period, j));
+         ObjectSetDouble(0, name, OBJPROP_PRICE, p);
+         ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 171); // Star
+         ObjectSetInteger(0, name, OBJPROP_COLOR, clrGold);
+         ObjectSetInteger(0, name, OBJPROP_ANCHOR, (v == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+      }
+   }
+
+   // 11. ATUALIZAÇÃO DO HISTÓRICO QRW
+   if(ArraySize(parts) > 17 && parts[17] != "") {
+      string hQRW[]; StringSplit(parts[17], ',', hQRW);
+      int tQRW = ArraySize(hQRW);
+      for(int j=0; j < tQRW && j < iBars(_Symbol, _Period); j++) {
+         int v = (int)StringToInteger(hQRW[tQRW - 1 - j]);
+         string name = "NEXUS_QRW_HIST_" + IntegerToString(j);
+         if(v == 0) { ObjectDelete(0, name); continue; }
+         if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_ARROW, 0, 0, 0);
+         double p = (v == 1) ? iLow(_Symbol, _Period, j) - 350 * _Point : iHigh(_Symbol, _Period, j) + 350 * _Point;
+         ObjectSetInteger(0, name, OBJPROP_TIME, iTime(_Symbol, _Period, j));
+         ObjectSetDouble(0, name, OBJPROP_PRICE, p);
+         ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 233); // Arrow/Checkmark
+         ObjectSetInteger(0, name, OBJPROP_COLOR, (v == 1) ? clrCyan : clrOrange);
+         ObjectSetInteger(0, name, OBJPROP_ANCHOR, (v == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+      }
+   }
    
    ChartRedraw(0);
 }
