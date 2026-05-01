@@ -10,11 +10,11 @@ from Code.N_Core.plasma_market import PlasmaMarketTracker
 def test_mhd_zpinch():
     print("Iniciando simulação visual: MHD Plasma Market (Z-Pinch) - Timeframe H2")
     
-    data_path = os.path.join("Data", "Historical", "GER40.cash_H2.parquet")
+    data_path = os.path.join("Data", "Historical", "BTCUSD_H2.parquet")
     if not os.path.exists(data_path):
         print(f"Erro: Base de dados {data_path} não encontrada. Tentando H1 ou sintético.")
         # Se H2 não existir, tenta H1 para compor ou falha pro sintético (já que a ponte mt5 só salva H1 e H4 por padrão)
-        data_path_h1 = os.path.join("Data", "Historical", "GER40.cash_H1.parquet")
+        data_path_h1 = os.path.join("Data", "Historical", "BTCUSD_H1.parquet")
         if os.path.exists(data_path_h1):
              print(f"Carregando {data_path_h1} e re-amostrando para H2...")
              df_h1 = pd.read_parquet(data_path_h1)

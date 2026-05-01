@@ -29,7 +29,7 @@ def run_server():
     app.run(host='127.0.0.1', port=5000)
 
 class AethelgardAGI:
-    def __init__(self, symbol="GER40.cash"):
+    def __init__(self, symbol="BTCUSD"):
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
@@ -288,6 +288,6 @@ class AethelgardAGI:
         print("SISTEMA OFFLINE.")
 
 if __name__ == "__main__":
-    bot = AethelgardAGI("GER40.cash")
+    bot = AethelgardAGI("BTCUSD")
     if bot.startup():
         bot.live_evolution_loop()

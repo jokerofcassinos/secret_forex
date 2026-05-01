@@ -11,14 +11,10 @@
             "id": "b8fff723e227ae5c",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/HISTORY_TQFM.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "HISTORY_TQFM"
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
             }
           }
         ]
@@ -199,6 +195,8 @@
   },
   "active": "b8fff723e227ae5c",
   "lastOpenFiles": [
+    "Docs/HISTORY_TQFM.md",
+    "Code/N_Core/quantum_indicators.py",
     "debug_qrw_phase.py",
     "debug_qrw.py",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/QRW_Interference_Render.png",
@@ -209,8 +207,6 @@
     "Code/CPP_Engine/build/temp.win-amd64-cpython-313/Release/src/qrw/qrw_engine.cp313-win_amd64.def",
     "Code/CPP_Engine/build/temp.win-amd64-cpython-313/Release/src/qrw/qrw_engine.o",
     "Code/CPP_Engine/build/temp.win-amd64-cpython-313/Release/src/qrw",
-    "Code/N_Core/quantum_walk.py",
-    "Code/CPP_Engine/setup_qrw.py",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_QRW_COIN.md",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RMT_Spectrum_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_RMT_SPECTRUM.md",
@@ -222,7 +218,6 @@
     "Docs/02_Logica_e_Estrategia/CONCEITO_FRACTAL_SRF.md",
     "Docs/01_Planejamento_Executivo/VISAO_GERAL.md",
     "Docs/01_Planejamento_Executivo/BLUEPRINT_AETHELGARD.md",
-    "Docs/HISTORY_TQFM.md",
     "Docs/04_Perfis_Neurais/STATE_GER40_CASH.md",
     "Docs/04_Perfis_Neurais/ARCHIVE_STATE_BTCUSD.md",
     "Docs/03_Ambiente_Executivo/SWARM_MANAGEMENT.md",

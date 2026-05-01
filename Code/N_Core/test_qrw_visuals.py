@@ -10,7 +10,7 @@ from Code.N_Core.quantum_walk import QRWTracker
 def test_qrw_visuals():
     print("Iniciando simulação visual: Quantum Random Walk (QRW) - Timeframe H2")
     
-    data_path_h1 = os.path.join("Data", "Historical", "GER40.cash_H1.parquet")
+    data_path_h1 = os.path.join("Data", "Historical", "BTCUSD_H1.parquet")
     if os.path.exists(data_path_h1):
          print(f"Carregando {data_path_h1} e re-amostrando para H2...")
          df_h1 = pd.read_parquet(data_path_h1)

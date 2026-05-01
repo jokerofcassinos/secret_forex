@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 class MT5NeuralBridge:
-    def __init__(self, symbol="GER40.cash"):
+    def __init__(self, symbol="BTCUSD"):
         self.symbol = symbol
         self.timeframes = {
             "M1": mt5.TIMEFRAME_M1,
