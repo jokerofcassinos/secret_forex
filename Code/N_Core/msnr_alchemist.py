@@ -100,13 +100,39 @@ class MSNRAlchemist:
 
     def validate_sovereign_signal(self, df, regime, is_genesis=False):
         """
-        TQFM v310 - Sovereign Unchain
-        O Alchemist agora delega a Soberania Total para a Máquina de Estados Quântica (v300).
-        Retorna True para não interferir no display do MT5, garantindo caixas contínuas.
+        TQFM v310 - Sovereign Validation v2.0 (FIX P1-13)
+        Reactivated with meaningful confluence checks.
+        Validates regime with EMA spread, momentum, and body confirmation.
+        Genesis transitions always pass to avoid blocking regime changes.
         """
-        # A validação de ruído, spread de médias, e choques atômicos 
-        # agora é tratada de forma monolítica pelo `advanced_regime_score`.
-        # O Alchemist aprova incondicionalmente para manter a integridade visual da TQFM v300.
+        if is_genesis:
+            return True  # Regime transitions always pass through
+        
+        if regime == 0:
+            return True  # Neutral regime — no signal to validate
+        
+        if len(df) < 90:
+            return True  # Not enough data — let it pass
+        
+        ema_34 = df['close'].ewm(span=34, adjust=False).mean().iloc[-1]
+        ema_89 = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+        
+        high_low = df['high'] - df['low']
+        atr = high_low.rolling(14).mean().iloc[-1]
+        if np.isnan(atr) or atr < 1e-9:
+            return True
+        
+        # Confluence 1: EMAs must have meaningful separation (>0.3 ATR)
+        ema_gap = abs(ema_34 - ema_89) / atr
+        if ema_gap < 0.3:
+            return False  # EMAs too close — no clear trend
+        
+        # Confluence 2: Direction must match regime
+        if regime == 1 and ema_34 < ema_89:
+            return False  # BULL regime but trend EMA below macro
+        if regime == 2 and ema_34 > ema_89:
+            return False  # BEAR regime but trend EMA above macro
+        
         return True
 
 

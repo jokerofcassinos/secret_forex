@@ -8,27 +8,35 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Code.N_Core.random_matrix import RandomMatrixTracker
 
 def test_rmt_spectral_filter():
-    print("Iniciando simulação visual: RMT Spectral Filter (Filtro de Ruído Varejo)")
+    print("Iniciando simulação visual: RMT Spectral Filter (Filtro de Ruído Varejo) - Timeframe H2")
     
-    data_path = os.path.join("Data", "Historical", "GER40.cash_M15.parquet")
+    data_path = os.path.join("Data", "Historical", "GER40.cash_H2.parquet")
     if not os.path.exists(data_path):
-        print(f"Erro: Base de dados {data_path} não encontrada. Usando dados sintéticos.")
-        dates = pd.date_range('2023-01-01', periods=1000, freq='15min')
-        
-        # Gerar mercado consolidado (Ruído) e depois uma forte agressão institucional
-        prices = 18000 + np.cumsum(np.random.randn(1000) * 5)
-        # Inserir "Pernadas Institucionais" (Baixo Ruído, Alta Direção e Volume) no meio e fim
-        for i in range(400, 450): prices[i] += (i - 400) * 4
-        for i in range(800, 850): prices[i] -= (i - 800) * 5
-        
-        highs = prices + np.random.rand(1000) * 5
-        lows = prices - np.random.rand(1000) * 5
-        volumes = np.random.randint(100, 1000, 1000)
-        # Volume salta nas pernadas institucionais
-        volumes[400:450] *= 5
-        volumes[800:850] *= 5
-        
-        df = pd.DataFrame({'time': dates, 'open': prices, 'high': highs, 'low': lows, 'close': prices, 'tick_volume': volumes})
+        print(f"Erro: Base de dados {data_path} não encontrada. Tentando H1 ou sintético.")
+        data_path_h1 = os.path.join("Data", "Historical", "GER40.cash_H1.parquet")
+        if os.path.exists(data_path_h1):
+             print(f"Carregando {data_path_h1} e re-amostrando para H2...")
+             df_h1 = pd.read_parquet(data_path_h1)
+             df = df_h1.iloc[::2].reset_index(drop=True)
+             df = df.tail(1000).reset_index(drop=True)
+        else:
+             print("Usando dados sintéticos (H2).")
+             dates = pd.date_range('2023-01-01', periods=1000, freq='2h')
+             
+             # Gerar mercado consolidado (Ruído) e depois uma forte agressão institucional
+             prices = 18000 + np.cumsum(np.random.randn(1000) * 15)
+             # Inserir "Pernadas Institucionais" (Baixo Ruído, Alta Direção e Volume) no meio e fim
+             for i in range(400, 450): prices[i] += (i - 400) * 12
+             for i in range(800, 850): prices[i] -= (i - 800) * 15
+             
+             highs = prices + np.random.rand(1000) * 15
+             lows = prices - np.random.rand(1000) * 15
+             volumes = np.random.randint(500, 5000, 1000)
+             # Volume salta nas pernadas institucionais
+             volumes[400:450] *= 5
+             volumes[800:850] *= 5
+             
+             df = pd.DataFrame({'time': dates, 'open': prices, 'high': highs, 'low': lows, 'close': prices, 'tick_volume': volumes})
     else:
         print(f"Carregando {data_path}...")
         df = pd.read_parquet(data_path)

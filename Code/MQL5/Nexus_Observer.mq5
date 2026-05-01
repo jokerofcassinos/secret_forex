@@ -10,10 +10,14 @@
 string last_payload = "";
 
 //+------------------------------------------------------------------+
-int OnInit() { EventSetTimer(1); return(INIT_SUCCEEDED); }
+int OnInit() { 
+    EventSetTimer(1); 
+    ChartSetInteger(0, CHART_SHOW_TRADE_LEVELS, false); // Esconde as setas nativas feias do MT5
+    return(INIT_SUCCEEDED); 
+}
 void OnDeinit(const int reason) { EventKillTimer(); ObjectsDeleteAll(0, "NEXUS_"); }
-void OnTick() { UpdateDashboard(); }
-void OnTimer() { UpdateDashboard(); }
+void OnTick() { UpdateDashboard(); DrawModernTradeHistory(); }
+void OnTimer() { UpdateDashboard(); DrawModernTradeHistory(); }
 
 void UpdateDashboard()
 {
@@ -172,8 +176,20 @@ void ParseAndDraw(string data)
          }
       }
       
-      datetime tStart = iTime(_Symbol, _Period, 0);
-      datetime tEnd = tStart + PeriodSeconds() * 10; // Avança visualmente 10 candles pra direita
+      datetime tStart = iTime(_Symbol, _Period, MathMin(100, iBars(_Symbol, _Period)-1)); // Cobre o fundo visualmente 100 barras pra trás
+      datetime tEnd = TimeCurrent() + PeriodSeconds() * 20; // Avança visualmente pro futuro
+      
+      // Estima a largura da banda (dx)
+      double dx = 10 * _Point; 
+      if(tCloud > 1) {
+         string cVal0[]; StringSplit(cloudBins[0], '|', cVal0);
+         string cVal1[]; StringSplit(cloudBins[1], '|', cVal1);
+         if(ArraySize(cVal0) == 2 && ArraySize(cVal1) == 2) {
+             dx = MathAbs(StringToDouble(cVal0[0]) - StringToDouble(cVal1[0]));
+         }
+      }
+      
+      double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       
       for(int b=0; b<tCloud; b++) {
          string cVal[]; StringSplit(cloudBins[b], '|', cVal);
@@ -183,31 +199,54 @@ void ParseAndDraw(string data)
          double den = StringToDouble(cVal[1]);
          
          string bName = "NEXUS_QC_" + IntegerToString(b);
-         if(den < maxDensity * 0.05) { // Ignora bins com densidade muito baixa para salvar performance
+         string tagName = "NEXUS_QCTAG_" + IntegerToString(b);
+         
+         if(den < maxDensity * 0.15) { // Threshold dinâmico pra não poluir o fundo
              ObjectDelete(0, bName);
+             ObjectDelete(0, tagName);
              continue;
          }
          
-         if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_TREND, 0, 0, 0, 0, 0);
-         
-         // A largura da linha representa a densidade da nuvem naquele preço
          double ratio = den / maxDensity;
-         datetime tCloudEnd = tStart + (int)(PeriodSeconds() * 10 * ratio);
+         color qColor = clrBlack;
          
-         // Gradiente de cor baseado na densidade (Laranja Escuro para Amarelo Brilhante)
-         color qColor = clrOrangeRed;
-         if(ratio > 0.8) qColor = clrYellow;
-         else if(ratio > 0.5) qColor = clrOrange;
+         // Gradiente TV-Style: Resistência (Acima) = Red, Suporte (Abaixo) = Green
+         if(pLevel > currentPrice) {
+             if(ratio > 0.9) qColor = clrRed;
+             else if(ratio > 0.6) qColor = clrFireBrick;
+             else if(ratio > 0.3) qColor = clrMaroon;
+             else qColor = 0x000033; // Dark Red customizado (BGR format) -> 0x330000 no MT5 (R=0x33, G=0, B=0) mas MT5 é BGR, entao clrMaroon é 128,0,0
+         } else {
+             if(ratio > 0.9) qColor = clrLime;
+             else if(ratio > 0.6) qColor = clrForestGreen;
+             else if(ratio > 0.3) qColor = clrDarkGreen;
+             else qColor = 0x003300; // Dark Green customizado
+         }
          
+         // Cores literais seguras pra não bugar o MT5
+         if(pLevel > currentPrice && ratio <= 0.3) qColor = clrBlack; 
+         if(pLevel <= currentPrice && ratio <= 0.3) qColor = clrBlack;
+         
+         // Cria a Banda Background
+         if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
          ObjectSetInteger(0, bName, OBJPROP_TIME, 0, tStart);
-         ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, pLevel);
-         ObjectSetInteger(0, bName, OBJPROP_TIME, 1, tCloudEnd);
-         ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, pLevel);
-         
+         ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, pLevel + (dx/2.0));
+         ObjectSetInteger(0, bName, OBJPROP_TIME, 1, tEnd);
+         ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, pLevel - (dx/2.0));
          ObjectSetInteger(0, bName, OBJPROP_COLOR, qColor);
-         ObjectSetInteger(0, bName, OBJPROP_WIDTH, 4); // Espessura da linha horizontal
-         ObjectSetInteger(0, bName, OBJPROP_RAY_RIGHT, false);
-         ObjectSetInteger(0, bName, OBJPROP_BACK, true); // Desenha atrás dos candles
+         ObjectSetInteger(0, bName, OBJPROP_FILL, true);
+         ObjectSetInteger(0, bName, OBJPROP_BACK, true); // Essencial: Fica no background igual TradingView
+         
+         // Desenha a Tag POC/HOTSPOT no eixo de preços
+         if(ratio > 0.95) {
+             if(ObjectFind(0, tagName) < 0) ObjectCreate(0, tagName, OBJ_ARROW_RIGHT_PRICE, 0, 0, 0);
+             ObjectSetInteger(0, tagName, OBJPROP_TIME, 0, tEnd);
+             ObjectSetDouble(0, tagName, OBJPROP_PRICE, 0, pLevel);
+             ObjectSetInteger(0, tagName, OBJPROP_COLOR, clrGold);
+             ObjectSetString(0, tagName, OBJPROP_TEXT, " POC / HOTSPOT");
+         } else {
+             ObjectDelete(0, tagName);
+         }
       }
       
       // Limpa bins extras que podem ter sobrado se o grid diminuir
@@ -336,4 +375,111 @@ void DrawLabel(string name, string text, int x, int y, color clr, int fontSize)
    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
    ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
+}
+
+void DrawModernTradeHistory()
+{
+    datetime start_time = iTime(_Symbol, _Period, MathMin(300, iBars(_Symbol, _Period)-1));
+    if(start_time == 0) return;
+    
+    HistorySelect(start_time, TimeCurrent());
+    int total = HistoryDealsTotal();
+    
+    // Pass 1: Desenhar Entradas (IN)
+    for(int i=0; i<total; i++) {
+        ulong ticket = HistoryDealGetTicket(i);
+        if(HistoryDealGetString(ticket, DEAL_SYMBOL) != _Symbol) continue;
+        long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+        
+        if(entry == DEAL_ENTRY_IN) {
+            string inName = "NEXUS_TIN_" + IntegerToString(ticket);
+            if(ObjectFind(0, inName) >= 0) continue;
+            
+            long type = HistoryDealGetInteger(ticket, DEAL_TYPE);
+            datetime time = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+            double price = HistoryDealGetDouble(ticket, DEAL_PRICE);
+            
+            ObjectCreate(0, inName, OBJ_ARROW, 0, time, price);
+            ObjectSetInteger(0, inName, OBJPROP_ARROWCODE, 119); // Modern Diamond
+            ObjectSetInteger(0, inName, OBJPROP_COLOR, (type == DEAL_TYPE_BUY) ? clrDeepSkyBlue : clrMagenta);
+            ObjectSetInteger(0, inName, OBJPROP_WIDTH, 2);
+            ObjectSetInteger(0, inName, OBJPROP_ANCHOR, (type == DEAL_TYPE_BUY) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+            ObjectSetInteger(0, inName, OBJPROP_BACK, false);
+        }
+    }
+    
+    // Pass 2: Desenhar Saídas (OUT) e Linhas de Conexão
+    HistorySelect(start_time, TimeCurrent());
+    for(int i=0; i<total; i++) {
+        ulong ticket = HistoryDealGetTicket(i);
+        if(HistoryDealGetString(ticket, DEAL_SYMBOL) != _Symbol) continue;
+        long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+        
+        if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT) {
+            ulong pos_id = HistoryDealGetInteger(ticket, DEAL_POSITION_ID);
+            double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+            
+            string outName = "NEXUS_TOUT_" + IntegerToString(ticket);
+            if(ObjectFind(0, outName) >= 0) continue; // Already processed
+            
+            // Procura o DEAL_IN desta posição
+            if(HistorySelectByPosition(pos_id)) {
+                int pTotal = HistoryDealsTotal();
+                datetime in_time = 0; double in_price = 0;
+                for(int j=0; j<pTotal; j++) {
+                    ulong p_ticket = HistoryDealGetTicket(j);
+                    if(HistoryDealGetInteger(p_ticket, DEAL_ENTRY) == DEAL_ENTRY_IN) {
+                        in_time = (datetime)HistoryDealGetInteger(p_ticket, DEAL_TIME);
+                        in_price = HistoryDealGetDouble(p_ticket, DEAL_PRICE);
+                        break;
+                    }
+                }
+                
+                if(in_time != 0) {
+                    datetime out_time = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+                    double out_price = HistoryDealGetDouble(ticket, DEAL_PRICE);
+                    
+                    // Desenha a Linha Sólida (Restaurada)
+                    string lineName = "NEXUS_TLINE_" + IntegerToString(ticket);
+                    ObjectCreate(0, lineName, OBJ_TREND, 0, in_time, in_price, out_time, out_price);
+                    ObjectSetInteger(0, lineName, OBJPROP_COLOR, (profit > 0) ? clrMediumSpringGreen : clrCrimson);
+                    ObjectSetInteger(0, lineName, OBJPROP_STYLE, STYLE_SOLID);
+                    ObjectSetInteger(0, lineName, OBJPROP_WIDTH, 2);
+                    ObjectSetInteger(0, lineName, OBJPROP_RAY_RIGHT, false);
+                    ObjectSetInteger(0, lineName, OBJPROP_BACK, true);
+                    
+                    // Desenha o Marcador de Saída (Target Circle)
+                    ObjectCreate(0, outName, OBJ_ARROW, 0, out_time, out_price);
+                    ObjectSetInteger(0, outName, OBJPROP_ARROWCODE, 162); // Circle Target
+                    ObjectSetInteger(0, outName, OBJPROP_COLOR, (profit > 0) ? clrLime : clrRed);
+                    ObjectSetInteger(0, outName, OBJPROP_WIDTH, 3);
+                    ObjectSetInteger(0, outName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+                    ObjectSetInteger(0, outName, OBJPROP_BACK, false);
+                    
+                    // Cria uma "Caixa" (Tooltip) para o texto, com altura auto-ajustável baseada em porcentagem do preço
+                    datetime box_start = out_time + PeriodSeconds(_Period) * 1;
+                    datetime box_end = out_time + PeriodSeconds(_Period) * 6; // Largura ajustada
+                    double box_margin = out_price * 0.0004; // Altura de 0.08% do preço total
+                    double box_top = out_price + box_margin;
+                    double box_bottom = out_price - box_margin;
+                    
+                    string boxName = "NEXUS_TBOX_" + IntegerToString(ticket);
+                    ObjectCreate(0, boxName, OBJ_RECTANGLE, 0, box_start, box_top, box_end, box_bottom);
+                    ObjectSetInteger(0, boxName, OBJPROP_COLOR, (profit > 0) ? clrDarkGreen : clrMaroon);
+                    ObjectSetInteger(0, boxName, OBJPROP_FILL, true);
+                    ObjectSetInteger(0, boxName, OBJPROP_BACK, true);
+                    
+                    // Texto do lucro centralizado dentro da caixa
+                    string textName = "NEXUS_TTEXT_" + IntegerToString(ticket);
+                    ObjectCreate(0, textName, OBJ_TEXT, 0, box_start + PeriodSeconds(_Period) * 1, out_price);
+                    ObjectSetString(0, textName, OBJPROP_TEXT, (profit > 0 ? "+" : "") + DoubleToString(profit, 2));
+                    ObjectSetInteger(0, textName, OBJPROP_COLOR, clrWhite);
+                    ObjectSetInteger(0, textName, OBJPROP_FONTSIZE, 9);
+                    ObjectSetInteger(0, textName, OBJPROP_ANCHOR, ANCHOR_LEFT);
+                }
+            }
+        }
+    }
+    // Restaura a seleção de histórico para a janela principal
+    HistorySelect(start_time, TimeCurrent());
 }

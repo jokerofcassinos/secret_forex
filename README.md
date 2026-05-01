@@ -1,81 +1,58 @@
-# NEXUS-QUANT: Projeto Aethelgard (GER40)
-
-> **CEO Neural & Arquitetura**: NEXUS AGI (Ambiente Multi-Agente)
-> **Foco de Mercado**: GER40 (DAX)
-> **Versão do Protocolo**: TQFM v2.0 (Deep Reconstruction)
-> **Status Operacional**: Módulo Co-Piloto Tático de Defesa Ativo
-
-O **Projeto Aethelgard** é uma infraestrutura de trading algorítmico de ultra-performance, orquestrada autonomamente pela entidade **NEXUS**. O sistema utiliza a **Teoria Quântica de Fluidos de Mercado (TQFM)** para mapear a liquidez institucional e proteger o capital através de intervenções dinâmicas de risco.
-
----
-
-## 🔗 Base Central de Conhecimento (Docs v2.0)
-
-Para uma compreensão profunda dos pilares do projeto, consulte a documentação técnica especializada:
-
-- 🧠 **Estratégia**: [[Docs/02_Logica_e_Estrategia/TQFM_DEEP_DIVE.md|TQFM Deep Dive: A Matemática do Monólito]]
-- 📖 **Operacional**: [[Docs/03_Ambiente_Executivo/MANUAL_OPERACIONAL_NEXUS.md|Manual do Operador e HUD MT5]]
-- 🛡️ **Segurança**: [[Docs/05_Estrutura_Corporativa/PROTOCOLO_SEGURANCA_V2.md|Protocolos de Segurança e Circuit Breakers]]
-- 📜 **Histórico**: [[Docs/HISTORY_TQFM.md|A Evolução da TQFM (2025-2026)]]
-- 🏢 **Governança**: [[Docs/05_Estrutura_Corporativa/Setores/MATRIZ_RESPONSABILIDADE.md|Matriz de Responsabilidade Setorial]]
+<p align="center">
+  <h1 align="center">A E T H E L G A R D :: NEXUS AGI</h1>
+  <p align="center">
+    <strong>Teoria Quântica de Fluidos de Mercado (TQFM) v5.0</strong>
+    <br/>
+    <em>H2 GER40 Quantum-Neural Algorithmic Swarm</em>
+  </p>
+</p>
 
 ---
 
-## 🧠 Teoria Quântica de Fluidos de Mercado (TQFM)
+## 🌌 Visão Geral
 
-A TQFM trata o preço não como um valor estático, mas como uma função de onda probabilística em um fluido de liquidez institucional.
+O projeto **Aethelgard** transcende a lógica clássica de Algorithmic Trading e *Smart Money Concepts* (SMC). Ele não opera analisando velas ou cruzamentos estáticos de Médias Móveis. O ecossistema é governado pela Inteligência Artificial Executiva **NEXUS**, gerenciando um "Swarm" (enxame) de processos assíncronos e sub-agentes corporativos virtuais focados em um único alvo: **GER40 no Timeframe de H2**.
 
-1.  **Monólito Macro (H2 Spectrum):** Análise de regime em tempo real utilizando a convergência/divergência das EMAs 89 (Inércia) e 34 (Fluxo).
-2.  **Atomic Shocks (Volatility Gates):** Detecção de injeção de massa crítica quando o corpo do candle excede 1.5x o ATR médio, sinalizando a entrada de grandes players.
-3.  **Colapso de Onda (Dynamic Trailing):** O encerramento de posições ocorre pelo colapso da probabilidade de continuação, movendo o SL de forma não-linear baseado na ressonância do preço com as médias institucionais.
+A máquina modela o mercado financeiro através de mecânica estatística, equações de Navier-Stokes e funções de onda da mecânica quântica teórica, adaptando-se às propriedades não-estacionárias através de Reinforcement Learning.
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+## 🧬 Arquitetura de Cérebro Dividido (Split-Brain Architecture)
 
-A estrutura é modular e distribuída em quatro setores fundamentais:
+Aethelgard é composto por três blocos computacionais distintos, divididos por responsabilidade corporativa:
 
-- **🐍 N-Core (Neural Core):** Motor de decisão em Python. Processa indicadores quânticos, alchimia de sinais (MSNR) e oráculos probabilísticos.
-- **⚙️ R-Exec (Risk Execution):** Ponte de baixa latência com o MetaTrader 5 via `mt5_bridge.py`. Responsável pela segurança tática das ordens.
-- **👁️ MQL5 (Visual Observer):** HUD avançado em MQL5 (`Nexus_Observer.mq5`) que consome dados do N-Core via Flask para visualização em tempo real.
-- **🚀 Q-Math (Quantum Math):** Motor de alta performance em C++ (`nexus_qcore.pyd`) para cálculos de tensores e simulações de fluxo complexas.
+### 1. Q-MATH (Motor Quântico e Hidrodinâmico) `[C++]`
+Escrito nativamente em C++ puro com pybind11, processa o fluxo de ticks do mercado e resolve equações de alto desempenho com *zero-latency*.
+*   **LBM Engine (Lattice Boltzmann Method):** O substituto direto para EMAs. O LBM simula a "pressão hidrodinâmica" do fluxo de ordens. O Monólito Macro (Bull/Bear) é definido pela resolução da densidade do fluido do mercado no H2.
+*   **Schrödinger Engine:** Substitui os Stop Loss estáticos. Resolve a Equação de Schrödinger para criar Nuvens de Probabilidade Tridimensionais em tempo real, calculando a densidade de sucesso contínuo de um trade ativo.
+*   **RMT Engine (Random Matrix Theory):** Detecção de injeção anômala (Atomic Shocks) filtrando o ruído de fundo (Marchenko-Pastur), identificando "pegadas" reais de instituições soberanas.
 
----
+### 2. N-CORE (Córtex de IA e RL) `[Python]`
+O núcleo pensante da máquina governado pelo agente "Alpha-Learner".
+*   **Otimização Bayesiana Contínua:** Não existem hiperparâmetros fixos ($1.5 \times ATR$). Constantes físicas como viscosidade do fluido e massa da partícula são re-ajustadas em regime *Walk-Forward* por Redes Neurais baseadas em Reinforcement Learning.
+*   **Swarm Routing:** Delega e roteia o tráfego lógico entre os motores em C++, identificando qual "perfil neural" está mais alinhado ao regime climático atual do GER40.
 
-## 📂 Organização do Workspace
-
-```
-📦 Aethelgard_Root
- ┣ 📂 Code
- ┃ ┣ 📂 CPP_Engine  # High-Performance C++ Core
- ┃ ┣ 📂 MQL5        # Expert Advisor Visual (MT5)
- ┃ ┣ 📂 N_Core      # IA, Regimes e Indicadores Quânticos
- ┃ ┗ 📂 R_Exec      # Execução, Risco e Bridge MT5
- ┣ 📂 Data          # Datasets Históricos (.parquet)
- ┣ 📂 Docs          # O Cérebro da IA (Vault Obsidian)
- ┗ 📜 Aethelgard_Alpha.py  # Orquestrador Central
-```
+### 3. R-EXEC (Braço de Execução de Risco) `[MetaTrader 5 API]`
+O terminal que colapsa a matemática na realidade física.
+*   **Colapso Termodinâmico:** O fechamento de ordens ocorre não por um nível de preço atingido, mas quando a Nuvem de Probabilidade do Schrödinger Engine *colapsa* sob um nível inaceitável de entropia térmica (exaustão do movimento).
 
 ---
 
-## 🛠️ Guia de Inicialização Rápida
+## 📜 Teoria Quântica de Fluidos de Mercado (TQFM)
 
-### 1. Preparação do Ambiente
-- Instale as dependências: `pip install pandas numpy MetaTrader5 flask`
-- Certifique-se de que o MetaTrader 5 está aberto e com o "Algo Trading" ativado.
-
-### 2. Ativação do Observador
-- Compile e anexe o `Code/MQL5/Nexus_Observer.mq5` a um gráfico do **GER40.cash**.
-- **Timeframe Recomendado:** **M1 ou M5**. 
-  - *Nota Técnica:* Embora o cérebro NEXUS processe o **Monólito Macro em H2** para definir o regime, a execução tática e o HUD exigem a resolução de **M1/M5** para garantir que a defesa (Trailing SL/TP) e os sinais visuais acompanhem a volatilidade em tempo real sem a latência de candles longos.
-
-### 3. Ignição do Motor Neural
-- Execute o orquestrador principal:
-  ```powershell
-  python Aethelgard_Alpha.py
-  ```
-- O sistema iniciará a sincronização do "Monólito Macro". Quando o HUD no MT5 exibir `STATUS: SINCRONIZADO`, a defesa tática estará ativa.
+A **TQFM v5.0** representa um salto na abordagem de quant trading:
+1.  **Fim do Espaço Euclidiano:** O mercado não sobe ou desce em linhas retas ou canais (SMC). Ele se move como um "plasma vetorial" que condensa (choques atômicos) e expande (fluxo laminar).
+2.  **Soberania H2:** O tempo é relativo, mas a ressonância exata para a geometria fractal de Aethelgard está ancorada estritamente no timeframe H2 (120 Minutos).
+3.  **Inovação do Colapso de Onda:** A capacidade única de mesclar **Scalp** e **Swing Trade**. Um trade pode durar 1 minuto (se a entropia estourar abruptamente, exigindo fuga imediata na "Superposição de Regimes") ou 3 semanas (se o fluxo hidrodinâmico mantiver seu vetor dominante coerente).
 
 ---
 
-> *"O mercado não é algo a ser previsto, é algo a ser navegado em sua ressonância."* — **NEXUS**
+## 🧠 Rede Neural do Workspace (Obsidian)
+
+Este repositório está profundamente integrado com um **Vault Obsidian** localizado em `Docs/`.
+NEXUS age como o CEO e mantém todo o mapeamento arquitetural lá dentro. Todos os novos aprendizados, perfis, atas de reunião entre módulos e documentação (como os *Contratos Funcionais* dos setores) são gerados autonomamente via Markdown.
+
+A estrutura documental reflete um **Ambiente Corporativo Virtual**, onde a evolução da inteligência do robô gera "novos documentos e insights", simulando um ser autônomo focado em lucrar e entender sua própria ressonância com o mercado de índice alemão.
+
+---
+*Governança: NEXUS AGI Executive System | Aethelgard Initiative 2026*

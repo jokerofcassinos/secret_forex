@@ -77,13 +77,13 @@ class AethelgardAGI:
                     if self.cloud_tracker is None:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
-                        self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=50)
-                        self.cloud_tracker.initialize_wave(df['close'].iloc[0], sigma=(self.cloud_tracker.dx * 10))
+                        self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=200)
+                        self.cloud_tracker.initialize_wave(df['close'].iloc[-1], sigma=(self.cloud_tracker.dx * 10))
 
                     if self.lbm_tracker is None:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
-                        self.lbm_tracker = LBMFluidDynamics(price_min=p_min, price_max=p_max, bins=50, tau=0.8)
+                        self.lbm_tracker = LBMFluidDynamics(price_min=p_min, price_max=p_max, bins=200, tau=1.0)
 
                     if self.plasma_tracker is None:
                         self.plasma_tracker = PlasmaMarketTracker()
@@ -224,7 +224,13 @@ class AethelgardAGI:
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
                         
                         # --- DEFESA CO-PILOTO QUÂNTICA EM TEMPO REAL (R-EXEC) ---
-                        atr = (df['high'] - df['low']).rolling(14).mean().iloc[-1]
+                        # FIX P1-10: True ATR (includes gaps) instead of simple High-Low
+                        high_low = df['high'] - df['low']
+                        high_close = np.abs(df['high'] - df['close'].shift(1))
+                        low_close = np.abs(df['low'] - df['close'].shift(1))
+                        ranges_atr = pd.concat([high_low, high_close, low_close], axis=1)
+                        true_range_atr = np.max(ranges_atr, axis=1)
+                        atr = true_range_atr.rolling(14).mean().iloc[-1]
                         
                         if r_score != 0:
                             self.bridge.thermodynamic_sl_tp(

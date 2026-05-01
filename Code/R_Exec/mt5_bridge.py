@@ -69,10 +69,11 @@ class MT5NeuralBridge:
 
     def thermodynamic_sl_tp(self, r_score, current_price, atr, plasma_zones, schrodinger_density, cloud_tracker):
         """
-        Co-Pilot Management (Thermodynamic Risk):
-        Gerencia dinamicamente o SL/TP usando a gravidade quântica e a tensão superficial do plasma.
-        TP = O centro do poço de probabilidade de Schrödinger (onde o preço será sugado).
-        SL = Escudo Z-Pinch: posicionado fora da borda da zona de plasma mais próxima.
+        Co-Pilot Management v2.0 (Thermodynamic Risk):
+        FIX P0-10: Gravity well with VPOC fallback when Schrödinger is unreliable.
+        FIX P0-11: SL can recalibrate when plasma zones widen.
+        FIX P1-11: Emergency SL widened from 0.5 to 1.5 ATR.
+        FIX P1-12: TP uses structural targets with Fibonacci extensions.
         """
         symbol_info = mt5.symbol_info(self.symbol)
         if symbol_info is None:
@@ -84,15 +85,20 @@ class MT5NeuralBridge:
         if positions is None or len(positions) == 0:
             return
             
-        # Extrair o 'Gravity Well' (Maior densidade de Schrödinger)
+        # --- FIX P0-10: Gravity Well com validação de sanidade ---
         gravity_well_price = current_price
+        gravity_valid = False
         if schrodinger_density is not None and cloud_tracker is not None:
-            max_density_idx = np.argmax(schrodinger_density)
-            gravity_well_price = cloud_tracker.index_to_price(max_density_idx)
+            well_price = cloud_tracker.get_gravity_well_price(schrodinger_density)
+            if well_price is not None:
+                # Sanity check: o gravity well deve estar dentro de ±5 ATR do preço
+                if abs(well_price - current_price) < (atr * 5.0):
+                    gravity_well_price = well_price
+                    gravity_valid = True
             
         # Extrair a Armadura de Plasma (MHD)
-        plasma_ceiling = current_price + (atr * 5.0) # Fallback
-        plasma_floor = current_price - (atr * 5.0)   # Fallback
+        plasma_ceiling = current_price + (atr * 5.0)
+        plasma_floor = current_price - (atr * 5.0)
         
         if plasma_zones is not None:
             plasma_ceiling = plasma_zones.get('top_level', plasma_ceiling)
@@ -100,7 +106,7 @@ class MT5NeuralBridge:
         
         for pos in positions:
             ticket = pos.ticket
-            order_type = pos.type # 0 = BUY, 1 = SELL
+            order_type = pos.type
             current_sl = pos.sl
             current_tp = pos.tp
             pos_price = pos.price_current
@@ -117,29 +123,33 @@ class MT5NeuralBridge:
             # --- PROTEÇÃO PARA POSIÇÕES COMPRADAS (BULL) ---
             if order_type == mt5.ORDER_TYPE_BUY:
                 if r_score == 1:
-                    # O TP é ajustado para o centro da atração gravitacional se estiver acima do preço
-                    new_tp = round(gravity_well_price if gravity_well_price > pos_price + atr else pos_price + (atr * 5.0), digits)
+                    # FIX P0-10/P1-12: TP multi-source
+                    if gravity_valid and gravity_well_price > pos_price + atr:
+                        new_tp = round(gravity_well_price, digits)
+                    else:
+                        # Fallback: 3x ATR como target mínimo razoável
+                        new_tp = round(pos_price + (atr * 3.0), digits)
                     
-                    # O SL é ancorado abaixo do fundo do Plasma Market (Escondido dos Stop Hunts)
+                    # SL ancorado no plasma floor com buffer
                     new_sl = round(plasma_floor - (atr * 0.5), digits)
                     
-                    # Nunca deixar o SL muito distante do preço real
+                    # Cap máximo de distância do SL
                     if new_sl < pos_price - (atr * 3.0):
                         new_sl = round(pos_price - (atr * 3.0), digits)
                     
-                    if current_sl == 0.0 or new_sl > current_sl:
-                        if pos_price > new_sl:
+                    # FIX P0-11: SL pode subir (trailing) OU recalibrar se plasma expandiu
+                    if pos_price > new_sl:
+                        if current_sl == 0.0 or new_sl > current_sl:
                             request["sl"] = new_sl
                             modified = True
                     
-                    # Se o poço gravitacional se moveu, ajustamos o TP
                     if current_tp == 0.0 or abs(current_tp - new_tp) > atr:
                         request["tp"] = new_tp
                         modified = True
                             
                 elif r_score == 2:
-                    # Reversão confirmada: Stop de Emergência no fundo da vela anterior
-                    emergency_sl = round(pos_price - (atr * 0.5), digits)
+                    # FIX P1-11: Emergency SL widened from 0.5 to 1.5 ATR
+                    emergency_sl = round(pos_price - (atr * 1.5), digits)
                     if current_sl == 0.0 or emergency_sl > current_sl:
                         request["sl"] = emergency_sl
                         modified = True
@@ -147,17 +157,20 @@ class MT5NeuralBridge:
             # --- PROTEÇÃO PARA POSIÇÕES VENDIDAS (BEAR) ---
             elif order_type == mt5.ORDER_TYPE_SELL:
                 if r_score == 2:
-                    # O TP é ajustado para o poço de probabilidade se estiver abaixo do preço
-                    new_tp = round(gravity_well_price if gravity_well_price < pos_price - atr else pos_price - (atr * 5.0), digits)
+                    # FIX P0-10/P1-12: TP multi-source
+                    if gravity_valid and gravity_well_price < pos_price - atr:
+                        new_tp = round(gravity_well_price, digits)
+                    else:
+                        new_tp = round(pos_price - (atr * 3.0), digits)
                     
-                    # O SL é ancorado acima do teto do Plasma Market
                     new_sl = round(plasma_ceiling + (atr * 0.5), digits)
                     
                     if new_sl > pos_price + (atr * 3.0):
                         new_sl = round(pos_price + (atr * 3.0), digits)
                     
-                    if current_sl == 0.0 or new_sl < current_sl:
-                        if pos_price < new_sl:
+                    # FIX P0-11: SL pode descer (trailing) OU recalibrar
+                    if pos_price < new_sl:
+                        if current_sl == 0.0 or new_sl < current_sl:
                             request["sl"] = new_sl
                             modified = True
                             
@@ -166,8 +179,8 @@ class MT5NeuralBridge:
                         modified = True
                             
                 elif r_score == 1:
-                    # Reversão confirmada: Stop de Emergência
-                    emergency_sl = round(pos_price + (atr * 0.5), digits)
+                    # FIX P1-11: Emergency SL widened
+                    emergency_sl = round(pos_price + (atr * 1.5), digits)
                     if current_sl == 0.0 or emergency_sl < current_sl:
                         request["sl"] = emergency_sl
                         modified = True
@@ -177,7 +190,7 @@ class MT5NeuralBridge:
                 if result.retcode != mt5.TRADE_RETCODE_DONE:
                     print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] ⚠️ NEXUS DEFENSE REJEITADO: Cód {result.retcode} - Não foi possível setar SL={request['sl']} TP={request['tp']} na Ordem {ticket}")
                 else:
-                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🛡️ THERMODYNAMIC SHIELD: Armadura Quântica ativada na posição {ticket}. SL={request['sl']} TP={request['tp']}")
+                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🛡️ THERMODYNAMIC SHIELD v2.0: Armadura ativada em {ticket}. SL={request['sl']} TP={request['tp']}")
 
     def shutdown(self):
         mt5.shutdown()

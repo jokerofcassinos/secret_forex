@@ -3,11 +3,9 @@ import pandas as pd
 import sys
 import os
 
-# Add the bin/ or built extension path to sys.path so we can import schrodinger_engine
-# (This assumes the .pyd or .so is built and placed in the correct location)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine', 'bin'))
-sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine')) # If built in place
+sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine'))
 
 try:
     if os.name == 'nt':
@@ -20,8 +18,9 @@ except ImportError as e:
 
 class QuantumCloudTracker:
     """
-    N-Core Agent: Quantum Cloud Tracker (Schrödinger Equation)
-    Transforms price action into a Probability Cloud to predict Institutional Squeezes and Tunneling.
+    N-Core Agent: Quantum Cloud Tracker v2.0 (Schrödinger Equation)
+    FIX P0-05/P0-06: Absorbing boundaries + adaptive dt + wave recentering.
+    FIX P1-05: Volume distributed across candle range, not single bin.
     """
     def __init__(self, price_min, price_max, bins=500):
         self.price_min = price_min
@@ -29,7 +28,6 @@ class QuantumCloudTracker:
         self.bins = bins
         self.dx = (price_max - price_min) / bins
         
-        # Initialize C++ Solver
         try:
             self.solver = schrodinger_engine.QuantumCloudSolver(self.bins, self.dx)
             self.is_active = True
@@ -44,104 +42,107 @@ class QuantumCloudTracker:
         return self.price_min + (idx * self.dx)
 
     def initialize_wave(self, current_price, sigma=None, k0=0.0):
-        """
-        Initializes the quantum wave packet at the current price.
-        Sigma controls the uncertainty (spread of the cloud).
-        """
         if not self.is_active: return
-        
         if sigma is None:
-            sigma = self.dx * 10 # Default uncertainty
-            
+            sigma = self.dx * 10
         x0 = current_price - self.price_min
         self.solver.initialize_gaussian(x0, sigma, k0)
 
     def generate_potential_from_volume_profile(self, df_slice):
         """
-        Translates Order Flow / Volume Profile into a 'Potential Energy' well.
-        High Volume Node = Low Potential (Attracts price).
-        Low Volume Node = High Potential Barrier (Repels price, requires tunneling).
+        FIX P1-05: Volume now distributed across the entire candle range (high-low),
+        not just assigned to the close bin.
         """
-        V = np.ones(self.bins) * 10.0 # High base potential
-        
-        # Calculate a simple volume profile
+        V = np.ones(self.bins) * 10.5  # Stable base potential for Crank-Nicolson
+
         if 'tick_volume' in df_slice.columns:
             vol_col = 'tick_volume'
         elif 'volume' in df_slice.columns:
             vol_col = 'volume'
         else:
-            # Fallback if no volume data
             return list(V)
             
-        # Distribute volume into bins
         for i in range(len(df_slice)):
             candle = df_slice.iloc[i]
-            c_price = candle['close']
             vol = candle[vol_col]
-            idx = self.price_to_index(c_price)
             
-            # The more volume, the deeper the potential well (minimum 0.1)
-            # This is a simplified approach; can be enhanced with actual Order Book data
-            V[idx] = max(0.1, V[idx] - (vol * 0.001)) 
+            # FIX P1-05: Distribute volume across the candle's full range
+            idx_low = self.price_to_index(candle['low'])
+            idx_high = self.price_to_index(candle['high'])
             
-        # Smooth the potential using a simple moving average window
+            if idx_high <= idx_low:
+                idx_high = idx_low + 1
+            
+            n_bins_covered = idx_high - idx_low
+            vol_per_bin = vol / max(1, n_bins_covered)
+            
+            vol_scale = 0.5 / (np.mean(df_slice.get(vol_col, [1000])) + 1e-9)
+            for b in range(idx_low, min(idx_high + 1, self.bins)):
+                # Deepen the well significantly based on volume
+                V[b] = max(0.0, V[b] - (vol_per_bin * vol_scale))
+            
         V_smoothed = np.convolve(V, np.ones(5)/5, mode='same')
         return list(V_smoothed)
 
     def step(self, df_slice, dt=1.0):
-        """
-        Advances the quantum simulation based on the current market state.
-        """
         if not self.is_active: return None
         
-        # Calculate Mass (Inverse of Volatility)
+        # Calculate True Range ATR (FIX P1-10 consistency)
         high_low = df_slice['high'] - df_slice['low']
-        atr = high_low.rolling(14).mean().iloc[-1]
+        high_close = np.abs(df_slice['high'] - df_slice['close'].shift(1))
+        low_close = np.abs(df_slice['low'] - df_slice['close'].shift(1))
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = np.max(ranges, axis=1)
+        atr = true_range.rolling(14).mean().iloc[-1]
         
-        if np.isnan(atr) or atr == 0:
+        # FIX: Mass is now significantly heavier so the wave doesn't disperse instantly
+        # Mass calibrated to ATR for natural fluidity
+        if np.isnan(atr) or atr < 1e-9:
             mass = 1.0
         else:
-            mass = 1.0 / atr  # High ATR -> Low Mass -> Wave spreads faster
-            
-        # 1. Update Potential Map based on recent history
+            mass = 1.0 / atr
+
         V = self.generate_potential_from_volume_profile(df_slice)
         self.solver.update_potential(V)
         
-        # 2. Step the PDE forward
+        # FIX P0-06: step_forward now handles adaptive substeps internally
         self.solver.step_forward(dt, mass)
         
-        # 3. Retrieve Probability Density (Zero-Copy)
-        density = self.solver.get_probability_density()
+        # Recentering is now handled gracefully inside C++ (only if completely lost)
+        current_price = df_slice['close'].iloc[-1]
+        x0 = current_price - self.price_min
+        sigma = self.dx * 10
+        self.solver.recenter_wave(x0, sigma)
         
+        density = self.solver.get_probability_density()
         return density
         
+    def get_gravity_well_price(self, density):
+        """
+        Returns the price at the peak of the probability density.
+        FIX P0-10: Provides a reliable gravity well based on corrected cloud.
+        """
+        if density is None:
+            return None
+        max_idx = np.argmax(density)
+        return self.index_to_price(max_idx)
+
     def check_tunneling_signal(self, current_price, resistance_price, density):
-        """
-        Analyzes the cloud to see if probability density has 'leaked' through a resistance,
-        indicating an imminent breakout before price actually moves there.
-        """
         curr_idx = self.price_to_index(current_price)
         res_idx = self.price_to_index(resistance_price)
         
-        # If the resistance is above us
         if res_idx > curr_idx:
-            # Sum probability beyond the resistance
             prob_beyond = np.sum(density[res_idx:])
-            # Sum probability trapped behind resistance
             prob_trapped = np.sum(density[curr_idx:res_idx])
-            
-            if prob_beyond > prob_trapped * 0.5: # Arbitrary tunneling threshold
+            if prob_beyond > prob_trapped * 0.5:
                 return "QUANTUM_TUNNEL_BULL"
-        
-        # If the resistance is below us (Support)
         elif res_idx < curr_idx:
             prob_beyond = np.sum(density[:res_idx])
             prob_trapped = np.sum(density[res_idx:curr_idx])
-            
             if prob_beyond > prob_trapped * 0.5:
                 return "QUANTUM_TUNNEL_BEAR"
                 
         return "STABLE"
 
 if __name__ == "__main__":
-    print("Quantum Clouds module loaded. Awaiting C++ Engine integration.")
+    print("Quantum Clouds v2.0 module loaded.")

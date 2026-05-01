@@ -18,17 +18,20 @@ except ImportError as e:
 
 class LBMFluidDynamics:
     """
-    N-Core Agent: LBM Fluid Dynamics
-    Models the market as a compressible fluid to predict Squeezes and Ruptures.
+    N-Core Agent: LBM Fluid Dynamics v2.0
+    FIX P0-08: tau >= 1.0 for stability.
+    FIX P0-09: Momentum proportional to candle body strength.
+    FIX P1-09: Mass decay built into C++ engine.
     """
-    def __init__(self, price_min, price_max, bins=500, tau=0.8):
+    def __init__(self, price_min, price_max, bins=200, tau=1.0):
         self.price_min = price_min
         self.price_max = price_max
         self.bins = bins
         self.dx = (price_max - price_min) / bins
         
         try:
-            self.engine = lbm_engine.LBMEngine(self.bins, tau)
+            # FIX P0-08: Default tau=1.0 for guaranteed stability
+            self.engine = lbm_engine.LBMEngine(self.bins, max(1.0, tau))
             self.is_active = True
         except NameError:
             self.is_active = False
@@ -41,27 +44,29 @@ class LBMFluidDynamics:
         return self.price_min + (idx * self.dx)
 
     def process_tick_stream(self, df_slice, steps=10):
-        """
-        Injects recent price action into the fluid grid and runs the LBM steps.
-        """
         if not self.is_active: return None, None
         
-        # Inject mass and momentum
+        # Calculate ATR for momentum normalization
+        tr = df_slice['high'] - df_slice['low']
+        atr = tr.rolling(min(14, len(df_slice))).mean().iloc[-1]
+        if np.isnan(atr) or atr < 1e-9:
+            atr = 1.0
+        
         for i in range(len(df_slice)):
             candle = df_slice.iloc[i]
             c_price = candle['close']
             vol = candle.get('tick_volume', 100)
             
-            is_green = candle['close'] >= candle['open']
-            momentum = 1.0 if is_green else -1.0
+            body = candle['close'] - candle['open']
             
-            # Normalize mass injection
+            # FIX P0-09: Momentum proportional to body size normalized by ATR
+            # Range: approximately -0.3 to +0.3 (clamped in C++)
+            momentum = np.clip(body / (atr + 1e-9), -0.3, 0.3)
+            
             mass = vol * 0.001
-            
             idx = self.price_to_index(c_price)
-            self.engine.inject_liquidity(idx, mass, momentum)
+            self.engine.inject_liquidity(idx, mass, float(momentum))
             
-        # Run BGK Collision and Streaming
         for _ in range(steps):
             self.engine.step()
             
@@ -71,30 +76,21 @@ class LBMFluidDynamics:
         return np.array(density), np.array(velocity)
 
     def detect_squeeze_rupture(self, current_price, density, velocity):
-        """
-        Scans for zones with extremely high density (compression)
-        and high absolute velocity (directional aggression).
-        Returns a signal if a rupture is imminent.
-        """
         curr_idx = self.price_to_index(current_price)
-        
-        # Check local neighborhood (e.g. +/- 5 bins)
         start = max(0, curr_idx - 5)
         end = min(self.bins, curr_idx + 6)
         
         local_density = np.mean(density[start:end])
         local_velocity = np.mean(velocity[start:end])
-        
         global_mean_density = np.mean(density)
         
-        # Rupture thresholds (can be optimized by reinforcement learning later)
         if local_density > global_mean_density * 2.0:
-            if local_velocity > 0.5: # Bullish Rupture
+            if local_velocity > 0.1:
                 return "FLUID_RUPTURE_BULL"
-            elif local_velocity < -0.5: # Bearish Rupture
+            elif local_velocity < -0.1:
                 return "FLUID_RUPTURE_BEAR"
                 
         return "LAMINAR_FLOW"
 
 if __name__ == "__main__":
-    print("LBM Fluid Dynamics module loaded.")
+    print("LBM Fluid Dynamics v2.0 module loaded.")

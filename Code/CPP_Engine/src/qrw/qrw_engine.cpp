@@ -14,6 +14,9 @@ private:
     int num_positions;
     std::vector<std::vector<Complex>> state;
     std::vector<std::vector<Complex>> new_state;
+    
+    // FIX P0-03: Epsilon para comparação numérica
+    static constexpr double EPSILON = 1e-30;
 
 public:
     QRWEngine(int positions = 201) : num_positions(positions) {
@@ -29,16 +32,20 @@ public:
         }
         if(start_pos == -1) start_pos = num_positions / 2;
         
-        // Inicialização Assimétrica para gerar Drift Quântico
-        state[start_pos][0] = Complex(1.0, 0.0);
-        state[start_pos][1] = Complex(0.0, 0.0);
+        // Inicialização balanceada para simetria perfeita
+        double inv_sqrt2 = 1.0 / std::sqrt(2.0);
+        state[start_pos][0] = Complex(inv_sqrt2, 0.0);
+        state[start_pos][1] = Complex(inv_sqrt2, 0.0);  // Ambas reais para simetria com operador i*sin
     }
 
-    void step(double theta) {
+    void step(double bias) {
+        // Operador Unitário Simétrico Biased (SU(2))
+        double theta = M_PI / 4.0;
+        Complex I(0.0, 1.0);
         Complex C00(std::cos(theta), 0.0);
-        Complex C01(std::sin(theta), 0.0);
-        Complex C10(std::sin(theta), 0.0);
-        Complex C11(-std::cos(theta), 0.0);
+        Complex C01 = I * std::sin(theta) * std::exp(I * bias);
+        Complex C10 = I * std::sin(theta) * std::exp(-I * bias);
+        Complex C11(std::cos(theta), 0.0);
 
         for(int i=0; i<num_positions; ++i) {
             new_state[i][0] = 0.0;
@@ -46,7 +53,8 @@ public:
         }
 
         for(int i=0; i<num_positions; ++i) {
-            if(std::norm(state[i][0]) == 0 && std::norm(state[i][1]) == 0) continue;
+            // FIX P0-03: Comparação com epsilon ao invés de ==0
+            if(std::norm(state[i][0]) < EPSILON && std::norm(state[i][1]) < EPSILON) continue;
 
             Complex val0 = C00 * state[i][0] + C01 * state[i][1];
             Complex val1 = C10 * state[i][0] + C11 * state[i][1];
@@ -60,47 +68,81 @@ public:
 
     double get_expected_value() {
         double expected_val = 0.0;
+        int center = num_positions / 2;
         for(int i=0; i<num_positions; ++i) {
             double prob = std::norm(state[i][0]) + std::norm(state[i][1]);
-            int x = i - (num_positions / 2);
+            int x = i - center;
             expected_val += x * prob;
         }
         return expected_val;
     }
+    
+    // FIX P1-04: Calcula a norma total para normalização
+    double get_total_probability() {
+        double total = 0.0;
+        for(int i=0; i<num_positions; ++i) {
+            total += std::norm(state[i][0]) + std::norm(state[i][1]);
+        }
+        return total;
+    }
+    
+    // Calcula a variância da distribuição para normalização do skew
+    double get_variance() {
+        double mean = get_expected_value();
+        double var = 0.0;
+        int center = num_positions / 2;
+        for(int i=0; i<num_positions; ++i) {
+            double prob = std::norm(state[i][0]) + std::norm(state[i][1]);
+            double x = (double)(i - center);
+            var += (x - mean) * (x - mean) * prob;
+        }
+        return var;
+    }
 
-    // Calcula o Desvio do Drift Quântico (Biased vs Unbiased)
-    double compute_interference_skew(const std::vector<double>& price_deltas, const std::vector<double>& volumes) {
+    // FIX P1-03: Aceita atr_scale para calibrar o bias dinamicamente
+    // FIX P1-04: Retorna skewness normalizada pela variância
+    double compute_interference_skew(const std::vector<double>& price_deltas, 
+                                     const std::vector<double>& volumes,
+                                     double atr_scale) {
         int steps = price_deltas.size();
+        if(steps == 0) return 0.0;
         
-        // 1. Simulação Não-Viesada (Baseline Drift)
+        // Calcular escala de normalização do bias
+        // FIX P1-03: atr_scale é passado pelo Python (1/ATR) para calibrar
+        double bias_factor = (atr_scale > 1e-12) ? atr_scale : 0.001;
+        
+        // 1. Simulação Não-Viesada (Baseline)
         reset();
         for(int t=0; t<steps; ++t) {
-            step(M_PI / 4.0); // Hadamard puro
+            step(0.0); // Bias puro zero
         }
         double baseline_expected = get_expected_value();
-
-        // 2. Simulação Viesada (Com Intenção Institucional Oculta)
+        double baseline_var = get_variance();
+        
+        // 2. Simulação Viesada (Com Intenção Institucional)
         reset();
         for(int t=0; t<steps; ++t) {
             double delta = price_deltas[t];
-            // Viés baseado no momentum do tick. 
-            double bias = std::tanh(delta * volumes[t] * 0.00001); 
-            double theta = (M_PI / 4.0) + (bias * M_PI / 8.0);
-            step(theta);
+            double vol = volumes[t];
+            double bias = std::tanh(delta * vol * bias_factor); 
+            step(bias);
         }
         double biased_expected = get_expected_value();
-
-        // Se o drift com viés for maior (mais à direita/Bullish) que o baseline, retorna positivo
-        // Invertemos o sinal porque o drift natural do [1,0] é negativo (esquerda).
-        double drift_diff = biased_expected - baseline_expected;
         
-        return drift_diff;
+        // FIX P1-04: Normalizar o drift pela variância do baseline
+        double drift_diff = biased_expected - baseline_expected;
+        double std_dev = std::sqrt(baseline_var + 1e-12);
+        double normalized_skew = drift_diff / std_dev;
+        
+        return normalized_skew;
     }
 };
 
 PYBIND11_MODULE(qrw_engine, m) {
-    m.doc() = "Quantum Random Walk (QRW) Engine for Market Decrypting";
+    m.doc() = "Quantum Random Walk (QRW) Engine v2.0 - Unitary Coin Operator";
     py::class_<QRWEngine>(m, "QRWEngine")
         .def(py::init<int>(), py::arg("positions") = 201)
-        .def("compute_interference_skew", &QRWEngine::compute_interference_skew, "Compute Probability Drift based on Quantum Interference");
+        .def("compute_interference_skew", &QRWEngine::compute_interference_skew, 
+             "Compute normalized Probability Drift based on Quantum Interference",
+             py::arg("price_deltas"), py::arg("volumes"), py::arg("atr_scale"));
 }
