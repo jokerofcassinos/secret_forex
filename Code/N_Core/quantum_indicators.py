@@ -19,10 +19,13 @@ if cpp_path not in sys.path:
 
 try:
     import qdd_engine
+    import qho_engine
     _QDD_ENGINE_INST = qdd_engine.QDDEngine(1, 1.0, 0.05)
+    _QHO_ENGINE_INST = qho_engine.QHOEngine()
     QDD_AVAILABLE = True
 except ImportError:
     _QDD_ENGINE_INST = None
+    _QHO_ENGINE_INST = None
     QDD_AVAILABLE = False
 
 class QuantumIndicators:
@@ -364,71 +367,48 @@ class QuantumIndicators:
     @staticmethod
     def calculate_tactical_dots(df, regime_score):
         """
-        Gera sinais visuais (dots) v27.1 (The Entropy Guard - Strict).
-        Foco: Silêncio total em zonas de exaustão e transição.
+        Gera sinais de tiro Sniper (dots) via C++ QHO-Engine.
+        Substitui a lógica estocástica ruidosa por um modelo de poço de potencial de Schrödinger.
         """
         if len(df) < 60: return [0] * len(df)
         
-        # Camadas de Comando
-        ema_9 = df['close'].ewm(span=9, adjust=False).mean()
-        ema_21 = df['close'].ewm(span=21, adjust=False).mean()
+        # O QHO agora ancora o poço de potencial na EMA 34 (Tendência Estrutural)
         ema_34 = df['close'].ewm(span=34, adjust=False).mean()
-        ema_89 = df['close'].ewm(span=89, adjust=False).mean()
         
         high_low = df['high'] - df['low']
-        atr = high_low.rolling(14).mean()
+        high_close = np.abs(df['high'] - df['close'].shift(1))
+        low_close = np.abs(df['low'] - df['close'].shift(1))
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = np.max(ranges, axis=1)
+        atr = true_range.rolling(14).mean().fillna(0)
         
-        dots = []
-        lookback = 8
-        for i in range(len(df)):
-            if i < 20:
-                dots.append(0); continue
+        if QDD_AVAILABLE and _QHO_ENGINE_INST is not None:
+            try:
+                # Converte arrays para numpy C-contiguous float64
+                o_arr = np.ascontiguousarray(df['open'].values, dtype=np.float64)
+                h_arr = np.ascontiguousarray(df['high'].values, dtype=np.float64)
+                l_arr = np.ascontiguousarray(df['low'].values, dtype=np.float64)
+                c_arr = np.ascontiguousarray(df['close'].values, dtype=np.float64)
+                e34_arr = np.ascontiguousarray(ema_34.values, dtype=np.float64)
+                r_arr = np.ascontiguousarray(regime_score, dtype=np.int32)
+                atr_arr = np.ascontiguousarray(atr.values, dtype=np.float64)
                 
-            curr_r = regime_score[i]
-            c = df['close'].iloc[i]
-            o = df['open'].iloc[i]
-            h = df['high'].iloc[i]
-            l = df['low'].iloc[i]
-            e9 = ema_9.iloc[i]
-            e21 = ema_21.iloc[i]
-            e34 = ema_34.iloc[i]
-            e89 = ema_89.iloc[i]
-            curr_atr = atr.iloc[i]
+                # Executa o motor quântico em C++
+                res = _QHO_ENGINE_INST.scan_quantum_triggers(o_arr, h_arr, l_arr, c_arr, e34_arr, r_arr, atr_arr)
+                dots = res['signals'].tolist()
+            except Exception as e:
+                print(f"Erro QHO Engine: {e}")
+                dots = [0] * len(df)
+        else:
+            dots = [0] * len(df)
             
-            # --- CÁLCULO DE ENTROPIA LOCAL ---
-            gap_macro = abs(e34 - e89) / (curr_atr + 1e-9)
-            gap_fast = abs(e9 - e21) / (curr_atr + 1e-9)
-            
-            # TRAVA DE SEGURANÇA Ph.D.
-            # Se a saúde macro é baixa (<20%) ou as médias estão coladas, SILÊNCIO.
-            is_exhausted = (gap_macro < 0.6) or (gap_fast < 0.1)
-            
-            dot = 0 # Default: Cinza (Será filtrado pelo gradiente)
-            
-            if not is_exhausted:
-                l_max = df['high'].iloc[i-lookback:i+1].max()
-                l_min = df['low'].iloc[i-lookback:i+1].min()
-                p_rel = (c - l_min) / (l_max - l_min + 1e-9)
-                
-                # --- LÓGICA BASE ---
-                if curr_r == 1 and p_rel < 0.50 and (l <= e9 * 1.001) and (c > o):
-                    dot = 1
-                elif curr_r == 2 and p_rel > 0.50 and (h >= e9 * 0.999) and (c < o):
-                    dot = 2
-            
-            dots.append(dot)
-            
-        # --- GRADIENTE PASS ---
+        # O QHO Engine já retorna 0, 1 (Bull) ou 2 (Bear). 
+        # Não precisamos do loop de gradiente antigo, os tiros são únicos (Snipers).
         gradient_dots = [0] * len(dots)
         for i in range(len(dots)):
             if dots[i] == 1:
-                gradient_dots[i] = 1
-                if i+1 < len(dots): gradient_dots[i+1] = 11
-                if i+2 < len(dots): gradient_dots[i+2] = 12
-                if i+3 < len(dots): gradient_dots[i+3] = 13
+                gradient_dots[i] = 1 # Verde choque
             elif dots[i] == 2:
-                gradient_dots[i] = 2
-                if i+1 < len(dots): gradient_dots[i+1] = 21
-                if i+2 < len(dots): gradient_dots[i+2] = 22
-                if i+3 < len(dots): gradient_dots[i+3] = 23
+                gradient_dots[i] = 2 # Vermelho choque
+                
         return gradient_dots

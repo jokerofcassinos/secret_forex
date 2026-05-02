@@ -146,6 +146,15 @@ class AethelgardAGI:
                         df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
                         df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
                         
+                        # WARM-UP ACELERADO DA NUVEM DE SCHRÖDINGER (Evita delay visual)
+                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Formando Nuvem de Schrödinger...")
+                        # 1. Calcula o Potencial Estático de todo o histórico de uma vez
+                        static_V = self.cloud_tracker.generate_potential_from_volume_profile(df)
+                        self.cloud_tracker.solver.update_potential(static_V)
+                        # 2. Difunde a função de onda por 50 passos temporais largos para preencher o heatmap instantaneamente
+                        for _ in range(50):
+                            self.cloud_tracker.solver.step_forward(dt=5.0, mass=1.0)
+                        
                         scores_hist = []
                         for i in range(len(df)):
                             if i < window_calc:
