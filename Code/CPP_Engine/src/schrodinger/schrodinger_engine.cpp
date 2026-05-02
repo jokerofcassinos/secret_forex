@@ -136,10 +136,10 @@ PYBIND11_MODULE(schrodinger_engine, m) {
     m.doc() = "Quantum Cloud Solver v2.0 - Absorbing Boundaries";
     py::class_<QuantumCloudSolver>(m, "QuantumCloudSolver")
         .def(py::init<int, double>())
-        .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian)
-        .def("update_potential", &QuantumCloudSolver::update_potential)
-        .def("step_forward", &QuantumCloudSolver::step_forward)
-        .def("recenter_wave", &QuantumCloudSolver::recenter_wave)
+        .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian, py::arg("x0"), py::arg("sigma"), py::arg("k0"))
+        .def("update_potential", &QuantumCloudSolver::update_potential, py::arg("new_V"))
+        .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("mass"))
+        .def("recenter_wave", &QuantumCloudSolver::recenter_wave, py::arg("new_x0"), py::arg("sigma"))
         .def("get_probability_density", &QuantumCloudSolver::get_probability_density, py::return_value_policy::reference_internal)
         .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass);
 }

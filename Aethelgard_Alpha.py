@@ -151,9 +151,10 @@ class AethelgardAGI:
                         # 1. Calcula o Potencial Estático de todo o histórico de uma vez
                         static_V = self.cloud_tracker.generate_potential_from_volume_profile(df)
                         self.cloud_tracker.solver.update_potential(static_V)
-                        # 2. Difunde a função de onda por 50 passos temporais largos para preencher o heatmap instantaneamente
+                        # 2. Difunde a função de onda por passos temporais largos para preencher o heatmap instantaneamente
+                        # FIX: Massa reduzida drasticamente para permitir a difusão rápida da nuvem nos poços de volume na inicialização
                         for _ in range(50):
-                            self.cloud_tracker.solver.step_forward(dt=5.0, mass=1.0)
+                            self.cloud_tracker.solver.step_forward(dt=5.0, mass=0.01)
                         
                         scores_hist = []
                         for i in range(len(df)):
@@ -193,9 +194,10 @@ class AethelgardAGI:
                                 true_range_h = np.max(ranges_h, axis=1)
                                 atr_h = true_range_h.rolling(14).mean().iloc[-1]
                                 
-                                # EXTREME SANITIZATION: Somente volume institucional real (> 3.0x ATR)
-                                if body_h > (atr_h * 3.0):
-                                    sig = 1 if r_score == 1 else 2
+                                # EXTREME SANITIZATION: Somente volume institucional real (> 1.8x ATR)
+                                if body_h > (atr_h * 1.8):
+                                    is_bull_candle_h = curr_h['close'] > curr_h['open']
+                                    sig = 1 if is_bull_candle_h else 2
                             
                             self.signals_cache.append(str(sig))
                             self.lbm_cache.append("0")
@@ -317,9 +319,10 @@ class AethelgardAGI:
                             curr = df.iloc[-1]
                             body = abs(curr['close'] - curr['open'])
                             
-                            # EXTREME SANITIZATION LIVE: Somente volume institucional real (> 3.0x ATR)
-                            if body > (atr * 3.0):
-                                sig = 1 if r_score == 1 else 2
+                            # EXTREME SANITIZATION LIVE: Somente volume institucional real (> 1.8x ATR)
+                            if body > (atr * 1.8):
+                                is_bull_candle = curr['close'] > curr['open']
+                                sig = 1 if is_bull_candle else 2
                                 print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt}")
                                 
                             # Atualização Síncrona

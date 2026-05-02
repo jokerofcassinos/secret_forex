@@ -49,17 +49,25 @@ void ParseAndDraw(string data)
    string historySignals = parts[7];
    string historyDots = parts[8];
    
-   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V114", 10, 20, clrCyan, 12);
-   
-   // --- NOVO: STATUS RG-QDD ---
    bool qddActive = (StringFind(statusTxt, "AGUARDANDO_IGNICAO") < 0 && StringFind(statusTxt, "INIT") < 0);
-   string qddMsg = qddActive ? "RG-QDD: PURIFYING" : "RG-QDD: SCANNING";
-   color qddClr = qddActive ? clrLime : clrGray;
-   DrawLabel("NEXUS_QDD_STATUS", qddMsg, 250, 20, qddClr, 10);
-   
-   color sClr = (health < 0.3) ? clrRed : (health < 0.6 ? clrGold : clrSpringGreen);
-   DrawLabel("NEXUS_STATUS", "STATUS: " + statusTxt, 10, 40, sClr, 10);
-   DrawLabel("NEXUS_INST_AVG", "INST_AVG_PRICE: " + DoubleToString(instAvgPrice, 2), 10, 60, clrGray, 9);
+   string qddMsg = qddActive ? "PURIFYING" : "SCANNING";
+
+   string lbm_signal = (ArraySize(parts) > 11) ? parts[11] : "LAMINAR_FLOW";
+   string z_signal = (ArraySize(parts) > 12) ? parts[12] : "NEUTRAL";
+   string rmt_signal = (ArraySize(parts) > 13) ? parts[13] : "NOISE";
+   string qrw_signal = (ArraySize(parts) > 14) ? parts[14] : "NEUTRAL";
+
+   // Limpa as antigas poluições textuais
+   ObjectDelete(0, "NEXUS_HEADER");
+   ObjectDelete(0, "NEXUS_QDD_STATUS");
+   ObjectDelete(0, "NEXUS_STATUS");
+   ObjectDelete(0, "NEXUS_INST_AVG");
+   ObjectDelete(0, "NEXUS_LBM_WARNING");
+   ObjectDelete(0, "NEXUS_ZPINCH_WARNING");
+   ObjectDelete(0, "NEXUS_RMT_WARNING");
+   ObjectDelete(0, "NEXUS_QRW_WARNING");
+
+   DrawModernDashboard(statusTxt, instAvgPrice, health, qddMsg, lbm_signal, z_signal, rmt_signal, qrw_signal);
 
    // 1. ATUALIZAÇÃO DAS CAIXAS (SEM DELETAR TUDO)
    string hReg[]; StringSplit(historyRegimes, ',', hReg);
@@ -86,7 +94,7 @@ void ParseAndDraw(string data)
          }
          
          string bName = "NEXUS_ZONE_" + IntegerToString(boxIdx);
-         color zClr = (r == 1) ? clrLime : clrRed;
+         color zClr = (r == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80);
          
          // ObjectCreate em objeto existente apenas atualiza as coordenadas (Sem Flicker)
          if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
@@ -120,14 +128,14 @@ void ParseAndDraw(string data)
       color dClr = clrBlack;
       bool isAbove = (dotVal == 2 || dotVal == 21 || dotVal == 22 || dotVal == 23);
 
-      if(dotVal == 1) dClr = clrSpringGreen;
-      else if(dotVal == 11) dClr = clrMediumSeaGreen;
-      else if(dotVal == 12) dClr = clrForestGreen;
-      else if(dotVal == 13) dClr = clrDarkGreen;
-      else if(dotVal == 2) dClr = clrRed;
-      else if(dotVal == 21) dClr = clrCrimson;
-      else if(dotVal == 22) dClr = clrFireBrick;
-      else if(dotVal == 23) dClr = clrMaroon;
+      if(dotVal == 1) dClr = RGB(38, 166, 154);
+      else if(dotVal == 11) dClr = RGB(0, 150, 136);
+      else if(dotVal == 12) dClr = RGB(0, 121, 107);
+      else if(dotVal == 13) dClr = RGB(0, 77, 64);
+      else if(dotVal == 2) dClr = RGB(239, 83, 80);
+      else if(dotVal == 21) dClr = RGB(229, 57, 53);
+      else if(dotVal == 22) dClr = RGB(198, 40, 40);
+      else if(dotVal == 23) dClr = RGB(183, 28, 28);
 
       if(dClr == clrBlack) { ObjectDelete(0, dName); continue; }
 
@@ -142,6 +150,7 @@ void ParseAndDraw(string data)
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
       ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 2 : 1));
       ObjectSetInteger(0, dName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
+      ObjectSetInteger(0, dName, OBJPROP_BACK, true); // Prevent HUD overlap
    }
 
    // 3. ATUALIZAÇÃO DOS SINAIS DE VOLUME
@@ -162,9 +171,10 @@ void ParseAndDraw(string data)
       ObjectSetInteger(0, sName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
       ObjectSetDouble(0, sName, OBJPROP_PRICE, sPrice);
       ObjectSetString(0, sName, OBJPROP_TEXT, (sVal == 1 ? "[BULL_VOLUME]" : "[BEAR_VOLUME]"));
-      ObjectSetInteger(0, sName, OBJPROP_COLOR, (sVal == 1 ? clrDodgerBlue : clrOrangeRed));
+      ObjectSetInteger(0, sName, OBJPROP_COLOR, (sVal == 1 ? RGB(66, 165, 245) : RGB(255, 167, 38)));
       ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 8);
       ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
+      ObjectSetInteger(0, sName, OBJPROP_BACK, true); // Prevent HUD overlap
    }
    
    // 4. ATUALIZAÇÃO DA NUVEM QUÂNTICA DE SCHRÖDINGER
@@ -207,31 +217,31 @@ void ParseAndDraw(string data)
          string bName = "NEXUS_QC_" + IntegerToString(b);
          string tagName = "NEXUS_QCTAG_" + IntegerToString(b);
          
-         if(den < maxDensity * 0.15) { // Threshold dinâmico pra não poluir o fundo
+         if(den < maxDensity * 0.05) { // Threshold dinâmico menor para fade suave
              ObjectDelete(0, bName);
              ObjectDelete(0, tagName);
              continue;
          }
          
          double ratio = den / maxDensity;
-         color qColor = clrBlack;
+         // Curva de intensidade para manter o brilho em high-density e fade natural
+         ratio = MathPow(ratio, 1.2); 
+         if(ratio > 1.0) ratio = 1.0;
          
-         // Gradiente TV-Style: Resistência (Acima) = Red, Suporte (Abaixo) = Green
+         uchar r, g, b;
+         // Gradiente TV-Style Termodinâmico (Smooth Lerp)
          if(pLevel > currentPrice) {
-             if(ratio > 0.9) qColor = clrRed;
-             else if(ratio > 0.6) qColor = clrFireBrick;
-             else if(ratio > 0.3) qColor = clrMaroon;
-             else qColor = 0x000033; // Dark Red customizado (BGR format) -> 0x330000 no MT5 (R=0x33, G=0, B=0) mas MT5 é BGR, entao clrMaroon é 128,0,0
+             // Red Gradient: From Base(24,24,24) to Hot(239,83,80)
+             r = (uchar)(24 + (239 - 24) * ratio);
+             g = (uchar)(24 + (83 - 24) * ratio);
+             b = (uchar)(24 + (80 - 24) * ratio);
          } else {
-             if(ratio > 0.9) qColor = clrLime;
-             else if(ratio > 0.6) qColor = clrForestGreen;
-             else if(ratio > 0.3) qColor = clrDarkGreen;
-             else qColor = 0x003300; // Dark Green customizado
+             // Teal Gradient: From Base(24,24,24) to Hot(38,166,154)
+             r = (uchar)(24 + (38 - 24) * ratio);
+             g = (uchar)(24 + (166 - 24) * ratio);
+             b = (uchar)(24 + (154 - 24) * ratio);
          }
-         
-         // Cores literais seguras pra não bugar o MT5
-         if(pLevel > currentPrice && ratio <= 0.3) qColor = clrBlack; 
-         if(pLevel <= currentPrice && ratio <= 0.3) qColor = clrBlack;
+         color qColor = RGB(r, g, b);
          
          // Cria a Banda Background
          if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
@@ -259,62 +269,7 @@ void ParseAndDraw(string data)
       for(int k=tCloud; k<200; k++) ObjectDelete(0, "NEXUS_QC_"+IntegerToString(k));
    }
    
-   // 5. ATUALIZAÇÃO DO ALARME LBM FLUID RUPTURE
-   if(ArraySize(parts) > 11 && parts[11] != "") {
-      string lbm_signal = parts[11];
-      string lbm_label = "NEXUS_LBM_WARNING";
-      
-      if(lbm_signal == "FLUID_RUPTURE_BULL" || lbm_signal == "FLUID_RUPTURE_BEAR") {
-          color wClr = (lbm_signal == "FLUID_RUPTURE_BULL") ? clrDeepSkyBlue : clrMagenta;
-          string wTxt = (lbm_signal == "FLUID_RUPTURE_BULL") ? "⚠️ LBM SQUEEZE: ALTA COMPRESSÃO BULLISH!" : "⚠️ LBM SQUEEZE: ALTA COMPRESSÃO BEARISH!";
-          DrawLabel(lbm_label, wTxt, 10, 90, wClr, 14); // Fonte maior, cor chamativa
-      } else {
-          // LAMINAR_FLOW -> Apaga o aviso ou deixa neutro
-          if(ObjectFind(0, lbm_label) >= 0) ObjectDelete(0, lbm_label);
-      }
-   }
-   
-   // 6. ATUALIZAÇÃO DO ALARME MHD Z-PINCH (PLASMA)
-   if(ArraySize(parts) > 12 && parts[12] != "") {
-      string z_signal = parts[12];
-      string z_label = "NEXUS_ZPINCH_WARNING";
-      
-      if(z_signal != "NEUTRAL") {
-          color zClr = clrGold;
-          string zTxt = "⚡ Z-PINCH ATINGIDO: " + z_signal + " (REVERSÃO ATÔMICA IMINENTE!)";
-          DrawLabel(z_label, zTxt, 10, 110, zClr, 16); 
-      } else {
-          if(ObjectFind(0, z_label) >= 0) ObjectDelete(0, z_label);
-      }
-   }
-
-   // 7. ATUALIZAÇÃO DO FILTRO RMT SPECTRAL (RUÍDO VS INSTITUCIONAL)
-   if(ArraySize(parts) > 13 && parts[13] != "") {
-      string rmt_signal = parts[13];
-      string rmt_label = "NEXUS_RMT_WARNING";
-      
-      if(rmt_signal != "NOISE") {
-          color rmtClr = clrLime;
-          string rmtTxt = "🔬 RMT: " + rmt_signal + " (SINAL INSTITUCIONAL VERIFICADO)";
-          DrawLabel(rmt_label, rmtTxt, 10, 130, rmtClr, 12); 
-      } else {
-          if(ObjectFind(0, rmt_label) >= 0) ObjectDelete(0, rmt_label);
-      }
-   }
-
-   // 8. ATUALIZAÇÃO DO DECODER QRW (QUANTUM RANDOM WALK)
-   if(ArraySize(parts) > 14 && parts[14] != "") {
-      string qrw_signal = parts[14];
-      string qrw_label = "NEXUS_QRW_WARNING";
-      
-      if(qrw_signal != "NEUTRAL") {
-          color qrwClr = (qrw_signal == "HIDDEN_ACCUMULATION_BULL") ? clrCyan : clrOrange;
-          string qrwTxt = "🎲 QRW DECODER: " + qrw_signal + " (INTERFERÊNCIA DETECTADA)";
-          DrawLabel(qrw_label, qrwTxt, 10, 150, qrwClr, 12); 
-      } else {
-          if(ObjectFind(0, qrw_label) >= 0) ObjectDelete(0, qrw_label);
-      }
-   }
+   // Os alertas isolados de LBM, Z-PINCH, RMT e QRW foram integrados ao painel do HUD Moderno.
 
    // 9. ATUALIZAÇÃO DO HISTÓRICO LBM (MARCADORES PERMANENTES)
    if(ArraySize(parts) > 15 && parts[15] != "") {
@@ -329,8 +284,9 @@ void ParseAndDraw(string data)
          ObjectSetInteger(0, name, OBJPROP_TIME, iTime(_Symbol, _Period, j));
          ObjectSetDouble(0, name, OBJPROP_PRICE, p);
          ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 108); // Diamond
-         ObjectSetInteger(0, name, OBJPROP_COLOR, (v == 1) ? clrDeepSkyBlue : clrMagenta);
+         ObjectSetInteger(0, name, OBJPROP_COLOR, (v == 1) ? RGB(66, 165, 245) : RGB(171, 71, 188));
          ObjectSetInteger(0, name, OBJPROP_ANCHOR, (v == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+         ObjectSetInteger(0, name, OBJPROP_BACK, true);
       }
    }
    
@@ -347,8 +303,9 @@ void ParseAndDraw(string data)
          ObjectSetInteger(0, name, OBJPROP_TIME, iTime(_Symbol, _Period, j));
          ObjectSetDouble(0, name, OBJPROP_PRICE, p);
          ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 171); // Star
-         ObjectSetInteger(0, name, OBJPROP_COLOR, clrGold);
+         ObjectSetInteger(0, name, OBJPROP_COLOR, RGB(255, 202, 40));
          ObjectSetInteger(0, name, OBJPROP_ANCHOR, (v == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+         ObjectSetInteger(0, name, OBJPROP_BACK, true);
       }
    }
 
@@ -365,8 +322,9 @@ void ParseAndDraw(string data)
          ObjectSetInteger(0, name, OBJPROP_TIME, iTime(_Symbol, _Period, j));
          ObjectSetDouble(0, name, OBJPROP_PRICE, p);
          ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 233); // Arrow/Checkmark
-         ObjectSetInteger(0, name, OBJPROP_COLOR, (v == 1) ? clrCyan : clrOrange);
+         ObjectSetInteger(0, name, OBJPROP_COLOR, (v == 1) ? RGB(38, 198, 218) : RGB(255, 167, 38));
          ObjectSetInteger(0, name, OBJPROP_ANCHOR, (v == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+         ObjectSetInteger(0, name, OBJPROP_BACK, true);
       }
    }
    
@@ -407,7 +365,7 @@ void DrawModernTradeHistory()
             
             ObjectCreate(0, inName, OBJ_ARROW, 0, time, price);
             ObjectSetInteger(0, inName, OBJPROP_ARROWCODE, 119); // Modern Diamond
-            ObjectSetInteger(0, inName, OBJPROP_COLOR, (type == DEAL_TYPE_BUY) ? clrDeepSkyBlue : clrMagenta);
+            ObjectSetInteger(0, inName, OBJPROP_COLOR, (type == DEAL_TYPE_BUY) ? RGB(66, 165, 245) : RGB(171, 71, 188));
             ObjectSetInteger(0, inName, OBJPROP_WIDTH, 2);
             ObjectSetInteger(0, inName, OBJPROP_ANCHOR, (type == DEAL_TYPE_BUY) ? ANCHOR_TOP : ANCHOR_BOTTOM);
             ObjectSetInteger(0, inName, OBJPROP_BACK, false);
@@ -448,7 +406,7 @@ void DrawModernTradeHistory()
                     // Desenha a Linha Sólida (Restaurada)
                     string lineName = "NEXUS_TLINE_" + IntegerToString(ticket);
                     ObjectCreate(0, lineName, OBJ_TREND, 0, in_time, in_price, out_time, out_price);
-                    ObjectSetInteger(0, lineName, OBJPROP_COLOR, (profit > 0) ? clrMediumSpringGreen : clrCrimson);
+                    ObjectSetInteger(0, lineName, OBJPROP_COLOR, (profit > 0) ? RGB(38, 166, 154) : RGB(239, 83, 80));
                     ObjectSetInteger(0, lineName, OBJPROP_STYLE, STYLE_SOLID);
                     ObjectSetInteger(0, lineName, OBJPROP_WIDTH, 2);
                     ObjectSetInteger(0, lineName, OBJPROP_RAY_RIGHT, false);
@@ -457,7 +415,7 @@ void DrawModernTradeHistory()
                     // Desenha o Marcador de Saída (Target Circle)
                     ObjectCreate(0, outName, OBJ_ARROW, 0, out_time, out_price);
                     ObjectSetInteger(0, outName, OBJPROP_ARROWCODE, 162); // Circle Target
-                    ObjectSetInteger(0, outName, OBJPROP_COLOR, (profit > 0) ? clrLime : clrRed);
+                    ObjectSetInteger(0, outName, OBJPROP_COLOR, (profit > 0) ? RGB(38, 166, 154) : RGB(239, 83, 80));
                     ObjectSetInteger(0, outName, OBJPROP_WIDTH, 3);
                     ObjectSetInteger(0, outName, OBJPROP_ANCHOR, ANCHOR_CENTER);
                     ObjectSetInteger(0, outName, OBJPROP_BACK, false);
@@ -471,7 +429,7 @@ void DrawModernTradeHistory()
                     
                     string boxName = "NEXUS_TBOX_" + IntegerToString(ticket);
                     ObjectCreate(0, boxName, OBJ_RECTANGLE, 0, box_start, box_top, box_end, box_bottom);
-                    ObjectSetInteger(0, boxName, OBJPROP_COLOR, (profit > 0) ? clrDarkGreen : clrMaroon);
+                    ObjectSetInteger(0, boxName, OBJPROP_COLOR, (profit > 0) ? RGB(0, 105, 92) : RGB(183, 28, 28));
                     ObjectSetInteger(0, boxName, OBJPROP_FILL, true);
                     ObjectSetInteger(0, boxName, OBJPROP_BACK, true);
                     
@@ -482,10 +440,174 @@ void DrawModernTradeHistory()
                     ObjectSetInteger(0, textName, OBJPROP_COLOR, clrWhite);
                     ObjectSetInteger(0, textName, OBJPROP_FONTSIZE, 9);
                     ObjectSetInteger(0, textName, OBJPROP_ANCHOR, ANCHOR_LEFT);
+                    ObjectSetInteger(0, textName, OBJPROP_BACK, true); // Push to chart layer
                 }
             }
         }
     }
     // Restaura a seleção de histórico para a janela principal
     HistorySelect(start_time, TimeCurrent());
+}
+
+//+------------------------------------------------------------------+
+//| MODERN HUD FUNCTIONS (TRADINGVIEW STYLE)                         |
+//+------------------------------------------------------------------+
+
+string GetStatusShort(string status) {
+    if(StringFind(status, "TSUNAMI_BULL") >= 0) return "Bull Tsunami";
+    if(StringFind(status, "TSUNAMI_BEAR") >= 0) return "Bear Tsunami";
+    if(StringFind(status, "BULL_PREVISAO") >= 0) return "Bull Pre-Ignition";
+    if(StringFind(status, "BEAR_PREVISAO") >= 0) return "Bear Pre-Ignition";
+    return "Neutral Regime";
+}
+color GetStatusColor(string status) {
+    if(StringFind(status, "BULL") >= 0) return RGB(38, 166, 154); // TV Green
+    if(StringFind(status, "BEAR") >= 0) return RGB(239, 83, 80); // TV Red
+    return RGB(120, 123, 134); // TV Gray
+}
+color GetHealthColor(double h) { return (h < 0.3) ? RGB(239, 83, 80) : (h < 0.6 ? RGB(255, 167, 38) : RGB(38, 166, 154)); }
+
+string GetLBMShort(string lbm) {
+    if(lbm == "FLUID_RUPTURE_BULL") return "Squeeze Bull";
+    if(lbm == "FLUID_RUPTURE_BEAR") return "Squeeze Bear";
+    return "Laminar Flow";
+}
+color GetLBMColor(string lbm) {
+    if(lbm == "FLUID_RUPTURE_BULL") return RGB(66, 165, 245); // TV Blue
+    if(lbm == "FLUID_RUPTURE_BEAR") return RGB(171, 71, 188); // TV Purple
+    return RGB(120, 123, 134);
+}
+
+string GetZPShort(string zp) {
+    if(zp == "NEUTRAL" || zp == "") return "Neutral";
+    if(StringFind(zp, "Z_PINCH_") >= 0) {
+        string sub[]; StringSplit(zp, '_', sub);
+        if(ArraySize(sub) >= 3) return sub[2] + " " + sub[3]; // "BOTTOM SWEEP"
+    }
+    return zp; 
+}
+color GetZPColor(string zp) { return (zp == "NEUTRAL" || zp == "") ? RGB(120, 123, 134) : RGB(255, 202, 40); }
+
+string GetRMTShort(string rmt) {
+    if(rmt == "NOISE" || rmt == "") return "Noise Filtered";
+    return rmt; // PURE_SIGNAL_x2.7
+}
+color GetRMTColor(string rmt) { return (rmt == "NOISE" || rmt == "") ? RGB(120, 123, 134) : RGB(38, 166, 154); }
+
+string GetQRWShort(string qrw) {
+    if(qrw == "NEUTRAL" || qrw == "") return "No Interf.";
+    if(qrw == "HIDDEN_ACCUMULATION_BULL") return "Accumulation";
+    if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return "Distribution";
+    return qrw;
+}
+color GetQRWColor(string qrw) {
+    if(qrw == "HIDDEN_ACCUMULATION_BULL") return RGB(38, 198, 218); // Cyan
+    if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return RGB(255, 167, 38); // Orange
+    return RGB(120, 123, 134);
+}
+
+void DrawHUDText(string name, string text, int x, int y, color clr, int fontSize, bool isRightAligned=false, int corner=CORNER_RIGHT_UPPER)
+{
+    if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, name, OBJPROP_CORNER, corner);
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetString(0, name, OBJPROP_TEXT, text);
+    ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
+    ObjectSetString(0, name, OBJPROP_FONT, "Segoe UI");
+    ObjectSetInteger(0, name, OBJPROP_ANCHOR, isRightAligned ? ANCHOR_RIGHT_UPPER : ANCHOR_LEFT_UPPER);
+    ObjectSetInteger(0, name, OBJPROP_ZORDER, 100); // Extremely high Z-order to guarantee top rendering
+    ObjectSetInteger(0, name, OBJPROP_BACK, false);
+}
+
+color RGB(uchar r, uchar g, uchar b) { return (color)((b << 16) | (g << 8) | r); }
+
+void DrawHUDRow(string id, string label, string val, color valClr, int baseX, int y, int panelW, int corner=CORNER_LEFT_UPPER)
+{
+    DrawHUDText(id + "_L", label, baseX + 15, y, RGB(140, 140, 145), 9, false, corner); 
+    DrawHUDText(id + "_V", val, baseX + panelW - 15, y, valClr, 9, true, corner);
+}
+
+void DrawModernDashboard(string status, double instAvg, double health, string qdd, string lbm, string zp, string rmt, string qrw)
+{
+    int panelW = 280;
+    int panelH = 200;
+    int corner = CORNER_LEFT_UPPER;
+    int baseX = 20;
+    int baseY = 30;
+    
+    // Background Rectangle
+    string bgName = "NEXUS_HUD_BASE";
+    if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, bgName, OBJPROP_CORNER, corner);
+    ObjectSetInteger(0, bgName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+    ObjectSetInteger(0, bgName, OBJPROP_XDISTANCE, baseX);
+    ObjectSetInteger(0, bgName, OBJPROP_YDISTANCE, baseY);
+    ObjectSetInteger(0, bgName, OBJPROP_XSIZE, panelW);
+    ObjectSetInteger(0, bgName, OBJPROP_YSIZE, panelH);
+    ObjectSetInteger(0, bgName, OBJPROP_BGCOLOR, RGB(30, 34, 45)); // Distinct Dark Blue/Grey TV panel
+    ObjectSetInteger(0, bgName, OBJPROP_COLOR, RGB(60, 65, 80)); // Light Border
+    ObjectSetInteger(0, bgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(0, bgName, OBJPROP_BACK, false);
+    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 90); // High Z-order
+    
+    // Title Background
+    string hBgName = "NEXUS_HUD_HEADER_BG";
+    if(ObjectFind(0, hBgName) < 0) ObjectCreate(0, hBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, hBgName, OBJPROP_CORNER, corner);
+    ObjectSetInteger(0, hBgName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+    ObjectSetInteger(0, hBgName, OBJPROP_XDISTANCE, baseX);
+    ObjectSetInteger(0, hBgName, OBJPROP_YDISTANCE, baseY);
+    ObjectSetInteger(0, hBgName, OBJPROP_XSIZE, panelW);
+    ObjectSetInteger(0, hBgName, OBJPROP_YSIZE, 35);
+    ObjectSetInteger(0, hBgName, OBJPROP_BGCOLOR, RGB(38, 43, 56));
+    ObjectSetInteger(0, hBgName, OBJPROP_COLOR, RGB(60, 65, 80));
+    ObjectSetInteger(0, hBgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 95); // High Z-order
+    ObjectSetInteger(0, hBgName, OBJPROP_BACK, false);
+
+    DrawHUDText("NEXUS_HUD_TITLE", "HELIX ENSEMBLE", baseX + 15, baseY + 10, RGB(220, 225, 235), 10, false, corner);
+    
+    // Divider
+    string divName = "NEXUS_HUD_DIVIDER";
+    if(ObjectFind(0, divName) < 0) ObjectCreate(0, divName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, divName, OBJPROP_CORNER, corner);
+    ObjectSetInteger(0, divName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+    ObjectSetInteger(0, divName, OBJPROP_XDISTANCE, baseX);
+    ObjectSetInteger(0, divName, OBJPROP_YDISTANCE, baseY + 35);
+    ObjectSetInteger(0, divName, OBJPROP_XSIZE, panelW);
+    ObjectSetInteger(0, divName, OBJPROP_YSIZE, 1);
+    ObjectSetInteger(0, divName, OBJPROP_BGCOLOR, RGB(60, 65, 80));
+    ObjectSetInteger(0, divName, OBJPROP_COLOR, RGB(60, 65, 80));
+    ObjectSetInteger(0, divName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(0, divName, OBJPROP_ZORDER, 96); // High Z-order
+    
+    int rowY = baseY + 45;
+    int rowH = 19;
+    
+    // Draw row backgrounds
+    for(int i=0; i<8; i++) {
+        string rBgName = "NEXUS_HUD_ROW_BG_" + IntegerToString(i);
+        if(ObjectFind(0, rBgName) < 0) ObjectCreate(0, rBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+        ObjectSetInteger(0, rBgName, OBJPROP_CORNER, corner);
+        ObjectSetInteger(0, rBgName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+        ObjectSetInteger(0, rBgName, OBJPROP_XDISTANCE, baseX);
+        ObjectSetInteger(0, rBgName, OBJPROP_YDISTANCE, baseY + 36 + (i * rowH));
+        ObjectSetInteger(0, rBgName, OBJPROP_XSIZE, panelW);
+        ObjectSetInteger(0, rBgName, OBJPROP_YSIZE, rowH);
+        ObjectSetInteger(0, rBgName, OBJPROP_BGCOLOR, (i % 2 == 0) ? RGB(33, 38, 50) : RGB(30, 34, 45));
+        ObjectSetInteger(0, rBgName, OBJPROP_COLOR, (i % 2 == 0) ? RGB(33, 38, 50) : RGB(30, 34, 45));
+        ObjectSetInteger(0, rBgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+        ObjectSetInteger(0, rBgName, OBJPROP_ZORDER, 92); // High Z-order
+    }
+    
+    DrawHUDRow("NEXUS_HUD_L_1", "Regime", GetStatusShort(status), GetStatusColor(status), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_2", "Consensus", DoubleToString(health * 100, 1) + "%", GetHealthColor(health), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_3", "Filters", qdd, (qdd == "PURIFYING" ? RGB(38, 166, 154) : clrGray), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_4", "Strength", GetLBMShort(lbm), GetLBMColor(lbm), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_5", "Agreement", GetZPShort(zp), GetZPColor(zp), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_6", "Slope", GetRMTShort(rmt), GetRMTColor(rmt), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_7", "Last Flip", GetQRWShort(qrw), GetQRWColor(qrw), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg Price", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
 }
