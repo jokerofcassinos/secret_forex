@@ -139,16 +139,24 @@ void ParseAndDraw(string data)
 
       if(dClr == clrBlack) { ObjectDelete(0, dName); continue; }
 
-      if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_ARROW, 0, 0, 0);
+      // Verifica e converte de OBJ_ARROW para OBJ_TEXT caso exista cache
+      if(ObjectFind(0, dName) >= 0 && ObjectType(dName) != OBJ_TEXT) ObjectDelete(0, dName);
+      if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_TEXT, 0, 0, 0);
       
-      double offset = 100 * _Point;
+      double offset = 140 * _Point; // Mais margem para não poluir os candles
       double dPrice = isAbove ? iHigh(_Symbol, _Period, d) + offset : iLow(_Symbol, _Period, d) - offset;
       
       ObjectSetInteger(0, dName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
       ObjectSetDouble(0, dName, OBJPROP_PRICE, dPrice);
-      ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, 159);
+      
+      // Símbolos Modernos: U+25B2 (▲) e U+25BC (▼)
+      string symbol = isAbove ? ShortToString(0x25BC) : ShortToString(0x25B2);
+      string txt = (dotVal < 10) ? ("[ " + symbol + " ]") : ("  " + symbol + "  "); // Sinal primário ganha caixa
+      
+      ObjectSetString(0, dName, OBJPROP_TEXT, txt);
+      ObjectSetString(0, dName, OBJPROP_FONT, "Segoe UI");
+      ObjectSetInteger(0, dName, OBJPROP_FONTSIZE, (dotVal < 10 ? 9 : 7)); // Tamanho legível e moderno
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 2 : 1));
       ObjectSetInteger(0, dName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
       ObjectSetInteger(0, dName, OBJPROP_BACK, true); // Prevent HUD overlap
    }
@@ -170,7 +178,10 @@ void ParseAndDraw(string data)
       
       ObjectSetInteger(0, sName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
       ObjectSetDouble(0, sName, OBJPROP_PRICE, sPrice);
-      ObjectSetString(0, sName, OBJPROP_TEXT, (sVal == 1 ? "[BULL_VOLUME]" : "[BEAR_VOLUME]"));
+      
+      string vSymbol = (sVal == 1) ? ShortToString(0x25B2) : ShortToString(0x25BC);
+      ObjectSetString(0, sName, OBJPROP_TEXT, "[ VOL " + vSymbol + " ]");
+      ObjectSetString(0, sName, OBJPROP_FONT, "Segoe UI");
       ObjectSetInteger(0, sName, OBJPROP_COLOR, (sVal == 1 ? RGB(66, 165, 245) : RGB(255, 167, 38)));
       ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 8);
       ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
