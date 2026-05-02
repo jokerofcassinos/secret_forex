@@ -142,29 +142,21 @@ void ParseAndDraw(string data)
       double offset = 140 * _Point; // Mais margem para não poluir os candles
       double dPrice = isAbove ? iHigh(_Symbol, _Period, d) + offset : iLow(_Symbol, _Period, d) - offset;
       
-      // Caixa de Fundo (Background Box) para máximo contraste
+      // Remove o antigo background se existir (Limpeza de versão anterior)
       string dNameBg = dName + "_BG";
-      if(ObjectFind(0, dNameBg) >= 0 && ObjectGetInteger(0, dNameBg, OBJPROP_TYPE) != OBJ_ARROW) ObjectDelete(0, dNameBg);
-      if(ObjectFind(0, dNameBg) < 0) ObjectCreate(0, dNameBg, OBJ_ARROW, 0, 0, 0);
-      ObjectSetInteger(0, dNameBg, OBJPROP_TIME, iTime(_Symbol, _Period, d));
-      ObjectSetDouble(0, dNameBg, OBJPROP_PRICE, dPrice);
-      ObjectSetInteger(0, dNameBg, OBJPROP_ARROWCODE, 110); // Solid Square (Wingdings)
-      ObjectSetInteger(0, dNameBg, OBJPROP_COLOR, RGB(25, 29, 38)); // Dark Glassmorphism bg
-      ObjectSetInteger(0, dNameBg, OBJPROP_WIDTH, (dotVal < 10 ? 5 : 3));
-      ObjectSetInteger(0, dNameBg, OBJPROP_ANCHOR, ANCHOR_CENTER); // FIX ALIGNMENT
-      ObjectSetInteger(0, dNameBg, OBJPROP_BACK, true);
+      if(ObjectFind(0, dNameBg) >= 0) ObjectDelete(0, dNameBg);
 
-      // Seta de Primeiro Plano (Foreground Arrow)
+      // Seta Minimalista (Foreground Elegante)
       if(ObjectFind(0, dName) >= 0 && ObjectGetInteger(0, dName, OBJPROP_TYPE) != OBJ_ARROW) ObjectDelete(0, dName);
       if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_ARROW, 0, 0, 0);
       
       ObjectSetInteger(0, dName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
       ObjectSetDouble(0, dName, OBJPROP_PRICE, dPrice);
-      ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, isAbove ? 234 : 233); // Wingdings Down/Up Arrow
+      ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, isAbove ? 234 : 233); // Seta Moderna (Wingdings)
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 2 : 1)); // Menor para caber dentro da caixa
-      ObjectSetInteger(0, dName, OBJPROP_ANCHOR, ANCHOR_CENTER); // FIX ALIGNMENT
-      ObjectSetInteger(0, dName, OBJPROP_BACK, false); // On top of the background box
+      ObjectSetInteger(0, dName, OBJPROP_WIDTH, (dotVal < 10 ? 3 : 2)); // Limpo e vísivel
+      ObjectSetInteger(0, dName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
+      ObjectSetInteger(0, dName, OBJPROP_BACK, true); // Sem sobrepor o HUD
    }
 
    // 3. ATUALIZAÇÃO DOS SINAIS DE VOLUME
@@ -182,30 +174,24 @@ void ParseAndDraw(string data)
       double sPrice = (sVal == 1) ? iLow(_Symbol, _Period, j) - 100 * _Point : iHigh(_Symbol, _Period, j) + 100 * _Point;
       color sClr = (sVal == 1) ? RGB(66, 165, 245) : RGB(255, 167, 38);
       
-      // Fundo Escuro para Texto de Volume (Block Character Trick) -> Convertido para Colored Box Icon
+      // Remove o antigo background se existir
       string sNameBg = sName + "_BG";
-      if(ObjectFind(0, sNameBg) >= 0 && ObjectGetInteger(0, sNameBg, OBJPROP_TYPE) != OBJ_ARROW) ObjectDelete(0, sNameBg);
-      if(ObjectFind(0, sNameBg) < 0) ObjectCreate(0, sNameBg, OBJ_ARROW, 0, 0, 0);
-      ObjectSetInteger(0, sNameBg, OBJPROP_TIME, iTime(_Symbol, _Period, j));
-      ObjectSetDouble(0, sNameBg, OBJPROP_PRICE, sPrice);
-      ObjectSetInteger(0, sNameBg, OBJPROP_ARROWCODE, 110); // Solid Box
-      ObjectSetInteger(0, sNameBg, OBJPROP_COLOR, sClr); // Colored Background!
-      ObjectSetInteger(0, sNameBg, OBJPROP_WIDTH, 5); // Huge Box
-      ObjectSetInteger(0, sNameBg, OBJPROP_ANCHOR, ANCHOR_CENTER);
-      ObjectSetInteger(0, sNameBg, OBJPROP_BACK, true);
+      if(ObjectFind(0, sNameBg) >= 0) ObjectDelete(0, sNameBg);
 
-      // Texto em Si (Foreground Carved 'V')
+      // Texto Minimalista HUD-Like
       if(ObjectFind(0, sName) >= 0 && ObjectGetInteger(0, sName, OBJPROP_TYPE) != OBJ_TEXT) ObjectDelete(0, sName);
       if(ObjectFind(0, sName) < 0) ObjectCreate(0, sName, OBJ_TEXT, 0, 0, 0);
+      
       ObjectSetInteger(0, sName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
       ObjectSetDouble(0, sName, OBJPROP_PRICE, sPrice);
       
-      ObjectSetString(0, sName, OBJPROP_TEXT, "V");
+      string vSymbol = (sVal == 1) ? ShortToString(0x25B2) : ShortToString(0x25BC);
+      ObjectSetString(0, sName, OBJPROP_TEXT, vSymbol + " VOL");
       ObjectSetString(0, sName, OBJPROP_FONT, "Segoe UI Bold");
-      ObjectSetInteger(0, sName, OBJPROP_COLOR, RGB(24, 24, 24)); // Dark carved out letter
-      ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 10);
-      ObjectSetInteger(0, sName, OBJPROP_ANCHOR, ANCHOR_CENTER);
-      ObjectSetInteger(0, sName, OBJPROP_BACK, false);
+      ObjectSetInteger(0, sName, OBJPROP_COLOR, sClr); // Neon bright colors
+      ObjectSetInteger(0, sName, OBJPROP_FONTSIZE, 9);
+      ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (sVal == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
+      ObjectSetInteger(0, sName, OBJPROP_BACK, true); // Prevent HUD overlap
    }
    
    // 4. ATUALIZAÇÃO DA NUVEM QUÂNTICA DE SCHRÖDINGER
