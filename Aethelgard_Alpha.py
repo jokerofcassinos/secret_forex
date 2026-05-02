@@ -14,6 +14,14 @@ import MetaTrader5 as mt5
 from flask import Flask, request
 import threading
 import logging
+import sys
+
+# Windows UTF-8 console fix
+if sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -37,7 +45,7 @@ def run_server():
     app.run(host='127.0.0.1', port=5000)
 
 class AethelgardAGI:
-    def __init__(self, symbol="GER40.cash"):
+    def __init__(self, symbol="BTCUSD"):
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
@@ -211,6 +219,13 @@ class AethelgardAGI:
                     
                     else:
                         # --- PROCESSO DE TICKS EM TEMPO REAL v420 (SOBERANIA QUÂNTICA) ---
+                        # FIX EMA BUG: Compute EMAs globally before slicing to avoid EMA divergence
+                        df['ema_fast'] = df['close'].ewm(span=9, adjust=False).mean()
+                        df['ema_mid'] = df['close'].ewm(span=21, adjust=False).mean()
+                        df['ema_trend'] = df['close'].ewm(span=34, adjust=False).mean()
+                        df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
+                        df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
+                        
                         slice_df = df.iloc[-window_calc:]
                         r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                         
@@ -293,13 +308,18 @@ class AethelgardAGI:
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
                         
                         # --- DEFESA CO-PILOTO QUÂNTICA EM TEMPO REAL (R-EXEC) ---
-                        # FIX P1-10: True ATR (includes gaps) instead of simple High-Low
                         high_low = df['high'] - df['low']
                         high_close = np.abs(df['high'] - df['close'].shift(1))
                         low_close = np.abs(df['low'] - df['close'].shift(1))
                         ranges_atr = pd.concat([high_low, high_close, low_close], axis=1)
                         true_range_atr = np.max(ranges_atr, axis=1)
                         atr = true_range_atr.rolling(14).mean().iloc[-1]
+                        
+                        # FIX ATR ANOMALIES: Clamp ATR to a max of 2% of price to prevent invalid SL/TP
+                        max_atr = df['close'].iloc[-1] * 0.02
+                        if pd.isna(atr) or atr > max_atr:
+                            atr = np.nanmedian(true_range_atr.tail(50))
+                            if pd.isna(atr) or atr > max_atr: atr = max_atr
                         
                         if r_score != 0:
                             self.bridge.thermodynamic_sl_tp(
@@ -359,6 +379,6 @@ class AethelgardAGI:
         print("SISTEMA OFFLINE.")
 
 if __name__ == "__main__":
-    bot = AethelgardAGI("GER40.cash")
+    bot = AethelgardAGI("BTCUSD")
     if bot.startup():
         bot.live_evolution_loop()

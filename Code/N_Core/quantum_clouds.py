@@ -62,9 +62,14 @@ class QuantumCloudTracker:
         else:
             return list(V)
             
-        for i in range(len(df_slice)):
-            candle = df_slice.iloc[i]
-            vol = candle[vol_col]
+        # FIX OVERFLOW: Use float64 for sum/mean and avoid int32 overflow
+        vol_array = df_slice[vol_col].astype(np.float64).values
+        vol_mean = np.mean(vol_array) if len(vol_array) > 0 else 1000.0
+        vol_scale = 0.5 / (vol_mean + 1e-9)
+            
+        records = df_slice.to_dict('records')
+        for candle in records:
+            vol = float(candle.get(vol_col, 0.0))
             
             # FIX P1-05: Distribute volume across the candle's full range
             idx_low = self.price_to_index(candle['low'])
@@ -76,7 +81,6 @@ class QuantumCloudTracker:
             n_bins_covered = idx_high - idx_low
             vol_per_bin = vol / max(1, n_bins_covered)
             
-            vol_scale = 0.5 / (np.mean(df_slice.get(vol_col, [1000])) + 1e-9)
             for b in range(idx_low, min(idx_high + 1, self.bins)):
                 # Deepen the well significantly based on volume
                 V[b] = max(0.0, V[b] - (vol_per_bin * vol_scale))

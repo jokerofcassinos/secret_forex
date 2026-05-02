@@ -584,7 +584,7 @@ void DrawModernDashboard(string status, double instAvg, double health, string qd
     ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 95); // High Z-order
     ObjectSetInteger(0, hBgName, OBJPROP_BACK, false);
 
-    DrawHUDText("NEXUS_HUD_TITLE", "HELIX ENSEMBLE", baseX + 15, baseY + 10, RGB(220, 225, 235), 10, false, corner);
+    DrawHUDText("NEXUS_HUD_TITLE", "Quantum01011011_beta", baseX + 15, baseY + 10, RGB(220, 225, 235), 10, false, corner);
     
     // Divider
     string divName = "NEXUS_HUD_DIVIDER";

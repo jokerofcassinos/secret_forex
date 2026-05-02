@@ -319,6 +319,11 @@ class QuantumIndicators:
             # SOMENTE se a tendência estrutural virou (EMA 34 cruzou EMA 89 para cima) E o preço está acima da EMA 89.
             if macro_reversal_bull and curr['close'] > ema_macro:
                 return 1, 0 
+            # V-RECOVERY ESCAPE (FIX BTCUSD): Se o regime BEAR está velho (30+ bars)
+            # e o preço já cruzou acima da EMA 200 com momentum bullish confirmado,
+            # o BEAR está claramente errado mesmo sem o cross EMA 34/200.
+            if prev_conf >= 30 and bull_momentum and curr['close'] > ema_gravity and (ema_mid > ema_macro):
+                return 1, 0
                 
             return 2, min(prev_conf + 1, 50000)
 
