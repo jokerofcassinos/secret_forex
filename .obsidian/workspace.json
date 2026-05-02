@@ -11,14 +11,12 @@
             "id": "b8fff723e227ae5c",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "image",
               "state": {
-                "file": "crie um link.md",
-                "mode": "source",
-                "source": false
+                "file": "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/Plasma_ZPinch_Render.png"
               },
-              "icon": "lucide-file",
-              "title": "crie um link"
+              "icon": "lucide-image",
+              "title": "Plasma_ZPinch_Render"
             }
           }
         ]
@@ -199,7 +197,12 @@
   },
   "active": "b8fff723e227ae5c",
   "lastOpenFiles": [
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/QRW_Interference_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RG_QDD_Regime_Quantization.png",
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RMT_Spectrum_Render.png",
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/Schrodinger_Cloud_Render.png",
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_SCHRODINGER_CLOUDS.md",
+    "crie um link.md",
     "Code/N_Core/test_qdd_visuals.py",
     "Code/N_Core/verify_qdd_integration.py",
     "Code/CPP_Engine/qdd_engine.pyd",
@@ -212,15 +215,11 @@
     "Code/N_Core/quantum_indicators.py",
     "debug_qrw_phase.py",
     "debug_qrw.py",
-    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/QRW_Interference_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_QRW_COIN.md",
-    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RMT_Spectrum_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_RMT_SPECTRUM.md",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/Plasma_ZPinch_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_PLASMA_ZPINCH.md",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_LBM_FLUIDS.md",
-    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/Schrodinger_Cloud_Render.png",
-    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_SCHRODINGER_CLOUDS.md",
     "Docs/02_Logica_e_Estrategia/CONCEITO_FRACTAL_SRF.md",
     "Docs/01_Planejamento_Executivo/VISAO_GERAL.md",
     "Docs/01_Planejamento_Executivo/BLUEPRINT_AETHELGARD.md",
@@ -237,7 +236,6 @@
     "Docs/Audits/TRUTH_AUDIT_20260426_1824.md",
     "Docs/Audits/TRUTH_AUDIT_20260427_0325.md",
     "Docs/Audits/TRUTH_AUDIT_20260427_0241.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0133.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0054.md"
+    "Docs/Audits/TRUTH_AUDIT_20260427_0133.md"
   ]
 }

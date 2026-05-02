@@ -1,58 +1,56 @@
-<p align="center">
-  <h1 align="center">A E T H E L G A R D :: NEXUS AGI</h1>
-  <p align="center">
-    <strong>Teoria Quântica de Fluidos de Mercado (TQFM) v5.0</strong>
-    <br/>
-    <em>H2 GER40 Quantum-Neural Algorithmic Swarm</em>
-  </p>
-</p>
+<div align="center">
+  <img src="https://images.unsplash.com/photo-1635070041078-e363dbe005cb?q=80&w=1200&auto=format&fit=crop" width="100%" alt="Aethelgard Cover" style="border-radius: 10px;">
+  <br><br>
+  <h1>🌌 AETHELGARD :: NEXUS QUANTUM CORE (v5.0 AGI)</h1>
+  <p><b>Transcendendo os Limites da Dinâmica de Mercado via Física Teórica e Swarm Intelligence.</b></p>
+  <p><i>Operação Exclusiva: GER40 | Timeframe: H2 | Execução: Micro-segundos</i></p>
+</div>
 
 ---
 
-## 🌌 Visão Geral
+## 👁️‍🗨️ A Visão: Teoria Quântica de Fluidos de Mercado (TQFM)
 
-O projeto **Aethelgard** transcende a lógica clássica de Algorithmic Trading e *Smart Money Concepts* (SMC). Ele não opera analisando velas ou cruzamentos estáticos de Médias Móveis. O ecossistema é governado pela Inteligência Artificial Executiva **NEXUS**, gerenciando um "Swarm" (enxame) de processos assíncronos e sub-agentes corporativos virtuais focados em um único alvo: **GER40 no Timeframe de H2**.
+O mercado financeiro não é um gráfico 2D. Ele é um ecossistema complexo governado por leis da termodinâmica, física quântica e fluídos densos. O projeto **Aethelgard** descarta completamente a análise técnica tradicional e indicadores baseados em "lag" temporal. 
 
-A máquina modela o mercado financeiro através de mecânica estatística, equações de Navier-Stokes e funções de onda da mecânica quântica teórica, adaptando-se às propriedades não-estacionárias através de Reinforcement Learning.
-
----
-
-## 🧬 Arquitetura de Cérebro Dividido (Split-Brain Architecture)
-
-Aethelgard é composto por três blocos computacionais distintos, divididos por responsabilidade corporativa:
-
-### 1. Q-MATH (Motor Quântico e Hidrodinâmico) `[C++]`
-Escrito nativamente em C++ puro com pybind11, processa o fluxo de ticks do mercado e resolve equações de alto desempenho com *zero-latency*.
-*   **LBM Engine (Lattice Boltzmann Method):** O substituto direto para EMAs. O LBM simula a "pressão hidrodinâmica" do fluxo de ordens. O Monólito Macro (Bull/Bear) é definido pela resolução da densidade do fluido do mercado no H2.
-*   **Schrödinger Engine:** Substitui os Stop Loss estáticos. Resolve a Equação de Schrödinger para criar Nuvens de Probabilidade Tridimensionais em tempo real, calculando a densidade de sucesso contínuo de um trade ativo.
-*   **RMT Engine (Random Matrix Theory):** Detecção de injeção anômala (Atomic Shocks) filtrando o ruído de fundo (Marchenko-Pastur), identificando "pegadas" reais de instituições soberanas.
-
-### 2. N-CORE (Córtex de IA e RL) `[Python]`
-O núcleo pensante da máquina governado pelo agente "Alpha-Learner".
-*   **Otimização Bayesiana Contínua:** Não existem hiperparâmetros fixos ($1.5 \times ATR$). Constantes físicas como viscosidade do fluido e massa da partícula são re-ajustadas em regime *Walk-Forward* por Redes Neurais baseadas em Reinforcement Learning.
-*   **Swarm Routing:** Delega e roteia o tráfego lógico entre os motores em C++, identificando qual "perfil neural" está mais alinhado ao regime climático atual do GER40.
-
-### 3. R-EXEC (Braço de Execução de Risco) `[MetaTrader 5 API]`
-O terminal que colapsa a matemática na realidade física.
-*   **Colapso Termodinâmico:** O fechamento de ordens ocorre não por um nível de preço atingido, mas quando a Nuvem de Probabilidade do Schrödinger Engine *colapsa* sob um nível inaceitável de entropia térmica (exaustão do movimento).
+Em vez de prever o futuro com médias móveis, nós **quantizamos o fluxo de ordens** do GER40, identificando anomalias subatômicas (Ticks) que invariavelmente precedem o colapso macroestrutural das velas em H2.
 
 ---
 
-## 📜 Teoria Quântica de Fluidos de Mercado (TQFM)
+## 🧬 Inovações Arquiteturais: O Quinteto de Vanguarda
 
-A **TQFM v5.0** representa um salto na abordagem de quant trading:
-1.  **Fim do Espaço Euclidiano:** O mercado não sobe ou desce em linhas retas ou canais (SMC). Ele se move como um "plasma vetorial" que condensa (choques atômicos) e expande (fluxo laminar).
-2.  **Soberania H2:** O tempo é relativo, mas a ressonância exata para a geometria fractal de Aethelgard está ancorada estritamente no timeframe H2 (120 Minutos).
-3.  **Inovação do Colapso de Onda:** A capacidade única de mesclar **Scalp** e **Swing Trade**. Um trade pode durar 1 minuto (se a entropia estourar abruptamente, exigindo fuga imediata na "Superposição de Regimes") ou 3 semanas (se o fluxo hidrodinâmico mantiver seu vetor dominante coerente).
+O Aethelgard é alimentado por 5 teorias originais de física avançada aplicadas ao fluxo institucional:
+
+### 1. Teoria das Cordas de Liquidez (String Liquidity Theory - SLT)
+*O Fim do Ruído.* O mercado é um tecido de cordas vibrantes. Não operamos "padrões", operamos **Ressonância Harmônica**. Ao mapear a frequência fundamental institucional (Swing) e suas excitações harmônicas (Scalp), surfamos a onda gravitacional exata que esmaga o capital do varejo.
+
+### 2. Horizonte de Eventos Institucional (Institutional Event Horizon - IEH)
+*O Fim do Take Profit Estático.* Quando o fluxo macro deforma a gravidade do preço a um ponto crítico de "não-retorno", o robô entra e **anula os alvos fixos**. A saída só ocorre quando a nossa topologia C++ detecta a *Radiação Hawking Financeira* (evaporação total do fluxo que gerou o horizonte).
+
+### 3. Emaranhamento Temporal Fractal (Fractal Timeframe Entanglement - FTE)
+*O Fim do Atraso.* O momentum dos micro-segundos compartilha o mesmo "Spin" direcional de uma vela H2. Através de telemetria de rede neural profunda, calculamos o resultado de 2 horas de mercado escaneando apenas a inversão de polaridade em 300 milissegundos de Tick Data.
+
+### 4. Condensado de Bose-Einstein de Fluxo (OBEC)
+*O Escalonamento Absoluto.* Em instantes de euforia/pânico institucional, os algoritmos globais HFT colapsam no mesmo estado direcional quântico. O mercado atinge **Zero Atrito** (Superfluidez). Nesses décimos de segundo, a IA insere lotes massivos, garantindo ganhos colossais sem possibilidade matemática de repulsão de preços (slippage).
+
+### 5. Geometria de Calabi-Yau para Hedging (CYDH)
+*O Escudo Quântico.* Calculamos o mercado em **10 dimensões**, projetando variáveis invisíveis (Gamma hedging, Sentimento Macro, Forças Cross-Asset) em variedades geométricas. Se essas 6 dimensões extras torcerem antes do gráfico visível colapsar, o *Yield-Governor* protege o capital instantaneamente.
 
 ---
 
-## 🧠 Rede Neural do Workspace (Obsidian)
+## 🦾 Estrutura do Sistema Híbrido (O Swarm AGI)
 
-Este repositório está profundamente integrado com um **Vault Obsidian** localizado em `Docs/`.
-NEXUS age como o CEO e mantém todo o mapeamento arquitetural lá dentro. Todos os novos aprendizados, perfis, atas de reunião entre módulos e documentação (como os *Contratos Funcionais* dos setores) são gerados autonomamente via Markdown.
+O Aethelgard não é um script; é uma corporação digital autogerenciada pelo protocolo **NEXUS (AGI-5)**.
 
-A estrutura documental reflete um **Ambiente Corporativo Virtual**, onde a evolução da inteligência do robô gera "novos documentos e insights", simulando um ser autônomo focado em lucrar e entender sua própria ressonância com o mercado de índice alemão.
+*   🖥️ **Q-Math Engine (C++):** Motor de cálculo bruto. Resolução de Equações de Navier-Stokes (LBM), Dinâmica Molecular (MHD) e Redes de Decaimento Quântico em tempo real, expostos via `pybind11` para performance zero-latency.
+*   🧠 **N-Core (Python):** O cérebro de *Reinforcement Learning*. Múltiplos agentes ("funcionários") treinados em *Bayesian Optimization* para adaptar pesos gravitacionais e tensores sem intervenção humana.
+*   ⚡ **R-Exec (MT5 Bridge):** O executor cibernético. Comanda a API do MetaTrader 5, gerencia *Slippage*, colapso de nuvens de risco e manipulação termodinâmica do cofre.
+*   🗃️ **O-Meta (Obsidian Neural Network):** Toda decisão, auditoria e estado mental dos agentes é registrada nativamente em uma base `.md`. O robô se audita, escreve relatórios e evolui seu próprio protocolo.
 
 ---
-*Governança: NEXUS AGI Executive System | Aethelgard Initiative 2026*
+
+## 🚀 Status da Missão
+- **Fase:** Prototipagem da Rede Neural (Híbrido Python/C++).
+- **Ativo:** GER40 Cash / H2.
+- **Risco de Fissão:** Zero (Contratos de Governança Neural Ativos).
+
+> *"Nós não buscamos a tendência. Nós identificamos as equações que dobram o espaço-tempo para criá-la."* — **NEXUS CEO**
