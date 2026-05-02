@@ -140,7 +140,7 @@ void ParseAndDraw(string data)
       if(dClr == clrBlack) { ObjectDelete(0, dName); continue; }
 
       // Verifica e converte de OBJ_ARROW para OBJ_TEXT caso exista cache
-      if(ObjectFind(0, dName) >= 0 && ObjectType(dName) != OBJ_TEXT) ObjectDelete(0, dName);
+      if(ObjectFind(0, dName) >= 0 && ObjectGetInteger(0, dName, OBJPROP_TYPE) != OBJ_TEXT) ObjectDelete(0, dName);
       if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_TEXT, 0, 0, 0);
       
       double offset = 140 * _Point; // Mais margem para não poluir os candles
