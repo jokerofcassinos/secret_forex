@@ -1,9 +1,77 @@
 import numpy as np
 import pandas as pd
+import sys
+import os
+
+# --- NEXUS QDD BRIDGE ---
+if sys.platform == 'win32':
+    # Garante carregamento das DLLs do MinGW
+    mingw_bin = r"D:\msys64\mingw64\bin"
+    if os.path.exists(mingw_bin):
+        try:
+            os.add_dll_directory(mingw_bin)
+        except Exception: pass
+
+# Localiza extensões C++
+cpp_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'CPP_Engine'))
+if cpp_path not in sys.path:
+    sys.path.append(cpp_path)
+
+try:
+    import qdd_engine
+    _QDD_ENGINE_INST = qdd_engine.QDDEngine(1, 1.0, 0.05)
+    QDD_AVAILABLE = True
+except ImportError:
+    _QDD_ENGINE_INST = None
+    QDD_AVAILABLE = False
 
 class QuantumIndicators:
     def __init__(self):
         pass
+
+    @staticmethod
+    def _get_qdd_regime_with_direction(data_series, timeframe_period=16386, atr=1.0):
+        """
+        Internal helper v5.4 Stability Patch:
+        Elimina oscilação de direção e aplica histerese de fase.
+        """
+        if not QDD_AVAILABLE or len(data_series) < 64:
+            return 0, 0
+        
+        uv_cutoff = 3
+        slope_window = 5
+        energy_mult = 0.08
+        
+        if timeframe_period <= 1: 
+            uv_cutoff = 6; slope_window = 30; energy_mult = 0.15
+        elif timeframe_period <= 5: 
+            uv_cutoff = 5; slope_window = 20; energy_mult = 0.12
+        elif timeframe_period <= 15: 
+            uv_cutoff = 4; slope_window = 15; energy_mult = 0.10
+            
+        arr = np.array(data_series, dtype=np.float64)
+        try:
+            res = _QDD_ENGINE_INST.quantize_regime(arr, uv_cutoff, energy_threshold=atr*energy_mult)
+            state = res['regime_state']
+            
+            direction = 0
+            if state >= 1:
+                # ANCORAGEM MACRO-ESTRUTURAL (SMA 64)
+                # Em vez de olhar a inclinação bruta (que cai em pullbacks),
+                # comparamos o preço atual com o preço médio da janela quântica (SMA 64).
+                macro_mean = data_series.mean()
+                curr_price = data_series.iloc[-1]
+                
+                # HISTERESE DIRECONAL: Exige rompimento claro da média
+                slope_threshold = atr * 0.1
+                if curr_price > macro_mean + slope_threshold:
+                    direction = 1 # Bull
+                elif curr_price < macro_mean - slope_threshold:
+                    direction = 2 # Bear
+                
+            return state, direction
+        except Exception:
+            return 0, 0
 
     @staticmethod
     def calculate_resonance_zones(df_slice, atr_window=14):
@@ -75,11 +143,19 @@ class QuantumIndicators:
         curr = df_slice.iloc[-1]
 
         # 1. Camadas de Fluxo e Momentum (EMAs)
-        ema_fast = df_slice['close'].ewm(span=9, adjust=False).mean().iloc[-1]
-        ema_mid = df_slice['close'].ewm(span=21, adjust=False).mean().iloc[-1]
-        ema_trend = df_slice['close'].ewm(span=34, adjust=False).mean().iloc[-1]
-        ema_macro = df_slice['close'].ewm(span=89, adjust=False).mean().iloc[-1]
-        ema_gravity = df_slice['close'].ewm(span=200, adjust=False).mean().iloc[-1]
+        # Usa EMAs pré-calculadas se existirem (para estabilidade de histórico), senão recalcula
+        if 'ema_fast' in df_slice.columns:
+            ema_fast = df_slice['ema_fast'].iloc[-1]
+            ema_mid = df_slice['ema_mid'].iloc[-1]
+            ema_trend = df_slice['ema_trend'].iloc[-1]
+            ema_macro = df_slice['ema_macro'].iloc[-1]
+            ema_gravity = df_slice['ema_gravity'].iloc[-1]
+        else:
+            ema_fast = df_slice['close'].ewm(span=9, adjust=False).mean().iloc[-1]
+            ema_mid = df_slice['close'].ewm(span=21, adjust=False).mean().iloc[-1]
+            ema_trend = df_slice['close'].ewm(span=34, adjust=False).mean().iloc[-1]
+            ema_macro = df_slice['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+            ema_gravity = df_slice['close'].ewm(span=200, adjust=False).mean().iloc[-1]
         
         ema_spread = abs(ema_fast - ema_mid)
         bull_momentum = (ema_fast > ema_mid)
@@ -189,57 +265,74 @@ class QuantumIndicators:
         is_significant = body > (atr * 0.8)
         
         # 2. O Grande Colisor (MACRO FLIP)
-        # O regime só inverte naturalmente se a Tendência (34) cruzar a Macro (89).
-        # Isso garante que um pullback precisa durar horas para quebrar o monólito.
-        macro_reversal_bull = (ema_trend > ema_macro)
-        macro_reversal_bear = (ema_trend < ema_macro)
+        # O regime só inverte naturalmente se a Tendência (EMA 34) cruzar a Gravidade (EMA 200).
+        # Isso garante que um pullback precisa durar muito tempo para quebrar o monólito.
+        macro_reversal_bull = (ema_trend > ema_gravity)
+        macro_reversal_bear = (ema_trend < ema_gravity)
         
         # 3. Gatilho de Velocidade Sideral (V-Shape Macro)
         # Se houver um choque violento, antecipamos o flip usando a EMA 21 em vez da 34,
-        # MAS ela ainda deve obrigatoriamente cruzar a MACRO (89).
-        speed_bypass_bull = (ema_mid > ema_macro) and is_green and (body > atr * 1.5)
-        speed_bypass_bear = (ema_mid < ema_macro) and is_red and (body > atr * 1.5)
+        # MAS ela ainda deve obrigatoriamente cruzar a GRAVIDADE (200).
+        speed_bypass_bull = (ema_mid > ema_gravity) and is_green and (body > atr * 1.5)
+        speed_bypass_bear = (ema_mid < ema_gravity) and is_red and (body > atr * 1.5)
 
-        # 4. Imunidade de Regime Absoluta
+        # 4. Imunidade de Regime Absoluta (A TRAVA DE TITÂNIO)
         # O regime é literalmente cego para oscilações nas primeiras 20 velas.
         is_mature = (prev_conf > 20)
 
+        # --- DETECÇÃO AUTOMÁTICA DE TIMEFRAME v5.3 ---
+        tf_period = 16386 # Default H2
+        if len(df_slice) >= 2:
+            try:
+                d_sec = int(df_slice['time'].iloc[-1]) - int(df_slice['time'].iloc[-2])
+                if d_sec <= 65: tf_period = 1 
+                elif d_sec <= 305: tf_period = 5 
+                elif d_sec <= 905: tf_period = 15 
+                elif d_sec <= 1805: tf_period = 30 
+                elif d_sec <= 3605: tf_period = 16385 
+            except Exception: pass
+
+        # --- QDD PURIFICATION GATE (RG-QDD) v5.4 Stability ---
+        qdd_state, qdd_direction = QuantumIndicators._get_qdd_regime_with_direction(
+            df_slice['close'].iloc[-64:], timeframe_period=tf_period, atr=atr
+        )
+        is_quantum_event = (qdd_state >= 1)
+
+        # --- MÁQUINA DE ESTADO TQFM v7.1 (THE ABSOLUTE MONOLITH RESTORED) ---
+        
         # ESTADO BULL (1)
         if prev_score == 1:
-            if is_mature:
-                # FLIP MACRO: A maré de longo prazo virou
-                if macro_reversal_bear:
-                    return 2, 100
-                    
-                # FLIP DE VELOCIDADE: Mergulho V-Shape cruzando a Macro
-                if speed_bypass_bear:
-                    return 2, 100
-
-            # Monólito - Imune a todas as médias curtas. Segue a Macro 89.
+            # FLIP PARA BEAR:
+            # SOMENTE se a tendência estrutural virou (EMA 34 cruzou EMA 89 para baixo) E o preço está abaixo da EMA 89.
+            # Qualquer sombra, ruído ou choque quântico rápido é ignorado.
+            if macro_reversal_bear and curr['close'] < ema_macro:
+                return 2, 0 
+                
             return 1, min(prev_conf + 1, 50000)
 
         # ESTADO BEAR (2)
         if prev_score == 2:
-            if is_mature:
-                # FLIP MACRO: A maré de longo prazo virou
-                if macro_reversal_bull:
-                    return 1, 100
-                    
-                # FLIP DE VELOCIDADE: Rali V-Shape cruzando a Macro
-                if speed_bypass_bull:
-                    return 1, 100
-
-            # Monólito - Imune a todas as médias curtas. Segue a Macro 89.
+            # FLIP PARA BULL:
+            # SOMENTE se a tendência estrutural virou (EMA 34 cruzou EMA 89 para cima) E o preço está acima da EMA 89.
+            if macro_reversal_bull and curr['close'] > ema_macro:
+                return 1, 0 
+                
             return 2, min(prev_conf + 1, 50000)
 
-        # NOISE GATE v400
-        if not is_significant: return 0, 0
+        # NOISE GATE v7.2: Início de Regime a partir do Neutro (0)
         
-        if macro_reversal_bull: return 1, 50
-        if macro_reversal_bear: return 2, 50
-
-        if speed_bypass_bull: return 1, 100
-        if speed_bypass_bear: return 2, 100
+        # 1. Ignição Explosiva: Vela grande confirma o evento quântico imediatamente.
+        if is_significant and is_quantum_event and qdd_direction != 0:
+            return qdd_direction, 0
+            
+        # 2. Ignição Estrutural Lenta (A cura para o "Lag" no fundo):
+        # Se o preço está subindo sem velas gigantes, entramos assim que ele cruzar a EMA 34 (Tendência)
+        # com o aval do motor Quântico.
+        if is_quantum_event:
+            if qdd_direction == 1 and curr['close'] > ema_trend:
+                return 1, 0
+            if qdd_direction == 2 and curr['close'] < ema_trend:
+                return 2, 0
 
         return 0, 0
 

@@ -24,6 +24,7 @@ ENGINES = [
     ("schrodinger_engine", "src/schrodinger/schrodinger_engine.cpp"),
     ("rmt_engine",        "src/rmt/rmt_engine.cpp"),
     ("lbm_engine",        "src/lbm/lbm_engine.cpp"),
+    ("qdd_engine",        "src/qdd/qdd_engine.cpp"),
 ]
 
 def build_engine(name, src):

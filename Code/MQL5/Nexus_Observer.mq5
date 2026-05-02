@@ -21,7 +21,7 @@ void OnTimer() { UpdateDashboard(); DrawModernTradeHistory(); }
 
 void UpdateDashboard()
 {
-   string url = "http://127.0.0.1:5000/nexus";
+   string url = "http://127.0.0.1:5000/nexus?tf=" + IntegerToString(_Period);
    string cookie=NULL,headers;
    char post[],result[];
    int res;
@@ -49,7 +49,13 @@ void ParseAndDraw(string data)
    string historySignals = parts[7];
    string historyDots = parts[8];
    
-   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V113", 10, 20, clrCyan, 12);
+   DrawLabel("NEXUS_HEADER", "AETHELGARD [TRUE SYNC] V114", 10, 20, clrCyan, 12);
+   
+   // --- NOVO: STATUS RG-QDD ---
+   bool qddActive = (StringFind(statusTxt, "AGUARDANDO_IGNICAO") < 0 && StringFind(statusTxt, "INIT") < 0);
+   string qddMsg = qddActive ? "RG-QDD: PURIFYING" : "RG-QDD: SCANNING";
+   color qddClr = qddActive ? clrLime : clrGray;
+   DrawLabel("NEXUS_QDD_STATUS", qddMsg, 250, 20, qddClr, 10);
    
    color sClr = (health < 0.3) ? clrRed : (health < 0.6 ? clrGold : clrSpringGreen);
    DrawLabel("NEXUS_STATUS", "STATUS: " + statusTxt, 10, 40, sClr, 10);

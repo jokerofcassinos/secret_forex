@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 class MT5NeuralBridge:
-    def __init__(self, symbol="BTCUSD"):
+    def __init__(self, symbol="GER40.cash"):
         self.symbol = symbol
         self.timeframes = {
             "M1": mt5.TIMEFRAME_M1,
@@ -197,7 +197,7 @@ class MT5NeuralBridge:
 
 if __name__ == "__main__":
     # Teste de Conexão e Extração
-    bridge = MT5NeuralBridge("BTCUSD")
+    bridge = MT5NeuralBridge("GER40.cash")
     if bridge.initialize():
         bridge.fetch_full_history(count=5000)
         bridge.shutdown()

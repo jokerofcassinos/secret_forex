@@ -11,7 +11,7 @@ import time
 import pandas as pd
 import numpy as np
 import MetaTrader5 as mt5
-from flask import Flask
+from flask import Flask, request
 import threading
 import logging
 
@@ -20,19 +20,35 @@ log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
 nexus_data_str = "0;0;INIT;0;0;0;0;0"
+current_mt5_tf = mt5.TIMEFRAME_H2 # Global de timeframe dinâmico
 
 @app.route('/nexus')
 def get_nexus():
+    global current_mt5_tf
+    # Captura o timeframe enviado pelo indicador MQL5 (?tf=...)
+    tf_val = request.args.get('tf')
+    if tf_val:
+        try:
+            current_mt5_tf = int(tf_val)
+        except ValueError: pass
     return nexus_data_str
 
 def run_server():
     app.run(host='127.0.0.1', port=5000)
 
 class AethelgardAGI:
-    def __init__(self, symbol="BTCUSD"):
+    def __init__(self, symbol="GER40.cash"):
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
+        
+        # --- VERIFICAÇÃO RG-QDD ---
+        from Code.N_Core.quantum_indicators import QDD_AVAILABLE
+        self.qdd_active = QDD_AVAILABLE
+        if self.qdd_active:
+            print("💎 NEXUS AGI :: RG-QDD ENGINE [ACTIVE] :: Quantum Purification Gate Operational.")
+        else:
+            print("⚠️ NEXUS AGI :: RG-QDD ENGINE [OFFLINE] :: Falling back to standard TQFM logic.")
         self.alchemist = MSNRAlchemist()
         self.oracle = QuantumOracle(simulations=5000)
         self.cloud_tracker = None
@@ -60,18 +76,43 @@ class AethelgardAGI:
         return True
 
     def live_evolution_loop(self):
-        global nexus_data_str
+        global nexus_data_str, current_mt5_tf
         window_calc = 200
         prev_s = 0
         prev_c = 0
         status_txt = "INICIALIZANDO"
-        
+
         try:
+            current_processed_tf = None
             while self.is_running:
-                # Execução em H2 para análise de monólito macro
-                rates = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_H2, 0, 1000)
+                # --- DINAMISMO TEMPORAL NEXUS v2 (MQL5-PUSH) ---
+                selected_tf = current_mt5_tf
+                
+                # Se o timeframe mudou, limpa o cache para forçar recálculo completo
+                if current_processed_tf is not None and selected_tf != current_processed_tf:
+                    print(f"🔄 TIME-SHIFT DETECTADO: Recalculando malha neural para o novo timeframe.")
+                    self.regimes_cache = []
+                    self.signals_cache = []
+                    self.lbm_cache = []
+                    self.z_pinch_cache = []
+                    self.qrw_cache = []
+                    self.dots_cache = []
+                    self.cloud_tracker = None
+                    self.lbm_tracker = None
+                    self.plasma_tracker = None
+                    self.rmt_tracker = None
+                    self.qrw_tracker = None
+                    prev_s = 0
+                    prev_c = 0
+
+                current_processed_tf = selected_tf
+
+                rates = mt5.copy_rates_from_pos(self.symbol, selected_tf, 0, 1000)
                 if rates is not None and len(rates) > 0:
                     df = pd.DataFrame(rates)
+
+                    # Nome amigável do TF para o log
+                    tf_name = "M15" if selected_tf == mt5.TIMEFRAME_M15 else str(selected_tf)
                     
                     # Inicializações Quânticas
                     if self.cloud_tracker is None:
@@ -98,6 +139,13 @@ class AethelgardAGI:
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v66 [ARS SNIPER]...")
                         
+                        # CALCULA EMAs GLOBALMENTE PARA EVITAR INSTABILIDADE DE CONVERGÊNCIA (WARM-UP PANDAS)
+                        df['ema_fast'] = df['close'].ewm(span=9, adjust=False).mean()
+                        df['ema_mid'] = df['close'].ewm(span=21, adjust=False).mean()
+                        df['ema_trend'] = df['close'].ewm(span=34, adjust=False).mean()
+                        df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
+                        df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
+                        
                         scores_hist = []
                         for i in range(len(df)):
                             if i < window_calc:
@@ -110,6 +158,15 @@ class AethelgardAGI:
                                 continue
                             
                             slice_df = df.iloc[i-window_calc:i+1]
+                            
+                            # Injeta as EMAs pré-calculadas globalmente no final do slice para não precisar recalcular
+                            slice_df = slice_df.copy()
+                            slice_df['ema_fast'] = df['ema_fast'].iloc[i-window_calc:i+1]
+                            slice_df['ema_mid'] = df['ema_mid'].iloc[i-window_calc:i+1]
+                            slice_df['ema_trend'] = df['ema_trend'].iloc[i-window_calc:i+1]
+                            slice_df['ema_macro'] = df['ema_macro'].iloc[i-window_calc:i+1]
+                            slice_df['ema_gravity'] = df['ema_gravity'].iloc[i-window_calc:i+1]
+                            
                             r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                             self.regimes_cache.append(f"{r_score}|{conf}")
                             scores_hist.append(r_score)
@@ -127,8 +184,8 @@ class AethelgardAGI:
                                 true_range_h = np.max(ranges_h, axis=1)
                                 atr_h = true_range_h.rolling(14).mean().iloc[-1]
                                 
-                                is_genesis_h = (prev_s != r_score)
-                                if body_h > (atr_h * 1.5) or is_genesis_h:
+                                # EXTREME SANITIZATION: Somente volume institucional real (> 3.0x ATR)
+                                if body_h > (atr_h * 3.0):
                                     sig = 1 if r_score == 1 else 2
                             
                             self.signals_cache.append(str(sig))
@@ -142,14 +199,15 @@ class AethelgardAGI:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v73 Concluído.")
                     
                     else:
-                        # --- PROCESSO DE TICKS EM TEMPO REAL v410 ---
+                        # --- PROCESSO DE TICKS EM TEMPO REAL v420 (SOBERANIA QUÂNTICA) ---
                         slice_df = df.iloc[-window_calc:]
                         r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                         
                         is_genesis = (prev_s != r_score)
                         if is_genesis: self.genesis_count = 0
                         
-                        is_sovereign = self.alchemist.validate_sovereign_signal(slice_df, r_score, is_genesis or (self.genesis_count < 3))
+                        # SOBERANIA: O regime agora é absoluto (r_score), ignorando o filtro picotado do Alquimista
+                        is_sovereign = True 
                         
                         # Processa a Malha Quântica (Lado Python -> C++)
                         density_schrod = self.cloud_tracker.step(slice_df, dt=1.0)
@@ -250,7 +308,8 @@ class AethelgardAGI:
                             curr = df.iloc[-1]
                             body = abs(curr['close'] - curr['open'])
                             
-                            if body > (atr * 1.5) or is_genesis:
+                            # EXTREME SANITIZATION LIVE: Somente volume institucional real (> 3.0x ATR)
+                            if body > (atr * 3.0):
                                 sig = 1 if r_score == 1 else 2
                                 print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt}")
                                 
@@ -288,6 +347,6 @@ class AethelgardAGI:
         print("SISTEMA OFFLINE.")
 
 if __name__ == "__main__":
-    bot = AethelgardAGI("BTCUSD")
+    bot = AethelgardAGI("GER40.cash")
     if bot.startup():
         bot.live_evolution_loop()

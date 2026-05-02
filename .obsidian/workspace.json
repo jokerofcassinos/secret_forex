@@ -11,10 +11,14 @@
             "id": "b8fff723e227ae5c",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Visualização em gráfico"
+              "type": "markdown",
+              "state": {
+                "file": "crie um link.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "crie um link"
             }
           }
         ]
@@ -195,18 +199,20 @@
   },
   "active": "b8fff723e227ae5c",
   "lastOpenFiles": [
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RG_QDD_Regime_Quantization.png",
+    "Code/N_Core/test_qdd_visuals.py",
+    "Code/N_Core/verify_qdd_integration.py",
+    "Code/CPP_Engine/qdd_engine.pyd",
+    "Code/N_Core/test_qdd_quantization.py",
+    "Code/CPP_Engine/qdd_engine.cp313-win_amd64.pyd",
+    "Code/CPP_Engine/src/qdd/qdd_engine.cpp",
+    "Code/CPP_Engine/src/qdd",
+    "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_QDD_RENORMALIZATION.md",
     "Docs/HISTORY_TQFM.md",
     "Code/N_Core/quantum_indicators.py",
     "debug_qrw_phase.py",
     "debug_qrw.py",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/QRW_Interference_Render.png",
-    "Code/N_Core/test_qrw_visuals.py",
-    "Code/N_Core/__pycache__/quantum_walk.cpython-313.pyc",
-    "Code/CPP_Engine/qrw_engine.cp313-win_amd64.pyd",
-    "Code/CPP_Engine/build/lib.win-amd64-cpython-313/qrw_engine.cp313-win_amd64.pyd",
-    "Code/CPP_Engine/build/temp.win-amd64-cpython-313/Release/src/qrw/qrw_engine.cp313-win_amd64.def",
-    "Code/CPP_Engine/build/temp.win-amd64-cpython-313/Release/src/qrw/qrw_engine.o",
-    "Code/CPP_Engine/build/temp.win-amd64-cpython-313/Release/src/qrw",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_QRW_COIN.md",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RMT_Spectrum_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_RMT_SPECTRUM.md",
@@ -232,7 +238,6 @@
     "Docs/Audits/TRUTH_AUDIT_20260427_0325.md",
     "Docs/Audits/TRUTH_AUDIT_20260427_0241.md",
     "Docs/Audits/TRUTH_AUDIT_20260427_0133.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0054.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0013.md"
+    "Docs/Audits/TRUTH_AUDIT_20260427_0054.md"
   ]
 }
