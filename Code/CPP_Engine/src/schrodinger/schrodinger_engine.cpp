@@ -130,10 +130,47 @@ public:
         for(int i = 0; i < Nx; ++i) { double p = prob_density[i]; com += i * dx * p; total += p; }
         return (total > 1e-15) ? (com / total) : (Nx * dx / 2.0);
     }
+
+    /**
+     * @brief Calcula métricas de Singularidade Estocástica (SEC).
+     * Retorna um dicionário com:
+     * - 'singularity_strength': Densidade de probabilidade no pico relativo à massa total.
+     * - 'schwarzschild_radius': O raio de horizonte onde a fuga é improvável.
+     * - 'is_collapsed': Flag de horizonte de eventos.
+     */
+    py::dict calculate_singularity_metrics(double price_min, double price_max) {
+        double max_p = 0.0;
+        int peak_idx = 0;
+        double total_mass = 0.0;
+
+        for (int i = 0; i < Nx; ++i) {
+            double p = prob_density[i];
+            total_mass += p;
+            if (p > max_p) {
+                max_p = p;
+                peak_idx = i;
+            }
+        }
+
+        // Singularity Strength: Concentração de massa no pico
+        double strength = (total_mass > 1e-15) ? (max_p / total_mass) : 0.0;
+        
+        // Schwarzschild Radius Financeiro: Proporcional à força da singularidade
+        // Se a força > 0.15, o horizonte de eventos começa a se formar.
+        double rs = strength * 50.0; // Escalonamento para o grid Nx
+        
+        py::dict res;
+        res["singularity_strength"] = strength;
+        res["schwarzschild_radius"] = rs;
+        res["peak_price"] = price_min + (peak_idx * (price_max - price_min) / Nx);
+        res["is_collapsed"] = (strength > 0.04); // Horizonte de Não-Retorno
+
+        return res;
+    }
 };
 
 PYBIND11_MODULE(schrodinger_engine, m) {
-    m.doc() = "Quantum Cloud Solver v2.0 - Absorbing Boundaries";
+    m.doc() = "Quantum Cloud Solver v3.0 - SEC Singularity Engine";
     py::class_<QuantumCloudSolver>(m, "QuantumCloudSolver")
         .def(py::init<int, double>())
         .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian, py::arg("x0"), py::arg("sigma"), py::arg("k0"))
@@ -141,5 +178,6 @@ PYBIND11_MODULE(schrodinger_engine, m) {
         .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("mass"))
         .def("recenter_wave", &QuantumCloudSolver::recenter_wave, py::arg("new_x0"), py::arg("sigma"))
         .def("get_probability_density", &QuantumCloudSolver::get_probability_density, py::return_value_policy::reference_internal)
-        .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass);
+        .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass)
+        .def("calculate_singularity_metrics", &QuantumCloudSolver::calculate_singularity_metrics, py::arg("price_min"), py::arg("price_max"));
 }

@@ -67,8 +67,8 @@ class RandomMatrixTracker:
         # Extract Eigenvalue via Power Iteration in C++
         lambda_dom, power_ratio, lambda_max_mp = self.engine.extract_dominant_eigenvalue()
         
-        # Se a energia do Sinal Dominante for maior que 2x o limite do Ruído de Varejo (Marchenko-Pastur)
-        is_pure_signal = power_ratio > 2.0
+        # Se a energia do Sinal Dominante for maior que 1.5x o limite do Ruído de Varejo (Marchenko-Pastur)
+        is_pure_signal = power_ratio > 1.5
         
         return lambda_dom, power_ratio, is_pure_signal
 

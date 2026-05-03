@@ -65,9 +65,9 @@ class QRWTracker:
         )
         
         signal = "NEUTRAL"
-        if skewness > 1.0:
+        if skewness > 1.2:
             signal = "HIDDEN_ACCUMULATION_BULL"
-        elif skewness < -1.0:
+        elif skewness < -1.2:
             signal = "HIDDEN_DISTRIBUTION_BEAR"
             
         return skewness, signal
