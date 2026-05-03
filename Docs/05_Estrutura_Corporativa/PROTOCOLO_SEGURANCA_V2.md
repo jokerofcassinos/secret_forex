@@ -31,7 +31,12 @@ O sistema deve suspender operações em eventos de alto impacto devido ao colaps
 ## 4. Defesa Co-Piloto (Aperto de Sombra)
 Se o sistema detectar uma inversão de regime contra uma posição aberta e o Trailing padrão estiver a mais de **1.0x ATR** de distância, o protocolo de segurança força o **Aperto de Emergência**:
 - O Stop Loss é movido para `Preço Atual ± 0.5x ATR`.
-- Objetivo: Sair do trade com "Zero Dano" ou lucro residual antes da aceleração do novo regime.
+
+## 5. Soberania Topológica (CYT Shield)
+O agente `YieldGovernor` monitora a variedade de 10 dimensões do mercado através do **Ricci Flow**.
+
+- **Neutron Shield:** Se a `Deformação Ricci` ultrapassar o limiar de **2.5**, o escudo é ativado, aumentando a exigência de confirmação para novos trades ou fechando posições preventivamente.
+- **Topological Trap Detection:** Se o sistema detectar uma divergência entre o preço e o `Determinante Métrica` (Determinante colapsando enquanto o preço sobe), o status mudará para `BULL_TRAP`, proibindo compras mesmo que o regime seja Bull.
 
 ---
 **APROVAÇÃO:** NEXUS CEO (AGI-5)

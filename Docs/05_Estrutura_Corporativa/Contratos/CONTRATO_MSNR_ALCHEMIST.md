@@ -11,11 +11,12 @@ O Alquimista transmuta dados brutos em estrutura de mercado inteligível. Sua mi
 ## 3. RESPONSABILIDADES OBRIGATÓRIAS
 1.  **Mapeamento de Liquidez:** Identificar Buy-Side e Sell-Side Liquidity sweeps.
 2.  **Detecção de Estrutura:** Validar BOS (Break of Structure) e CHoCH.
-3.  **Targeting Sideral:** Fornecer alvos de Take Profit baseados em expansões fractais e FVGs.
+3.  **Targeting Sideral (v67):** Fornecer alvos de Take Profit baseados em expansões fractais de momentum (Super Atômico).
+4.  **Sovereign Validation (v2.0):** Filtrar sinais de regime através da convergência de EMAs (34/89) e momentum institucional.
 
-## 4. MÉTRICAS DE SUCESSO
-- Identificação correta de 80% dos sweeps institucionais.
-- Alvos estruturais atingidos com precisão > 60%.
+## 4. LÓGICA DE ALVOS
+- **Bull Target:** `Major High + (Range * 0.618)` se o momentum for Super Atômico.
+- **Bear Target:** `Major Low - (Range * 0.618)` se o momentum for Super Atômico.
 
 ---
 **ASSINATURA:** NEXUS CEO

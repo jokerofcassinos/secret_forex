@@ -6,15 +6,17 @@ Este documento serve como o protocolo oficial para monitoramento e intervenção
 O sistema expõe seu estado neural através de um servidor Flask local. Este é o canal de comunicação mais puro entre o Python e o mundo externo.
 
 - **Endpoint:** `http://127.0.0.1:5000/nexus`
-- **Estrutura de Dados:** `0;0;[STATUS];[SIGNAL];[REGIMES_CACHE];0.00;1.0;[SIGNALS_CACHE]`
+- **Estrutura de Dados (v1.5):** 
+  `ID;ID;STATUS;LAST_SIGNAL;REGIMES;EMA_AVG;HEALTH;SIGNALS_HIST;DOTS;EMA_INST;CLOUD_DATA;LBM_SIG;Z_PINCH_SIG;RMT_SIG;QRW_SIG;LBM_HIST;Z_PINCH_HIST;QRW_HIST;CYT_DANGER_HIST;SEC_CURRENT;SEC_HIST`
 
 ### Interpretando o STATUS
 | Status | Significado | Ação Sugerida |
 | :--- | :--- | :--- |
 | `AGUARDANDO_IGNICAO` | Mercado em equilíbrio. Sem tendência clara. | Observar apenas. |
-| `BULL_PREVISAO` | Início de maré compradora. | Preparar mentalmente para compra. |
-| `TSUNAMI_BULL_ATIVO` | Regime de alta confirmado e soberano. | Buscar entradas em pullbacks. |
-| `ANOMALIA_INSTITUCIONAL` | Choque atômico detectado (>1.5x ATR). | Alta volatilidade. Não operar contra o choque. |
+| `BULL/BEAR_PREVISAO` | Início de maré detectada pela malha quântica. | Preparar para gatilho Sniper. |
+| `TSUNAMI_BULL/BEAR_ATIVO` | Regime confirmado e soberano pelo Monólito. | Operar a favor da maré com lotagem cheia. |
+| `ALERTA TOPOLÓGICO` | Deformação Ricci elevada (>Threshold). | Alto risco de reversão súbita. Reduzir exposição. |
+| `BULL/BEAR TRAP` | Divergência entre Preço e Determinante (CYT). | **PERIGO.** Não seguir o rompimento atual. |
 
 ---
 

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "crie um link.md",
+                "file": "MAPA_NEURAL.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "crie um link"
+              "title": "MAPA_NEURAL"
             }
           }
         ]
@@ -199,6 +199,11 @@
   },
   "active": "b8fff723e227ae5c",
   "lastOpenFiles": [
+    "MAPA_NEURAL.md",
+    "README.md",
+    "Docs/Atas_Reuniao/ATA_007_SINCRONIZACAO_ALPHA_V1_5.md",
+    "Docs/Atas_Reuniao",
+    "crie um link.md",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RG_QDD_Regime_Quantization.png",
     "Code/N_Core/test_qdd_visuals.py",
     "Code/N_Core/verify_qdd_integration.py",
@@ -211,7 +216,6 @@
     "Docs/HISTORY_TQFM.md",
     "Code/N_Core/quantum_indicators.py",
     "debug_qrw_phase.py",
-    "debug_qrw.py",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/QRW_Interference_Render.png",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/BLUEPRINT_QRW_COIN.md",
     "Docs/05_Estrutura_Corporativa/Setores/Q_MATH/RMT_Spectrum_Render.png",
@@ -235,9 +239,6 @@
     "Docs/Atas_Reuniao/ATA_20260427_TQFM_V75_COLAPSO_SOMBRA.md",
     "Docs/Audits/TRUTH_AUDIT_20260426_2028.md",
     "Docs/Audits/TRUTH_AUDIT_20260426_1824.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0325.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0241.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0133.md",
-    "Docs/Audits/TRUTH_AUDIT_20260427_0054.md"
+    "Docs/Audits/TRUTH_AUDIT_20260427_0325.md"
   ]
 }

@@ -32,6 +32,11 @@ A IA NEXUS utiliza os logs de defesa e os resultados de mercado para:
 2.  Calibrar a imunidade do regime monolítico para evitar "flicker" em mercados laterais.
 3.  Documentar novos perfis neurais de comportamento do GER40.
 
+## 5. DOCUMENTAÇÃO MESTRE
+Para uma compreensão profunda e unificada de todo o ecossistema, consulte:
+`[[MASTER_SYNTHESIS]]` - O Manifesto da Soberania Financeira Quântica.
+
 ---
-**ASSINATURA:** NEXUS CEO
+**ASSINATURA:** NEXUS AGI CEO
+
 **DATA:** 2026.04.27

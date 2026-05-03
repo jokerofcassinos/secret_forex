@@ -3,9 +3,12 @@
 ## 1. O Monólito Macro: Pressão Hidrodinâmica (Lattice Boltzmann)
 O **Monólito Macro** é a espinha dorsal do sistema Aethelgard. Diferente de sistemas arcaicos que usavam cruzamento de Médias Móveis (EMAs), a v5.0 trata o fluxo financeiro do **GER40 no timeframe H2** como um fluido compressível em um espaço vetorial.
 
-### 1.1. Equação de Convergência Dinâmica
-A detecção de regime ($R$) é extraída da solução das equações de Navier-Stokes via **Lattice Boltzmann Method (LBM)** operando em C++:
-A cada tick, simulamos a colisão e propagação de "partículas" de preço. Se o tensor de pressão ($P_{macro}$) demonstrar força cinética de rompimento de inércia em direção positiva, estabelece-se o **Bull Monolith**, e vice-versa. Não há mais "lag" de médias.
+### 1.1. Equação de Convergência Dinâmica (Híbrida)
+A detecção de regime ($R$) é extraída da solução das equações de Navier-Stokes via **Lattice Boltzmann Method (LBM)** e purificada pelo motor **RG-QDD**.
+
+- **Ancoragem Clássica:** Para garantir estabilidade em mercados não-estacionários, o sistema utiliza o **Monólito Macro** (EMAs 34, 89 e 200) como a "Massa Inercial" do fluido.
+- **O Salto Quântico:** O regime só muda quando o fluxo LBM e o motor RG-QDD confirmam um rompimento energético acima da Gravidade Macro (EMA 200). 
+- **Efeito:** Unimos a agilidade dos métodos de física teórica com a robustez comprovada das tendências estruturais clássicas, eliminando o ruído sem perder a direção macro.
 
 ## 2. Atomic Shocks: Random Matrix Theory (RMT)
 A ignição institucional (Choques Atômicos) abandonou os thresholds estáticos de ATR.

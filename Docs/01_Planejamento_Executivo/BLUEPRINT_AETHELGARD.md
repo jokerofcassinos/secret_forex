@@ -17,9 +17,15 @@ Aethelgard opera como uma **Entidade de Defesa e Gestão Tática (Co-Piloto)**. 
 - **Objetivo:** Interface Homem-Máquina e Radar de Anomalias.
 - **Lógica:** O `Nexus_Observer.mq5` consome via REST (Flask) o estado mental da IA para visualização em tempo real no terminal.
 
-### C. Ativo de Pesquisa (C++) - "The Quantum Forge"
-- **Status:** Latente (Não integrado ao fluxo de produção).
-- **Objetivo:** Pesquisa em ultra-baixa latência e simulações de fluxo de ordens para futuras implementações HFT.
+### C. Camada de Cálculo (C++) - "The Quantum Forge"
+- **Status:** **ATIVO & INTEGRADO** (O Coração Cinético).
+- **Objetivo:** Processamento de ultra-alta fidelidade para modelos de física teórica.
+- **Motores em Produção:**
+    - `schrodinger_engine`: Propagação de ondas de probabilidade e Singularidades (SEC).
+    *   `lbm_engine`: Dinâmica de fluidos e detecção de Rupturas de Momentum.
+    *   `mhd_engine`: Compressão de plasma de liquidez (Z-Pinch).
+    *   `qrw_engine`: Quantum Random Walk para detecção de intenção institucional.
+    *   `qdd_engine`: Purificação topológica via Renormalização.
 
 ## 3. LÓGICA DE DEFESA: CO-PILOTO TQFM
 1. **Sincronização:** A IA monitora o gráfico H2 para definir o regime monolítico (EMA 89).
