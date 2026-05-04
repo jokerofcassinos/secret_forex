@@ -442,16 +442,9 @@ void DrawModernDashboard(string status, double instAvg, double health, string qd
     DrawHUDRow("NEXUS_HUD_L_5", "MHD Plasma", GetZPShort(zp), GetZPColor(zp), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_6", "RMT Spectral", GetRMTShort(rmt), GetRMTColor(rmt), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_7", "QRW Flux", GetQRWShort(qrw), GetQRWColor(qrw), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_8", "Singularity", (isSing ? "ACTIVE" : "STABLE"), (isSing ? RGB(255, 82, 82) : RGB(38, 166, 154)), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_9", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
-    
-    // Alerta de Singularidade integrado no rodapé dinâmico
-    if(isSing) {
-        rowY += rowH + 6;
-        DrawHUDText("NEXUS_SEC_ICON", "●", baseX + 15, rowY, RGB(255, 50, 50), 11, false, corner);
-        DrawHUDText("NEXUS_SEC_ALERT", "SINGULARITY ACTIVE (TP ANNIHILATED)", baseX + 32, rowY, RGB(255, 100, 100), 9, false, corner);
-    } else {
-        ObjectDelete(0, "NEXUS_SEC_ICON");
-        ObjectDelete(0, "NEXUS_SEC_ALERT");
+    DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
+
+    // Limpar objetos de alerta residuais se existirem
+    ObjectDelete(0, "NEXUS_SEC_ICON");
+    ObjectDelete(0, "NEXUS_SEC_ALERT");
     }
-}
