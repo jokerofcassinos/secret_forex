@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 class MT5NeuralBridge:
-    def __init__(self, symbol="BTCUSD"):
+    def __init__(self, symbol="GER40.cash"):
         self.symbol = symbol
         self.last_sec_alert = False # State tracker para logs
         self.timeframes = {
@@ -77,9 +77,8 @@ class MT5NeuralBridge:
 
     def thermodynamic_sl_tp(self, r_score, current_price, atr, plasma_zones, schrodinger_density, cloud_tracker):
         """
-        Co-Pilot Management v3.0 (Thermodynamic Risk + SEC Singularity):
+        Co-Pilot Management v3.0 (Thermodynamic Risk):
         FIX P0-10: Gravity well with VPOC fallback.
-        FIX P1-13: SEC Singularity - TP Annihilation when horizon collapses.
         """
         symbol_info = mt5.symbol_info(self.symbol)
         if symbol_info is None:
@@ -90,19 +89,6 @@ class MT5NeuralBridge:
         positions = mt5.positions_get(symbol=self.symbol)
         if positions is None or len(positions) == 0:
             return
-            
-        # --- SINGULARIDADE ESTOCÁSTICA (SEC) ---
-        is_sec_active = False
-        if cloud_tracker is not None:
-            singularity_metrics = cloud_tracker.get_singularity_metrics()
-            if singularity_metrics and singularity_metrics.get('is_collapsed', False):
-                is_sec_active = True
-                if not self.last_sec_alert:
-                    strength = singularity_metrics.get('singularity_strength', 0.0)
-                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🕳️ SEC COLLAPSE :: TP ANNIHILATED (Strength: {strength:.4f})")
-                    self.last_sec_alert = True
-            else:
-                self.last_sec_alert = False
 
         # --- FIX P0-10: Gravity Well com validação de sanidade ---
         gravity_well_price = current_price
@@ -142,20 +128,17 @@ class MT5NeuralBridge:
             # --- PROTEÇÃO PARA POSIÇÕES COMPRADAS (BULL) ---
             if order_type == mt5.ORDER_TYPE_BUY:
                 if r_score == 1:
-                    # SEC: Aniquilamento de TP
-                    if is_sec_active:
-                        new_tp = 0.0
-                    elif gravity_valid and gravity_well_price > pos_price + atr:
+                    if gravity_valid and gravity_well_price > pos_price + atr:
                         new_tp = round(gravity_well_price, digits)
                     else:
                         new_tp = round(pos_price + (atr * 3.0), digits)
                     
-                    # SL ancorado no plasma floor com buffer
-                    new_sl = round(plasma_floor - (atr * 0.5), digits)
+                    # SL ancorado no plasma floor com buffer (aumentado para respirar)
+                    new_sl = round(plasma_floor - (atr * 1.5), digits)
                     
                     # Cap máximo de distância do SL
-                    if new_sl < pos_price - (atr * 3.0):
-                        new_sl = round(pos_price - (atr * 3.0), digits)
+                    if new_sl < pos_price - (atr * 8.8):
+                        new_sl = round(pos_price - (atr * 8.8), digits)
                     
                     # FIX P0-11: SL pode subir (trailing) OU recalibrar se plasma expandiu
                     if pos_price > new_sl:
@@ -163,12 +146,12 @@ class MT5NeuralBridge:
                             request["sl"] = new_sl
                             modified = True
                     
-                    if (is_sec_active and current_tp != 0.0) or (not is_sec_active and (current_tp == 0.0 or abs(current_tp - new_tp) > atr)):
+                    if current_tp == 0.0 or abs(current_tp - new_tp) > atr:
                         request["tp"] = new_tp
                         modified = True
                             
                 elif r_score == 2:
-                    emergency_sl = round(pos_price - (atr * 1.5), digits)
+                    emergency_sl = round(pos_price - (atr * 2.5), digits)
                     if current_sl == 0.0 or emergency_sl > current_sl:
                         request["sl"] = emergency_sl
                         modified = True
@@ -176,18 +159,16 @@ class MT5NeuralBridge:
             # --- PROTEÇÃO PARA POSIÇÕES VENDIDAS (BEAR) ---
             elif order_type == mt5.ORDER_TYPE_SELL:
                 if r_score == 2:
-                    # SEC: Aniquilamento de TP
-                    if is_sec_active:
-                        new_tp = 0.0
-                    elif gravity_valid and gravity_well_price < pos_price - atr:
+                    if gravity_valid and gravity_well_price < pos_price - atr:
                         new_tp = round(gravity_well_price, digits)
                     else:
                         new_tp = round(pos_price - (atr * 3.0), digits)
                     
-                    new_sl = round(plasma_ceiling + (atr * 0.5), digits)
+                    # Buffer aumentado para respirar
+                    new_sl = round(plasma_ceiling + (atr * 1.5), digits)
                     
-                    if new_sl > pos_price + (atr * 3.0):
-                        new_sl = round(pos_price + (atr * 3.0), digits)
+                    if new_sl > pos_price + (atr * 8.8):
+                        new_sl = round(pos_price + (atr * 8.8), digits)
                     
                     # FIX P0-11: SL pode descer (trailing) OU recalibrar
                     if pos_price < new_sl:
@@ -195,12 +176,12 @@ class MT5NeuralBridge:
                             request["sl"] = new_sl
                             modified = True
                             
-                    if (is_sec_active and current_tp != 0.0) or (not is_sec_active and (current_tp == 0.0 or abs(current_tp - new_tp) > atr)):
+                    if current_tp == 0.0 or abs(current_tp - new_tp) > atr:
                         request["tp"] = new_tp
                         modified = True
                             
                 elif r_score == 1:
-                    emergency_sl = round(pos_price + (atr * 1.5), digits)
+                    emergency_sl = round(pos_price + (atr * 2.5), digits)
                     if current_sl == 0.0 or emergency_sl < current_sl:
                         request["sl"] = emergency_sl
                         modified = True
@@ -261,8 +242,13 @@ class MT5NeuralBridge:
         mt5.shutdown()
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Teste da MT5 Bridge")
+    parser.add_argument("--symbol", type=str, default="GER40.cash", help="Symbol to test")
+    args = parser.parse_args()
+
     # Teste de Conexão e Extração
-    bridge = MT5NeuralBridge("BTCUSD")
+    bridge = MT5NeuralBridge(args.symbol)
     if bridge.initialize():
         bridge.fetch_full_history(count=5000)
         bridge.shutdown()

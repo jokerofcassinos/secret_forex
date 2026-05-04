@@ -46,7 +46,7 @@ def run_server():
     app.run(host='127.0.0.1', port=5000)
 
 class AethelgardAGI:
-    def __init__(self, symbol="BTCUSD"):
+    def __init__(self, symbol="GER40.cash"):
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
@@ -398,10 +398,8 @@ class AethelgardAGI:
                             if m:
                                 is_coll = (m['singularity_strength'] > 0.04) # Rigor unificado
                                 if is_coll and not self.last_sec_state:
-                                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🕳️ SINGULARIDADE ATIVA :: Strength {m['singularity_strength']:.4f}")
                                     self.last_sec_state = True
                                 elif not is_coll and self.last_sec_state:
-                                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] ✨ SINGULARIDADE DISSIPADA :: Campo Estabilizado.")
                                     self.last_sec_state = False
                                 # Round peak price to stabilize white lines (avoiding zebra effect)
                                 rounded_peak = round(m['peak_price'] * 2) / 2 # Snap to 0.5 points
@@ -424,6 +422,11 @@ class AethelgardAGI:
         print("SISTEMA OFFLINE.")
 
 if __name__ == "__main__":
-    bot = AethelgardAGI("BTCUSD")
+    import argparse
+    parser = argparse.ArgumentParser(description="Aethelgard AGI Engine")
+    parser.add_argument("--symbol", type=str, default="GER40.cash", help="Symbol to trade (e.g., GER40.cash, BTCUSD)")
+    args = parser.parse_args()
+
+    bot = AethelgardAGI(args.symbol)
     if bot.startup():
         bot.live_evolution_loop()
