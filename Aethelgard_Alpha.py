@@ -8,6 +8,7 @@ from Code.N_Core.plasma_market import PlasmaMarketTracker
 from Code.N_Core.random_matrix import RandomMatrixTracker
 from Code.N_Core.quantum_walk import QRWTracker
 from Code.N_Core.yield_governor import YieldGovernor
+from Code.N_Core.live_rht import LiveRHTTracker
 import time
 import pandas as pd
 import numpy as np
@@ -50,6 +51,7 @@ class AethelgardAGI:
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
+        self.rht_tracker = LiveRHTTracker(symbol, lookback=300)
         
         # --- VERIFICAÇÃO RG-QDD ---
         from Code.N_Core.quantum_indicators import QDD_AVAILABLE
@@ -75,6 +77,7 @@ class AethelgardAGI:
         self.qrw_cache = []
         self.dots_cache = []
         self.sec_cache = []
+        self.rht_cache = []
         self.last_time = 0
         self.genesis_count = 0
         self.last_sec_state = False # State tracker para logs SEC
@@ -153,21 +156,18 @@ class AethelgardAGI:
                     if not self.regimes_cache:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v74 [TOPOLOGICAL BLACKOUT]...")
                         
-                        # CALCULA EMAs E ATR GLOBALMENTE PARA EVITAR INSTABILIDADE E LENTIDÃO
                         df['ema_fast'] = df['close'].ewm(span=9, adjust=False).mean()
                         df['ema_mid'] = df['close'].ewm(span=21, adjust=False).mean()
                         df['ema_trend'] = df['close'].ewm(span=34, adjust=False).mean()
                         df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
                         df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
                         
-                        # ATR Calculation for Anomaly Detection
                         high_low = df['high'] - df['low']
                         high_close = np.abs(df['high'] - df['close'].shift(1))
                         low_close = np.abs(df['low'] - df['close'].shift(1))
                         tr_full = np.maximum(high_low, np.maximum(high_close, low_close))
                         df['atr_static'] = tr_full.rolling(14).mean()
 
-                        # --- ANÁLISE CALABI-YAU HISTÓRICA (PURGA DE SINAIS) ---
                         t_open = df['open'].values
                         t_high = df['high'].values
                         t_low = df['low'].values
@@ -184,8 +184,6 @@ class AethelgardAGI:
                         
                         danger_scores_h = self.yield_governor.analyze_historical_danger(norm_data_10d)
                         
-                        # WARM-UP ACELERADO DA NUVEM DE SCHRÖDINGER
-                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Formando Nuvem de Schrödinger...")
                         static_V = self.cloud_tracker.generate_potential_from_volume_profile(df)
                         self.cloud_tracker.solver.update_potential(static_V)
                         for _ in range(50): self.cloud_tracker.solver.step_forward(dt=5.0, mass=0.01)
@@ -203,10 +201,8 @@ class AethelgardAGI:
                                 continue
                             
                             slice_df = df.iloc[i-window_calc:i+1]
-                            
                             r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
                             
-                            # --- COEXISTÊNCIA CALABI-YAU (SINAIS RESTAURADOS) ---
                             sig = 0
                             if r_score != 0:
                                 curr_h = df.iloc[i]
@@ -221,12 +217,9 @@ class AethelgardAGI:
                             self.z_pinch_cache.append("0")
                             self.qrw_cache.append("0")
                             
-                            # SEC Calculation during Sync - Optimized to use single call with multiple internal steps
                             sec_val = "0|0|0"
                             if self.cloud_tracker:
-                                # Run 20 steps internally in C++ for each candle during sync
                                 self.cloud_tracker.step(slice_df, dt=1.0, steps=20)
-                                    
                                 m = self.cloud_tracker.get_singularity_metrics()
                                 if m:
                                     is_coll = (m['singularity_strength'] > 0.10)
@@ -242,14 +235,12 @@ class AethelgardAGI:
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v74 Concluído.")
                     
                     else:
-                        # --- PROCESSO DE TICKS EM TEMPO REAL v420 (SOBERANIA QUÂNTICA) ---
                         df['ema_fast'] = df['close'].ewm(span=9, adjust=False).mean()
                         df['ema_mid'] = df['close'].ewm(span=21, adjust=False).mean()
                         df['ema_trend'] = df['close'].ewm(span=34, adjust=False).mean()
                         df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
                         df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
                         
-                        # --- ANÁLISE DE ZONAS DE PERIGO CALABI-YAU ---
                         t_open = df['open'].values
                         t_high = df['high'].values
                         t_low = df['low'].values
@@ -269,22 +260,21 @@ class AethelgardAGI:
                         latest_danger = danger_scores[-1]
                         cyt_danger_cache = [str(int(d)) for d in danger_scores[-len(self.regimes_cache):]]
 
-                        # --- DETECÇÃO DE TRAPS TOPOLÓGICOS ---
                         trap_state = self.yield_governor.detect_topological_trap(norm_data_10d, t_close)
+                        is_topological_collapsed = self.yield_governor.evaluate_dimensional_collapse(norm_data_10d).get('is_collapsed', False)
+
+                        self.bridge.enforce_quantum_boundary(df, self.lbm_tracker, self.cloud_tracker, is_topological_collapsed)
 
                         slice_df = df.iloc[-window_calc:]
                         r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
 
-                        # Processa RMT Spectral Filter (Antecipado para Filtro de Soberania)
                         rmt_signal = "NOISE"
                         _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df)
                         if is_pure: rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
 
-                        # --- FILTRO DE SOBERANIA RMT (AUMENTA TOLERÂNCIA DO CYT) ---
                         effective_danger_threshold = 50
-                        if is_pure: effective_danger_threshold = 75 # Tolerância 50% maior se o sinal for puro
+                        if is_pure: effective_danger_threshold = 75 
 
-                        # Determina o Status Visual Instantâneo
                         if r_score == 1:
                             status_txt = "BULL_PREVISAO" if not is_sovereign else "TSUNAMI_BULL_ATIVO"
                         elif r_score == 2:
@@ -292,7 +282,6 @@ class AethelgardAGI:
                         else:
                             status_txt = "AGUARDANDO_IGNICAO"
 
-                        # --- COEXISTÊNCIA CALABI-YAU (ALERTAS ADICIONAIS) ---
                         if latest_danger > effective_danger_threshold:
                             status_txt += " | [🚨 ALERTA TOPOLÓGICO]"
                         
@@ -303,10 +292,8 @@ class AethelgardAGI:
                         
                         is_genesis = (prev_s != r_score)
                         if is_genesis: self.genesis_count = 0
-                        
                         is_sovereign = True 
                         
-                        # Processa a Malha Quântica (REDUZIDO dt PARA ESTABILIDADE TEMPORAL)
                         density_schrod, needs_reset = self.cloud_tracker.step(slice_df, dt=0.2, steps=5)
                         if needs_reset:
                             self.sec_cache = ["0|0|0"] * len(self.sec_cache)
@@ -316,12 +303,11 @@ class AethelgardAGI:
                             max_d = np.max(density_schrod)
                             cloud_arr = []
                             for i, d in enumerate(density_schrod):
-                                if d > max_d * 0.10: # Aumentado threshold para 10% (Visual Clean-up)
+                                if d > max_d * 0.10: 
                                     p = self.cloud_tracker.index_to_price(i)
                                     cloud_arr.append(f"{p:.2f}|{d:.4f}")
                             cloud_str += ",".join(cloud_arr)
 
-                        # Processa LBM Dynamics
                         lbm_signal = "LAMINAR_FLOW"
                         lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(slice_df.tail(10), steps=5)
                         if lbm_density is not None and lbm_velocity is not None:
@@ -329,7 +315,6 @@ class AethelgardAGI:
                             if lbm_signal == "FLUID_RUPTURE_BULL": self.lbm_cache[-1] = "1"
                             elif lbm_signal == "FLUID_RUPTURE_BEAR": self.lbm_cache[-1] = "2"
 
-                        # Processa MHD Plasma Z-Pinch
                         z_pinch_signal = "NEUTRAL"
                         curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
                         if self.genesis_count % 100 == 0:
@@ -340,17 +325,20 @@ class AethelgardAGI:
                             if z_type == "BOTTOM_SWEEP": self.z_pinch_cache[-1] = "1"
                             elif z_type == "TOP_SWEEP": self.z_pinch_cache[-1] = "2"
                             
-                        # Processa QRW
                         qrw_signal = "NEUTRAL"; qrw_lookback = 20
                         if self.qrw_tracker.is_in_range(df, lookback=qrw_lookback):
                             _, qrw_signal = self.qrw_tracker.process_qrw_skewness(df, lookback=qrw_lookback)
                             if qrw_signal == "HIDDEN_ACCUMULATION_BULL": self.qrw_cache[-1] = "1"
                             elif qrw_signal == "HIDDEN_DISTRIBUTION_BEAR": self.qrw_cache[-1] = "2"
 
-                        # Estado em tempo real para o MT5
+                        # --- PROCESSA RHT (RESSONÂNCIA HOLOGRÁFICA) LIVE ---
+                        rht_status_local, rht_history = self.rht_tracker.process_live_rht(threshold=0.6)
+                        if rht_status_local and rht_status_local != "PURIFYING":
+                            status_txt += f" | [✨ {rht_status_local}]"
+                        self.rht_cache = rht_history if rht_history else ["0"] * 300
+
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
                         
-                        # --- DEFESA CO-PILOTO QUÂNTICA ---
                         high_low = df['high'] - df['low']
                         high_close = np.abs(df['high'] - df['close'].shift(1))
                         low_close = np.abs(df['low'] - df['close'].shift(1))
@@ -360,7 +348,6 @@ class AethelgardAGI:
                         if r_score != 0:
                             self.bridge.thermodynamic_sl_tp(r_score=r_score, current_price=df['close'].iloc[-1], atr=atr, plasma_zones=self.plasma_zones, schrodinger_density=density_schrod, cloud_tracker=self.cloud_tracker)
                         
-                        # --- RADAR DE ANOMALIAS ---
                         sig = 0
                         if df.iloc[-1]['time'] > self.last_time:
                             self.genesis_count += 1
@@ -375,10 +362,7 @@ class AethelgardAGI:
                             self.z_pinch_cache.pop(0); self.z_pinch_cache.append("0")
                             self.qrw_cache.pop(0); self.qrw_cache.append("0")
                             
-                            # Update SEC Cache - Persistent Logic
-                            if len(self.sec_cache) > 300:
-                                self.sec_cache.pop(0)
-                            # Append a clean slot for the new candle
+                            if len(self.sec_cache) > 300: self.sec_cache.pop(0)
                             self.sec_cache.append("0|0|0")
                             
                             scores_list = [int(r.split('|')[0]) for r in self.regimes_cache]
@@ -391,25 +375,18 @@ class AethelgardAGI:
                         health = self.q_logic.calculate_regime_health(df)
                         status_final = f"{status_txt} | SAÚDE: {health}%"
                         
-                        # Captura métricas de Singularidade SEC (Persistent Update com Arredondamento Topológico)
                         sec_str = "0|0|0"
                         if self.cloud_tracker:
                             m = self.cloud_tracker.get_singularity_metrics()
                             if m:
-                                is_coll = (m['singularity_strength'] > 0.04) # Rigor unificado
-                                if is_coll and not self.last_sec_state:
-                                    self.last_sec_state = True
-                                elif not is_coll and self.last_sec_state:
-                                    self.last_sec_state = False
-                                # Round peak price to stabilize white lines (avoiding zebra effect)
-                                rounded_peak = round(m['peak_price'] * 2) / 2 # Snap to 0.5 points
+                                is_coll = (m['singularity_strength'] > 0.04)
+                                rounded_peak = round(m['peak_price'] * 2) / 2
                                 sec_str = f"{1 if is_coll else 0}|{rounded_peak:.2f}|{(m['schwarzschild_radius'] * self.cloud_tracker.dx):.2f}"
-                                # If collapsed at any point in this candle, lock it in the history cache
                                 if is_coll and len(self.sec_cache) > 0:
                                     self.sec_cache[-1] = sec_str
 
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local if rht_status_local else 'PURIFYING'};{','.join(self.rht_cache)}"
 
                 time.sleep(1)
         except Exception as e:

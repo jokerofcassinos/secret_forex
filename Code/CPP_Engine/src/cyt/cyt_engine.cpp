@@ -127,11 +127,35 @@ public:
 
         return result;
     }
+
+    /**
+     * @brief Avalia colapso estrutural métrico para Invalidação Dimensional.
+     */
+    py::dict calculate_topological_collapse(py::array_t<double> data_10d) {
+        py::dict flow = analyze_manifold_flow(data_10d);
+        auto det_array = flow["determinant"].cast<py::array_t<double>>();
+        auto det_ptr = static_cast<double *>(det_array.request().ptr);
+        size_t n_points = det_array.size();
+
+        double final_det = 1.0;
+        if (n_points > 0) {
+            final_det = det_ptr[n_points - 1];
+        }
+
+        bool is_collapsed = (final_det < 0.05);
+
+        py::dict res;
+        res["metric_determinant"] = final_det;
+        res["is_collapsed"] = is_collapsed;
+        return res;
+    }
 };
 
 PYBIND11_MODULE(cyt_engine, m) {
+    m.doc() = "CYT Engine (Topologia Calabi-Yau - AGI-5 v4.0 with Topological Invalidation)";
     py::class_<CYTEngine>(m, "CYTEngine")
         .def(py::init<>())
         .def("analyze_manifold_flow", &CYTEngine::analyze_manifold_flow)
-        .def("calculate_danger_zones", &CYTEngine::calculate_danger_zones);
+        .def("calculate_danger_zones", &CYTEngine::calculate_danger_zones)
+        .def("calculate_topological_collapse", &CYTEngine::calculate_topological_collapse);
 }

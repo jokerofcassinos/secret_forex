@@ -104,14 +104,33 @@ public:
     py::array_t<double> get_velocity() {
         return py::array_t<double>({Nx}, {sizeof(double)}, u.data(), py::cast(this));
     }
+
+    /**
+     * @brief Calcula o Número de Deborah.
+     */
+    double calculate_deborah_number(double anomaly_duration) {
+        if (anomaly_duration <= 0.0) return 0.0;
+        return tau / anomaly_duration;
+    }
+
+    /**
+     * @brief Avalia se o choque é viscoelasticamente absorvido (pavio).
+     */
+    bool is_viscoelastic_absorption(double anomaly_duration) {
+        double De = calculate_deborah_number(anomaly_duration);
+        // Se De > 1.2, o mercado se comporta como sólido não-newtoniano (rebatendo o preço).
+        return (De > 1.2); 
+    }
 };
 
 PYBIND11_MODULE(lbm_engine, m) {
-    m.doc() = "Lattice Boltzmann Method v2.0 - Stable Fluid Dynamics Engine";
+    m.doc() = "Lattice Boltzmann Method v2.0 - Viscoelastic Fluid Dynamics Engine";
     py::class_<LBMEngine>(m, "LBMEngine")
         .def(py::init<int, double>(), py::arg("N"), py::arg("relaxation_time") = 1.0)
         .def("inject_liquidity", &LBMEngine::inject_liquidity)
         .def("step", &LBMEngine::step)
         .def("get_density", &LBMEngine::get_density, py::return_value_policy::reference_internal)
-        .def("get_velocity", &LBMEngine::get_velocity, py::return_value_policy::reference_internal);
+        .def("get_velocity", &LBMEngine::get_velocity, py::return_value_policy::reference_internal)
+        .def("calculate_deborah_number", &LBMEngine::calculate_deborah_number, py::arg("anomaly_duration"))
+        .def("is_viscoelastic_absorption", &LBMEngine::is_viscoelastic_absorption, py::arg("anomaly_duration"));
 }

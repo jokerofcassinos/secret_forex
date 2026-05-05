@@ -92,5 +92,10 @@ class LBMFluidDynamics:
                 
         return "LAMINAR_FLOW"
 
+    def evaluate_viscoelastic_shock(self, anomaly_duration_seconds):
+        if not self.is_active: return False
+        return self.engine.is_viscoelastic_absorption(anomaly_duration_seconds)
+
+
 if __name__ == "__main__":
     print("LBM Fluid Dynamics v2.0 module loaded.")

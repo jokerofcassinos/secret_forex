@@ -150,6 +150,10 @@ class QuantumCloudTracker:
         if not self.is_active: return None
         return self.solver.calculate_singularity_metrics(self.price_min, self.price_max)
 
+    def check_quantum_tunneling(self, barrier_energy, particle_energy, volume_mass):
+        if not self.is_active: return 0.0
+        return self.solver.calculate_tunneling_probability(barrier_energy, particle_energy, volume_mass)
+
     def check_tunneling_signal(self, current_price, resistance_price, density):
         curr_idx = self.price_to_index(current_price)
         res_idx = self.price_to_index(resistance_price)

@@ -91,3 +91,10 @@ class YieldGovernor:
             return "BEAR_TRAP"
             
         return "NORMAL"
+
+    def evaluate_dimensional_collapse(self, data_10d: np.ndarray):
+        """
+        Avalia se a malha topológica colapsou (Invalidando a tese estrutural).
+        """
+        if data_10d.shape[0] != 10: return {'is_collapsed': False}
+        return self.engine.calculate_topological_collapse(data_10d)

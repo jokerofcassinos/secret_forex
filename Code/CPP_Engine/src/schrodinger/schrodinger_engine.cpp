@@ -133,10 +133,6 @@ public:
 
     /**
      * @brief Calcula métricas de Singularidade Estocástica (SEC).
-     * Retorna um dicionário com:
-     * - 'singularity_strength': Densidade de probabilidade no pico relativo à massa total.
-     * - 'schwarzschild_radius': O raio de horizonte onde a fuga é improvável.
-     * - 'is_collapsed': Flag de horizonte de eventos.
      */
     py::dict calculate_singularity_metrics(double price_min, double price_max) {
         double max_p = 0.0;
@@ -167,10 +163,28 @@ public:
 
         return res;
     }
+
+    /**
+     * @brief Calcula a Probabilidade de Tunelamento Quântico.
+     * Retorna a probabilidade da partícula (preço) tunelar a barreira sem massa real.
+     */
+    double calculate_tunneling_probability(double barrier_energy, double particle_energy, double volume_mass) {
+        if (particle_energy > barrier_energy) {
+            return 1.0; // Passou livremente
+        }
+        
+        double L = 1.0; // Espessura teórica da barreira
+        double hbar = 1.0;
+        
+        // Aproximação WKB. volume_mass baixo (pavio) -> exp alto -> T alto -> é tunelamento, ignorar SL.
+        // volume_mass alto (reversão) -> exp baixo -> T baixo -> NÃO tunelou, quebrou a barreira real.
+        double exponent = -2.0 * L * std::sqrt(2.0 * std::max(0.01, volume_mass) * (barrier_energy - particle_energy)) / hbar;
+        return std::exp(exponent);
+    }
 };
 
 PYBIND11_MODULE(schrodinger_engine, m) {
-    m.doc() = "Quantum Cloud Solver v3.0 - SEC Singularity Engine";
+    m.doc() = "Quantum Cloud Solver v3.0 - SEC Singularity Engine with Quantum Tunneling";
     py::class_<QuantumCloudSolver>(m, "QuantumCloudSolver")
         .def(py::init<int, double>())
         .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian, py::arg("x0"), py::arg("sigma"), py::arg("k0"))
@@ -179,5 +193,6 @@ PYBIND11_MODULE(schrodinger_engine, m) {
         .def("recenter_wave", &QuantumCloudSolver::recenter_wave, py::arg("new_x0"), py::arg("sigma"))
         .def("get_probability_density", &QuantumCloudSolver::get_probability_density, py::return_value_policy::reference_internal)
         .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass)
-        .def("calculate_singularity_metrics", &QuantumCloudSolver::calculate_singularity_metrics, py::arg("price_min"), py::arg("price_max"));
+        .def("calculate_singularity_metrics", &QuantumCloudSolver::calculate_singularity_metrics, py::arg("price_min"), py::arg("price_max"))
+        .def("calculate_tunneling_probability", &QuantumCloudSolver::calculate_tunneling_probability, py::arg("barrier_energy"), py::arg("particle_energy"), py::arg("volume_mass"));
 }

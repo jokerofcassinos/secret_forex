@@ -54,25 +54,21 @@ void ParseAndDraw(string data)
 
    string lbm_signal = (ArraySize(parts) > 11) ? parts[11] : "LAMINAR_FLOW";
    string z_signal = (ArraySize(parts) > 12) ? parts[12] : "NEUTRAL";
-   string rmt_signal = (ArraySize(parts) > 13) ? parts[13] : "NOISE";
    string qrw_signal = (ArraySize(parts) > 14) ? parts[14] : "NEUTRAL";
    string cytDanger = (ArraySize(parts) > 18) ? parts[18] : "";
    string secData = (ArraySize(parts) > 19) ? parts[19] : "0|0|0";
    string secHistory = (ArraySize(parts) > 20) ? parts[20] : "";
+   string rhtStatus = (ArraySize(parts) > 21) ? parts[21] : "PURIFYING";
+   string rhtHistory = (ArraySize(parts) > 22) ? parts[22] : "";
 
    // Limpa as antigas poluições textuais
    ObjectDelete(0, "NEXUS_HEADER");
-   ObjectDelete(0, "NEXUS_QDD_STATUS");
-   ObjectDelete(0, "NEXUS_STATUS");
-   ObjectDelete(0, "NEXUS_INST_AVG");
-   ObjectDelete(0, "NEXUS_LBM_WARNING");
-   ObjectDelete(0, "NEXUS_ZPINCH_WARNING");
-   ObjectDelete(0, "NEXUS_RMT_WARNING");
-   ObjectDelete(0, "NEXUS_QRW_WARNING");
+   // ... (rest of deletions)
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, qddMsg, lbm_signal, z_signal, rmt_signal, qrw_signal, secData);
+   DrawModernDashboard(statusTxt, instAvgPrice, health, qddMsg, lbm_signal, z_signal, qrw_signal, secData);
 
-   // 1. ATUALIZAÇÃO DAS CAIXAS (RESTORED)
+   // 1. ATUALIZAÇÃO DAS CAIXAS
+   // ... (rest of existing code)
    string hReg[]; StringSplit(historyRegimes, ',', hReg);
    int totalR = ArraySize(hReg);
    
@@ -373,8 +369,6 @@ string GetLBMShort(string lbm) { if(lbm == "FLUID_RUPTURE_BULL") return "Squeeze
 color GetLBMColor(string lbm) { if(lbm == "FLUID_RUPTURE_BULL") return RGB(66, 165, 245); if(lbm == "FLUID_RUPTURE_BEAR") return RGB(171, 71, 188); return RGB(120, 123, 134); }
 string GetZPShort(string zp) { if(zp == "NEUTRAL" || zp == "") return "Neutral"; if(StringFind(zp, "Z_PINCH_") >= 0) { string sub[]; StringSplit(zp, '_', sub); if(ArraySize(sub) >= 3) return sub[2] + " " + sub[3]; } return zp; }
 color GetZPColor(string zp) { return (zp == "NEUTRAL" || zp == "") ? RGB(120, 123, 134) : RGB(255, 202, 40); }
-string GetRMTShort(string rmt) { if(rmt == "NOISE" || rmt == "") return "Noise Filtered"; return rmt; }
-color GetRMTColor(string rmt) { return (rmt == "NOISE" || rmt == "") ? RGB(120, 123, 134) : RGB(38, 166, 154); }
 string GetQRWShort(string qrw) { if(qrw == "NEUTRAL" || qrw == "") return "No Interf."; if(qrw == "HIDDEN_ACCUMULATION_BULL") return "Accumulation"; if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return "Distribution"; return qrw; }
 color GetQRWColor(string qrw) { if(qrw == "HIDDEN_ACCUMULATION_BULL") return RGB(38, 198, 218); if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return RGB(255, 167, 38); return RGB(120, 123, 134); }
 void DrawHUDText(string name, string text, int x, int y, color clr, int fontSize, bool isRightAligned=false, int corner=CORNER_RIGHT_UPPER)
@@ -397,7 +391,7 @@ void DrawHUDRow(string id, string label, string val, color valClr, int baseX, in
     DrawHUDText(id + "_L", label, baseX + 15, y, RGB(140, 140, 145), 9, false, corner); 
     DrawHUDText(id + "_V", val, baseX + panelW - 15, y, valClr, 9, true, corner);
 }
-void DrawModernDashboard(string status, double instAvg, double health, string qdd, string lbm, string zp, string rmt, string qrw, string sec)
+void DrawModernDashboard(string status, double instAvg, double health, string qdd, string lbm, string zp, string qrw, string sec)
 {
     int panelW = 280; int panelH = 285; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
     string bgName = "NEXUS_HUD_BASE"; if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
@@ -440,9 +434,8 @@ void DrawModernDashboard(string status, double instAvg, double health, string qd
     DrawHUDRow("NEXUS_HUD_L_3", "Purification", qdd, (qdd == "PURIFYING" ? RGB(38, 166, 154) : clrGray), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_4", "LBM Flow", GetLBMShort(lbm), GetLBMColor(lbm), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_5", "MHD Plasma", GetZPShort(zp), GetZPColor(zp), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_6", "RMT Spectral", GetRMTShort(rmt), GetRMTColor(rmt), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_7", "QRW Flux", GetQRWShort(qrw), GetQRWColor(qrw), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
+    DrawHUDRow("NEXUS_HUD_L_6", "QRW Flux", GetQRWShort(qrw), GetQRWColor(qrw), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_7", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
 
     // Limpar objetos de alerta residuais se existirem
     ObjectDelete(0, "NEXUS_SEC_ICON");
