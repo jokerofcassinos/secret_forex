@@ -114,6 +114,7 @@ class MT5NeuralBridge:
             current_sl = pos.sl
             current_tp = pos.tp
             pos_price = pos.price_current
+            open_price = pos.price_open
             
             request = {
                 "action": mt5.TRADE_ACTION_SLTP,
@@ -126,59 +127,59 @@ class MT5NeuralBridge:
             
             # --- PROTEÇÃO PARA POSIÇÕES COMPRADAS (BULL) ---
             if order_type == mt5.ORDER_TYPE_BUY:
-                if r_score == 1:
-                    if gravity_valid and gravity_well_price > pos_price + atr:
+                if r_score == 1: # REGIME BULL
+                    if gravity_valid and gravity_well_price > open_price + atr:
                         new_tp = round(gravity_well_price, digits)
                     else:
-                        new_tp = round(pos_price + (atr * 3.0), digits)
+                        new_tp = round(open_price + (atr * 4.0), digits)
                     
-                    # SL Dimensional (Alvo da Lógica Quântica)
                     logical_sl = round(plasma_floor - (atr * 1.5), digits)
                     self.virtual_sls[ticket] = logical_sl
-                    
-                    # SL Catastrófico Físico no MT5 (Distante para absorver wicks)
                     catastrophic_sl = round(pos_price - (atr * 8.8), digits)
                     
                     if current_sl == 0.0 or catastrophic_sl > current_sl:
                         request["sl"] = catastrophic_sl
                         modified = True
-                    
-                    if current_tp == 0.0 or abs(current_tp - new_tp) > atr:
+                    if current_tp == 0.0:
                         request["tp"] = new_tp
                         modified = True
                             
-                elif r_score == 2:
+                elif r_score == 2: # REGIME BEAR (CONTRÁRIO)
                     emergency_sl = round(pos_price - (atr * 2.5), digits)
                     self.virtual_sls[ticket] = emergency_sl
                     catastrophic_sl = round(pos_price - (atr * 4.0), digits)
                     if current_sl == 0.0 or catastrophic_sl > current_sl:
                         request["sl"] = catastrophic_sl
                         modified = True
+                        
+                else: # REGIME NEUTRO (0)
+                    if current_sl == 0.0:
+                        request["sl"] = round(open_price - (atr * 5.0), digits)
+                        modified = True
+                    if current_tp == 0.0:
+                        request["tp"] = round(open_price + (atr * 5.0), digits)
+                        modified = True
 
             # --- PROTEÇÃO PARA POSIÇÕES VENDIDAS (BEAR) ---
             elif order_type == mt5.ORDER_TYPE_SELL:
-                if r_score == 2:
-                    if gravity_valid and gravity_well_price < pos_price - atr:
+                if r_score == 2: # REGIME BEAR
+                    if gravity_valid and gravity_well_price < open_price - atr:
                         new_tp = round(gravity_well_price, digits)
                     else:
-                        new_tp = round(pos_price - (atr * 3.0), digits)
+                        new_tp = round(open_price - (atr * 4.0), digits)
                     
-                    # SL Dimensional
                     logical_sl = round(plasma_ceiling + (atr * 1.5), digits)
                     self.virtual_sls[ticket] = logical_sl
-                    
-                    # SL Catastrófico Físico no MT5
                     catastrophic_sl = round(pos_price + (atr * 8.8), digits)
                     
                     if current_sl == 0.0 or catastrophic_sl < current_sl:
                         request["sl"] = catastrophic_sl
                         modified = True
-                            
-                    if current_tp == 0.0 or abs(current_tp - new_tp) > atr:
+                    if current_tp == 0.0:
                         request["tp"] = new_tp
                         modified = True
                             
-                elif r_score == 1:
+                elif r_score == 1: # REGIME BULL (CONTRÁRIO)
                     emergency_sl = round(pos_price + (atr * 2.5), digits)
                     self.virtual_sls[ticket] = emergency_sl
                     catastrophic_sl = round(pos_price + (atr * 4.0), digits)
@@ -186,12 +187,21 @@ class MT5NeuralBridge:
                         request["sl"] = catastrophic_sl
                         modified = True
                         
+                else: # REGIME NEUTRO (0)
+                    if current_sl == 0.0:
+                        request["sl"] = round(open_price + (atr * 5.0), digits)
+                        modified = True
+                    if current_tp == 0.0:
+                        request["tp"] = round(open_price - (atr * 5.0), digits)
+                        modified = True
+                        
             if modified:
                 result = mt5.order_send(request)
                 if result.retcode != mt5.TRADE_RETCODE_DONE:
-                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] ⚠️ NEXUS DEFENSE REJEITADO: Cód {result.retcode} - SL={request['sl']} TP={request['tp']} na Ordem {ticket}")
+                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] ⚠️ NEXUS DEFENSE REJEITADO: Cód {result.retcode} na Ordem {ticket}")
                 else:
-                    print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🛡️ CATASTROPHIC SHIELD v4.0 Ativado em {ticket}. MT5 SL={request['sl']} | Virtual SL={self.virtual_sls[ticket]} | TP={request['tp']}")
+                    v_sl = self.virtual_sls.get(ticket, "N/A")
+                    # print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🛡️ SHIELD v4.1 Ativado em {ticket}. MT5 SL={request['sl']} | Virtual SL={v_sl} | TP={request['tp']}")
 
     def close_position(self, ticket, is_buy):
         """Fecha uma posição no mercado."""

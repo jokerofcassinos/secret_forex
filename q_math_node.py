@@ -19,6 +19,11 @@ from Code.N_Core.fluid_dynamics import LBMFluidDynamics
 from Code.N_Core.plasma_market import PlasmaMarketTracker
 from Code.N_Core.random_matrix import RandomMatrixTracker
 from Code.N_Core.quantum_walk import QRWTracker
+from Code.N_Core.market_qcd import MarketQCDTracker
+
+import sys
+sys.path.append("Code/CPP_Engine")
+import cyt_engine
 
 class QMathNode:
     def __init__(self):
@@ -36,6 +41,8 @@ class QMathNode:
         self.plasma_tracker = None
         self.rmt_tracker = None
         self.qrw_tracker = None
+        self.qcd_tracker = None
+        self.cyt = cyt_engine.CYTEngine()
         
         # Estado atual cacheado para responder rapidamente
         self.current_state = {
@@ -43,7 +50,9 @@ class QMathNode:
             "lbm_zones": [],
             "cloud_zones": [],
             "rmt_signal": 0.0,
-            "qrw_density": []
+            "qrw_density": [],
+            "qcd_signal": "CONFINED",
+            "ricci_curvature": 0.0
         }
         
         # Trava para evitar conflito de leitura/escrita no estado interno
@@ -82,6 +91,9 @@ class QMathNode:
                 
             if self.qrw_tracker is None:
                 self.qrw_tracker = QRWTracker(positions=201)
+                
+            if self.qcd_tracker is None:
+                self.qcd_tracker = MarketQCDTracker(lookback_window=20)
 
             # Atualização dos Trackers Pesados
             current_close = df['close'].iloc[-1]
@@ -145,6 +157,41 @@ class QMathNode:
             except Exception as e:
                 pass
 
+            # 6. Market QCD Step
+            qcd_signal = "CONFINED"
+            try:
+                qcd_signal = self.qcd_tracker.detect_fission(df)
+            except Exception as e:
+                print(f"[Q-Math] Erro Market QCD: {e}")
+
+            # 7. CYT Ricci Flow Step
+            ricci_curvature = 0.0
+            cyt_danger = 0.0
+            try:
+                import numpy as np
+                recent_df = df.tail(200).copy()
+                N = len(recent_df)
+                data_10d = np.zeros((10, N))
+                data_10d[0, :] = recent_df['open'].values
+                data_10d[1, :] = recent_df['high'].values
+                data_10d[2, :] = recent_df['low'].values
+                data_10d[3, :] = recent_df['close'].values
+                data_10d[4, :] = recent_df['tick_volume'].values
+                data_10d[5, :] = recent_df['close'].pct_change().bfill().values
+                data_10d[6, :] = (recent_df['high'] - recent_df['low']).values
+                data_10d[7, :] = recent_df['close'].rolling(5).mean().bfill().values
+                data_10d[8, :] = recent_df['tick_volume'].rolling(5).mean().bfill().values
+                data_10d[9, :] = (recent_df['close'] - recent_df['open']).values
+                
+                flow = self.cyt.analyze_manifold_flow(data_10d)
+                def_array = flow["deformation"]
+                danger_array = self.cyt.calculate_danger_zones(data_10d, 20, 0.5)
+                if len(def_array) > 0:
+                    ricci_curvature = def_array[-1]
+                    cyt_danger = danger_array[-1]
+            except Exception as e:
+                print(f"[Q-Math] Erro CYT Ricci Flow: {e}")
+
             # Atualização atômica do estado que será lido pelo AGI_CORE
             with self.state_lock:
                 self.current_state["status"] = "ACTIVE"
@@ -157,6 +204,9 @@ class QMathNode:
                 self.current_state["rmt_signal"] = rmt_signal
                 self.current_state["qrw_signal"] = qrw_signal
                 self.current_state["is_pure"] = is_pure if 'is_pure' in locals() else False
+                self.current_state["qcd_signal"] = qcd_signal
+                self.current_state["ricci_curvature"] = ricci_curvature
+                self.current_state["cyt_danger"] = cyt_danger
 
         except Exception as e:
             print(f"❌ Q-MATH :: Erro no processamento interno: {e}")

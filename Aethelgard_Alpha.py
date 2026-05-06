@@ -9,6 +9,7 @@ from Code.N_Core.random_matrix import RandomMatrixTracker
 from Code.N_Core.quantum_walk import QRWTracker
 from Code.N_Core.yield_governor import YieldGovernor
 from Code.N_Core.live_rht import LiveRHTTracker
+from Code.N_Core.market_qcd import MarketQCDTracker
 import time
 import pandas as pd
 import numpy as np
@@ -63,6 +64,7 @@ class AethelgardAGI:
         self.alchemist = MSNRAlchemist()
         self.oracle = QuantumOracle(simulations=5000)
         self.yield_governor = YieldGovernor(danger_window=30, danger_threshold=25.0)
+        self.qcd_tracker = MarketQCDTracker(lookback_window=20)
         self.cloud_tracker = None
         self.lbm_tracker = None
         self.plasma_tracker = None
@@ -75,6 +77,7 @@ class AethelgardAGI:
         self.lbm_cache = []
         self.z_pinch_cache = []
         self.qrw_cache = []
+        self.qcd_cache = []
         self.dots_cache = []
         self.sec_cache = []
         self.rht_cache = []
@@ -101,10 +104,7 @@ class AethelgardAGI:
         try:
             current_processed_tf = None
             while self.is_running:
-                # --- DINAMISMO TEMPORAL NEXUS v2 (MQL5-PUSH) ---
                 selected_tf = current_mt5_tf
-                
-                # Se o timeframe mudou, limpa o cache para forçar recálculo completo
                 if current_processed_tf is not None and selected_tf != current_processed_tf:
                     print(f"🔄 TIME-SHIFT DETECTADO: Recalculando malha neural para o novo timeframe.")
                     self.regimes_cache = []
@@ -112,6 +112,7 @@ class AethelgardAGI:
                     self.lbm_cache = []
                     self.z_pinch_cache = []
                     self.qrw_cache = []
+                    self.qcd_cache = []
                     self.dots_cache = []
                     self.cloud_tracker = None
                     self.lbm_tracker = None
@@ -123,99 +124,74 @@ class AethelgardAGI:
                     is_sovereign = False
 
                 current_processed_tf = selected_tf
-
                 rates = mt5.copy_rates_from_pos(self.symbol, selected_tf, 0, 1000)
                 if rates is not None and len(rates) > 0:
                     df = pd.DataFrame(rates)
-
-                    # Nome amigável do TF para o log
-                    tf_name = "M15" if selected_tf == mt5.TIMEFRAME_M15 else str(selected_tf)
-                    
-                    # Inicializações Quânticas
                     if self.cloud_tracker is None:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
                         self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=512)
                         self.cloud_tracker.initialize_wave(df['close'].iloc[-1], sigma=(self.cloud_tracker.dx * 15))
-
                     if self.lbm_tracker is None:
                         p_min = df['low'].min() - 100
                         p_max = df['high'].max() + 100
                         self.lbm_tracker = LBMFluidDynamics(price_min=p_min, price_max=p_max, bins=200, tau=1.0)
-
                     if self.plasma_tracker is None:
                         self.plasma_tracker = PlasmaMarketTracker()
                         self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
-
                     if self.rmt_tracker is None:
                         self.rmt_tracker = RandomMatrixTracker(time_steps=100)
-                        
                     if self.qrw_tracker is None:
                         self.qrw_tracker = QRWTracker(positions=201)
 
                     if not self.regimes_cache:
-                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v74 [TOPOLOGICAL BLACKOUT]...")
-                        
+                        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando v74 [QCD INTEGRATED]...")
                         df['ema_fast'] = df['close'].ewm(span=9, adjust=False).mean()
                         df['ema_mid'] = df['close'].ewm(span=21, adjust=False).mean()
                         df['ema_trend'] = df['close'].ewm(span=34, adjust=False).mean()
                         df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
                         df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
-                        
                         high_low = df['high'] - df['low']
                         high_close = np.abs(df['high'] - df['close'].shift(1))
                         low_close = np.abs(df['low'] - df['close'].shift(1))
                         tr_full = np.maximum(high_low, np.maximum(high_close, low_close))
                         df['atr_static'] = tr_full.rolling(14).mean()
-
-                        t_open = df['open'].values
-                        t_high = df['high'].values
-                        t_low = df['low'].values
-                        t_close = df['close'].values
+                        t_open, t_high, t_low, t_close = df['open'].values, df['high'].values, df['low'].values, df['close'].values
                         t_vol = df['tick_volume'].values if 'tick_volume' in df.columns else np.zeros(len(df))
                         t_hl = (df['high'] - df['low']).values
                         t_ret = df['close'].pct_change().fillna(0).values
                         raw_data_10d = np.vstack([t_open, t_high, t_low, t_close, t_vol, df['ema_fast'].values, df['ema_mid'].values, df['ema_macro'].values, t_hl, t_ret])
-                        
                         norm_data_10d = np.zeros_like(raw_data_10d)
                         for d in range(raw_data_10d.shape[0]):
                             row = raw_data_10d[d]; std = np.std(row)
                             if std > 1e-9: norm_data_10d[d] = (row - np.mean(row)) / std
                         
                         danger_scores_h = self.yield_governor.analyze_historical_danger(norm_data_10d)
-                        
+                        qcd_hist_tracker = MarketQCDTracker(lookback_window=20)
                         static_V = self.cloud_tracker.generate_potential_from_volume_profile(df)
                         self.cloud_tracker.solver.update_potential(static_V)
                         for _ in range(50): self.cloud_tracker.solver.step_forward(dt=5.0, mass=0.01)
                         
                         scores_hist = []
-
                         for i in range(len(df)):
                             if i < window_calc:
-                                self.regimes_cache.append("0|0")
-                                self.signals_cache.append("0")
-                                self.lbm_cache.append("0")
-                                self.z_pinch_cache.append("0")
-                                self.qrw_cache.append("0")
-                                scores_hist.append(0)
+                                self.regimes_cache.append("0|0"); self.signals_cache.append("0")
+                                self.lbm_cache.append("0"); self.z_pinch_cache.append("0"); self.qrw_cache.append("0")
+                                self.qcd_cache.append("0"); scores_hist.append(0)
                                 continue
-                            
                             slice_df = df.iloc[i-window_calc:i+1]
                             r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
-                            
                             sig = 0
                             if r_score != 0:
-                                curr_h = df.iloc[i]
-                                body_h = abs(curr_h['close'] - curr_h['open'])
+                                curr_h = df.iloc[i]; body_h = abs(curr_h['close'] - curr_h['open'])
                                 atr_val = df['atr_static'].iloc[i]
-                                if not np.isnan(atr_val) and body_h > (atr_val * 1.8):
-                                    sig = 1 if curr_h['close'] > curr_h['open'] else 2
-                            
-                            self.regimes_cache.append(f"{r_score}|{conf}")
-                            self.signals_cache.append(str(sig))
-                            self.lbm_cache.append("0")
-                            self.z_pinch_cache.append("0")
-                            self.qrw_cache.append("0")
+                                if not np.isnan(atr_val) and body_h > (atr_val * 1.8): sig = 1 if curr_h['close'] > curr_h['open'] else 2
+                            self.regimes_cache.append(f"{r_score}|{conf}"); self.signals_cache.append(str(sig))
+                            self.lbm_cache.append("0"); self.z_pinch_cache.append("0"); self.qrw_cache.append("0")
+                            qcd_sig = qcd_hist_tracker.detect_fission(slice_df)
+                            if "FISSION_EXPANSION_UP" in qcd_sig: self.qcd_cache.append("1")
+                            elif "FISSION_EXPANSION_DOWN" in qcd_sig: self.qcd_cache.append("2")
+                            else: self.qcd_cache.append("0")
                             
                             sec_val = "0|0|0"
                             if self.cloud_tracker:
@@ -226,10 +202,7 @@ class AethelgardAGI:
                                     sec_val = f"{1 if is_coll else 0}|{m['peak_price']:.2f}|{(m['schwarzschild_radius'] * self.cloud_tracker.dx):.2f}"
                             self.sec_cache.append(sec_val)
                             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
-
-                            scores_hist.append(r_score)
-                            prev_s, prev_c = r_score, conf
-                        
+                            scores_hist.append(r_score); prev_s, prev_c = r_score, conf
                         self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df, scores_hist)]
                         self.last_time = df.iloc[-1]['time']
                         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot v74 Concluído.")
@@ -240,85 +213,58 @@ class AethelgardAGI:
                         df['ema_trend'] = df['close'].ewm(span=34, adjust=False).mean()
                         df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
                         df['ema_gravity'] = df['close'].ewm(span=200, adjust=False).mean()
-                        
-                        t_open = df['open'].values
-                        t_high = df['high'].values
-                        t_low = df['low'].values
-                        t_close = df['close'].values
+                        t_open, t_high, t_low, t_close = df['open'].values, df['high'].values, df['low'].values, df['close'].values
                         t_vol = df['tick_volume'].values if 'tick_volume' in df.columns else np.zeros(len(df))
                         t_hl = (df['high'] - df['low']).values
                         t_ret = df['close'].pct_change().fillna(0).values
-                        
                         raw_data_10d = np.vstack([t_open, t_high, t_low, t_close, t_vol, df['ema_fast'].values, df['ema_mid'].values, df['ema_macro'].values, t_hl, t_ret])
-                        
                         norm_data_10d = np.zeros_like(raw_data_10d)
                         for d in range(raw_data_10d.shape[0]):
                             row = raw_data_10d[d]; std = np.std(row)
                             if std > 1e-9: norm_data_10d[d] = (row - np.mean(row)) / std
                         
                         danger_scores = self.yield_governor.analyze_historical_danger(norm_data_10d)
-                        latest_danger = danger_scores[-1]
-                        cyt_danger_cache = [str(int(d)) for d in danger_scores[-len(self.regimes_cache):]]
-
+                        latest_danger = danger_scores[-1]; cyt_danger_cache = [str(int(d)) for d in danger_scores[-len(self.regimes_cache):]]
                         trap_state = self.yield_governor.detect_topological_trap(norm_data_10d, t_close)
                         is_topological_collapsed = self.yield_governor.evaluate_dimensional_collapse(norm_data_10d).get('is_collapsed', False)
-
                         self.bridge.enforce_quantum_boundary(df, self.lbm_tracker, self.cloud_tracker, is_topological_collapsed)
-
                         slice_df = df.iloc[-window_calc:]
                         r_score, conf = self.q_logic.advanced_regime_score(slice_df, prev_s, prev_c)
 
-                        rmt_signal = "NOISE"
-                        _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df)
+                        rmt_signal = "NOISE"; _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df)
                         if is_pure: rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
+                        effective_danger_threshold = 75 if is_pure else 50 
 
-                        effective_danger_threshold = 50
-                        if is_pure: effective_danger_threshold = 75 
-
-                        if r_score == 1:
-                            status_txt = "BULL_PREVISAO" if not is_sovereign else "TSUNAMI_BULL_ATIVO"
-                        elif r_score == 2:
-                            status_txt = "BEAR_PREVISAO" if not is_sovereign else "TSUNAMI_BEAR_ATIVO"
-                        else:
-                            status_txt = "AGUARDANDO_IGNICAO"
-
-                        if latest_danger > effective_danger_threshold:
-                            status_txt += " | [🚨 ALERTA TOPOLÓGICO]"
-                        
-                        if trap_state == "BULL_TRAP":
-                            status_txt += " | [⚠️ BULL TRAP]"
-                        elif trap_state == "BEAR_TRAP":
-                            status_txt += " | [⚠️ BEAR TRAP]"
+                        if r_score == 1: status_txt = "BULL_PREVISAO" if not is_sovereign else "TSUNAMI_BULL_ATIVO"
+                        elif r_score == 2: status_txt = "BEAR_PREVISAO" if not is_sovereign else "TSUNAMI_BEAR_ATIVO"
+                        else: status_txt = "AGUARDANDO_IGNICAO"
+                        if latest_danger > effective_danger_threshold: status_txt += " | [🚨 ALERTA TOPOLÓGICO]"
+                        if trap_state == "BULL_TRAP": status_txt += " | [⚠️ BULL TRAP]"
+                        elif trap_state == "BEAR_TRAP": status_txt += " | [⚠️ BEAR TRAP]"
                         
                         is_genesis = (prev_s != r_score)
                         if is_genesis: self.genesis_count = 0
                         is_sovereign = True 
                         
                         density_schrod, needs_reset = self.cloud_tracker.step(slice_df, dt=0.2, steps=5)
-                        if needs_reset:
-                            self.sec_cache = ["0|0|0"] * len(self.sec_cache)
-
+                        if needs_reset: self.sec_cache = ["0|0|0"] * len(self.sec_cache)
                         cloud_str = f"{self.cloud_tracker.dx:.4f}:"
                         if density_schrod is not None:
                             max_d = np.max(density_schrod)
                             cloud_arr = []
                             for i, d in enumerate(density_schrod):
                                 if d > max_d * 0.10: 
-                                    p = self.cloud_tracker.index_to_price(i)
-                                    cloud_arr.append(f"{p:.2f}|{d:.4f}")
+                                    p = self.cloud_tracker.index_to_price(i); cloud_arr.append(f"{p:.2f}|{d:.4f}")
                             cloud_str += ",".join(cloud_arr)
 
-                        lbm_signal = "LAMINAR_FLOW"
-                        lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(slice_df.tail(10), steps=5)
+                        lbm_signal = "LAMINAR_FLOW"; lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(slice_df.tail(10), steps=5)
                         if lbm_density is not None and lbm_velocity is not None:
                             lbm_signal = self.lbm_tracker.detect_squeeze_rupture(df['close'].iloc[-1], lbm_density, lbm_velocity)
                             if lbm_signal == "FLUID_RUPTURE_BULL": self.lbm_cache[-1] = "1"
                             elif lbm_signal == "FLUID_RUPTURE_BEAR": self.lbm_cache[-1] = "2"
 
-                        z_pinch_signal = "NEUTRAL"
-                        curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
-                        if self.genesis_count % 100 == 0:
-                             self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
+                        z_pinch_signal = "NEUTRAL"; curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
+                        if self.genesis_count % 100 == 0: self.plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df, lookback=200)
                         z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, self.plasma_zones)
                         if z_idx > 90.0:
                             z_pinch_signal = f"Z_PINCH_{z_type}"
@@ -331,79 +277,55 @@ class AethelgardAGI:
                             if qrw_signal == "HIDDEN_ACCUMULATION_BULL": self.qrw_cache[-1] = "1"
                             elif qrw_signal == "HIDDEN_DISTRIBUTION_BEAR": self.qrw_cache[-1] = "2"
 
-                        # --- PROCESSA RHT (RESSONÂNCIA HOLOGRÁFICA) LIVE ---
                         rht_status_local, rht_history = self.rht_tracker.process_live_rht(threshold=0.6)
-                        if rht_status_local and rht_status_local != "PURIFYING":
-                            status_txt += f" | [✨ {rht_status_local}]"
+                        if rht_status_local and rht_status_local != "PURIFYING": status_txt += f" | [✨ {rht_status_local}]"
                         self.rht_cache = rht_history if rht_history else ["0"] * 300
-
                         rt_regime = f"{r_score if is_sovereign else 0}|{conf}"
-                        
-                        high_low = df['high'] - df['low']
-                        high_close = np.abs(df['high'] - df['close'].shift(1))
-                        low_close = np.abs(df['low'] - df['close'].shift(1))
+                        high_low = df['high'] - df['low']; high_close = np.abs(df['high'] - df['close'].shift(1)); low_close = np.abs(df['low'] - df['close'].shift(1))
                         true_range_atr = np.max(pd.concat([high_low, high_close, low_close], axis=1), axis=1)
                         atr = true_range_atr.rolling(14).mean().iloc[-1]
-                        
-                        if r_score != 0:
-                            self.bridge.thermodynamic_sl_tp(r_score=r_score, current_price=df['close'].iloc[-1], atr=atr, plasma_zones=self.plasma_zones, schrodinger_density=density_schrod, cloud_tracker=self.cloud_tracker)
+                        self.bridge.thermodynamic_sl_tp(r_score=r_score, current_price=df['close'].iloc[-1], atr=atr, plasma_zones=self.plasma_zones, schrodinger_density=density_schrod, cloud_tracker=self.cloud_tracker)
                         
                         sig = 0
                         if df.iloc[-1]['time'] > self.last_time:
-                            self.genesis_count += 1
-                            curr = df.iloc[-1]; body = abs(curr['close'] - curr['open'])
-                            if body > (atr * 1.8):
-                                sig = 1 if curr['close'] > curr['open'] else 2
-                                print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 👁️ NEXUS AWARE: {status_txt}")
-                                
+                            self.genesis_count += 1; curr = df.iloc[-1]; body = abs(curr['close'] - curr['open'])
+                            if body > (atr * 1.8): sig = 1 if curr['close'] > curr['open'] else 2
                             self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score}|{conf}")
                             self.signals_cache.pop(0); self.signals_cache.append(str(sig))
-                            self.lbm_cache.pop(0); self.lbm_cache.append("0")
-                            self.z_pinch_cache.pop(0); self.z_pinch_cache.append("0")
-                            self.qrw_cache.pop(0); self.qrw_cache.append("0")
-                            
+                            self.lbm_cache.pop(0); self.lbm_cache.append("0"); self.z_pinch_cache.pop(0); self.z_pinch_cache.append("0")
+                            self.qrw_cache.pop(0); self.qrw_cache.append("0"); self.qcd_cache.pop(0); self.qcd_cache.append("0")
                             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
                             self.sec_cache.append("0|0|0")
-                            
                             scores_list = [int(r.split('|')[0]) for r in self.regimes_cache]
                             self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df.tail(len(self.regimes_cache)), scores_list)]
-                            
-                            prev_s, prev_c = r_score, conf
-                            self.last_time = df.iloc[-1]['time']
+                            prev_s, prev_c, self.last_time = r_score, conf, df.iloc[-1]['time']
                         
-                        inst_avg = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
-                        health = self.q_logic.calculate_regime_health(df)
+                        inst_avg, health = df['close'].ewm(span=89, adjust=False).mean().iloc[-1], self.q_logic.calculate_regime_health(df)
                         status_final = f"{status_txt} | SAÚDE: {health}%"
-                        
                         sec_str = "0|0|0"
                         if self.cloud_tracker:
                             m = self.cloud_tracker.get_singularity_metrics()
                             if m:
-                                is_coll = (m['singularity_strength'] > 0.04)
-                                rounded_peak = round(m['peak_price'] * 2) / 2
+                                is_coll = (m['singularity_strength'] > 0.04); rounded_peak = round(m['peak_price'] * 2) / 2
                                 sec_str = f"{1 if is_coll else 0}|{rounded_peak:.2f}|{(m['schwarzschild_radius'] * self.cloud_tracker.dx):.2f}"
-                                if is_coll and len(self.sec_cache) > 0:
-                                    self.sec_cache[-1] = sec_str
+                                if is_coll and len(self.sec_cache) > 0: self.sec_cache[-1] = sec_str
+
+                        qcd_signal = self.qcd_tracker.detect_fission(slice_df)
+                        if "FISSION_EXPANSION_UP" in qcd_signal: self.qcd_cache[-1] = "1"
+                        elif "FISSION_EXPANSION_DOWN" in qcd_signal: self.qcd_cache[-1] = "2"
 
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local if rht_status_local else 'PURIFYING'};{','.join(self.rht_cache)}"
-
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local if rht_status_local else 'PURIFYING'};{','.join(self.rht_cache)};{qcd_signal};{','.join(self.qcd_cache)}"
                 time.sleep(1)
         except Exception as e:
-            print(f"ERRO: {e}")
-            self.shutdown()
+            print(f"ERRO: {e}"); self.shutdown()
 
     def shutdown(self):
-        self.is_running = False
-        self.bridge.shutdown()
-        print("SISTEMA OFFLINE.")
+        self.is_running = False; self.bridge.shutdown(); print("SISTEMA OFFLINE.")
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Aethelgard AGI Engine")
-    parser.add_argument("--symbol", type=str, default="GER40.cash", help="Symbol to trade (e.g., GER40.cash, BTCUSD)")
-    args = parser.parse_args()
-
-    bot = AethelgardAGI(args.symbol)
-    if bot.startup():
-        bot.live_evolution_loop()
+    parser.add_argument("--symbol", type=str, default="GER40.cash", help="Symbol to trade")
+    args = parser.parse_args(); bot = AethelgardAGI(args.symbol)
+    if bot.startup(): bot.live_evolution_loop()

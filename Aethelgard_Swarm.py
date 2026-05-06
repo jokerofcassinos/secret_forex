@@ -9,6 +9,7 @@ from Code.N_Core.msnr_alchemist import MSNRAlchemist
 from Code.N_Core.quantum_oracle import QuantumOracle
 from Code.N_Core.yield_governor import YieldGovernor
 from Code.N_Core.live_rht import LiveRHTTracker
+from Code.N_Core.market_qcd import MarketQCDTracker
 import time
 import numpy as np
 import pandas as pd
@@ -20,6 +21,7 @@ import logging
 import sys
 
 from Code.N_Core.swarm_bus import create_subscriber, create_request_client, create_publisher, PORT_TICK_FEED, PORT_Q_MATH, PORT_CONTROL, TOPIC_MARKET_BAR, TOPIC_CONTROL
+from Code.R_Exec.mt5_bridge import MT5NeuralBridge
 
 # Windows UTF-8 console fix
 if sys.stdout.encoding.lower() != 'utf-8':
@@ -76,6 +78,7 @@ def run_tcp_server():
 class AethelgardSwarm:
     def __init__(self, symbol="GER40.cash"):
         self.symbol = symbol
+        self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
         self.rht_tracker = LiveRHTTracker(symbol, lookback=300)
         self.alchemist = MSNRAlchemist()
@@ -94,6 +97,8 @@ class AethelgardSwarm:
         self.dots_cache = []
         self.sec_cache = []
         self.rht_cache = []
+        self.qcd_cache = []
+        self.cyt_danger_cache = []
         self.last_time = 0
         self.genesis_count = 0
         self.prev_s = 0
@@ -107,6 +112,7 @@ class AethelgardSwarm:
 
     def startup(self):
         print(f"--- INICIANDO MOTOR SWARM v2.0 [AGI CORE] :: {self.symbol} ---")
+        if not self.bridge.initialize(): return False
         threading.Thread(target=run_tcp_server, daemon=True).start()
         self.is_running = True
         return True
@@ -144,6 +150,8 @@ class AethelgardSwarm:
         tr_full = np.maximum(high_low, np.maximum(high_close, low_close))
         df['atr_static'] = tr_full.rolling(14).mean()
 
+        qcd_hist_tracker = MarketQCDTracker(lookback_window=20)
+        
         scores_hist = []
         for i in range(len(df)):
             if i < window_calc:
@@ -152,6 +160,8 @@ class AethelgardSwarm:
                 self.lbm_cache.append("0")
                 self.z_pinch_cache.append("0")
                 self.qrw_cache.append("0")
+                self.qcd_cache.append("0")
+                self.cyt_danger_cache.append("0")
                 scores_hist.append(0)
                 continue
             
@@ -171,6 +181,19 @@ class AethelgardSwarm:
             self.lbm_cache.append("0")
             self.z_pinch_cache.append("0")
             self.qrw_cache.append("0")
+            
+            qcd_sig = qcd_hist_tracker.detect_fission(slice_df)
+            if "FISSION_EXPANSION_UP" in qcd_sig: 
+                self.qcd_cache.append("1")
+            elif "FISSION_EXPANSION_DOWN" in qcd_sig: 
+                self.qcd_cache.append("2")
+            elif "FISSION" in qcd_sig:
+                self.qcd_cache.append("1" if curr_h['close'] > curr_h['open'] else "2")
+            else:
+                # If there's an existing fission in this bar (not fully possible historically per tick, but just fallback to 0)
+                self.qcd_cache.append("0")
+                
+            self.cyt_danger_cache.append("0")
             self.sec_cache.append("0|0|0")
             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
 
@@ -197,6 +220,8 @@ class AethelgardSwarm:
                     self.regimes_cache.clear()
                     self.sec_cache.clear()
                     self.dots_cache.clear()
+                    self.qcd_cache.clear()
+                    self.cyt_danger_cache.clear()
                     self.last_time = 0
                     
                     # 2. Informa o Router e o Q-Math para mudarem a janela
@@ -257,6 +282,8 @@ class AethelgardSwarm:
                             self.lbm_cache.pop(0); self.lbm_cache.append("0")
                             self.z_pinch_cache.pop(0); self.z_pinch_cache.append("0")
                             self.qrw_cache.pop(0); self.qrw_cache.append("0")
+                            self.qcd_cache.pop(0); self.qcd_cache.append("0")
+                            self.cyt_danger_cache.pop(0); self.cyt_danger_cache.append("0")
                             self.sec_cache.append("0|0|0")
                             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
 
@@ -286,6 +313,37 @@ class AethelgardSwarm:
                         if qrw_signal == "HIDDEN_ACCUMULATION_BULL": self.qrw_cache[-1] = "1"
                         elif qrw_signal == "HIDDEN_DISTRIBUTION_BEAR": self.qrw_cache[-1] = "2"
                         
+                        qcd_signal = q_state.get("qcd_signal", "CONFINED")
+                        cyt_danger = q_state.get("cyt_danger", 0.0)
+                        
+                        if "FISSION_EXPANSION_UP" in qcd_signal: 
+                            self.qcd_cache[-1] = "1"
+                        elif "FISSION_EXPANSION_DOWN" in qcd_signal: 
+                            self.qcd_cache[-1] = "2"
+                        elif "FISSION" in qcd_signal and self.qcd_cache[-1] == "0":
+                            self.qcd_cache[-1] = "1" if current_close > df['open'].iloc[-1] else "2"
+                        
+                        self.cyt_danger_cache[-1] = str(int(cyt_danger))
+                        
+                        # --- GESTÃO DE SL/TP SWARM v2.0 (Global Defense) ---
+                        high_low = df['high'] - df['low']
+                        high_close = np.abs(df['high'] - df['close'].shift(1))
+                        low_close = np.abs(df['low'] - df['close'].shift(1))
+                        true_range_atr = np.max(pd.concat([high_low, high_close, low_close], axis=1), axis=1)
+                        atr = true_range_atr.rolling(14).mean().iloc[-1]
+                        
+                        # Extrai densidade schrodinger do estado q_state se disponível
+                        density_schrod = q_state.get("density_schrod") # O nó Q-MATH precisa enviar isso para SL/TP dinâmico avançado
+                        
+                        self.bridge.thermodynamic_sl_tp(
+                            r_score=r_score, 
+                            current_price=current_close, 
+                            atr=atr, 
+                            plasma_zones=q_state.get("plasma_zones"), 
+                            schrodinger_density=density_schrod,
+                            cloud_tracker=None # O swarm gerencia isso via Q-MATH, passamos None para fallback seguro
+                        )
+
                         sec_str = "0|0|0"
                         if sec_m:
                             is_coll = (sec_m.get('singularity_strength', 0) > 0.04)
@@ -297,13 +355,12 @@ class AethelgardSwarm:
                         else:
                             sec_str = f"{sec_state}|{current_close:.2f}|0.00"
 
-                        cyt_danger_cache = ["0"] * len(self.regimes_cache) # Pode ser implementado no yield_governor depois
                         rht_status_local = "PURIFYING"
                         
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local};{','.join(self.rht_cache)}"
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local};{','.join(self.rht_cache)};{qcd_signal};{','.join(self.qcd_cache)}"
                         
-                        sys.stdout.write(f"\r🧠 SWARM CORE :: Processado {current_close:.2f} | R: {r_score} | SEC: {sec_state}      ")
-                        sys.stdout.flush()
+                        # sys.stdout.write(f"\r🧠 SWARM CORE :: Processado {current_close:.2f} | R: {r_score} | SEC: {sec_state}      ")
+                        # sys.stdout.flush()
                 else:
                     time.sleep(0.01)
                     

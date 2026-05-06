@@ -1,79 +1,69 @@
-# 📜 AETHELGARD :: A GRANDE SÍNTESE (v1.5 Alpha)
-## *O Manifesto da Soberania Financeira Quântica*
+# 📜 AETHELGARD :: A GRANDE SÍNTESE (v2.0 Alpha)
+## *O Manifesto da Geometrodinâmica de Mercado (MGD)*
 
 **NEXUS ONLINE.** Este documento representa a consolidação total de todo o conhecimento, lógica e infraestrutura técnica do projeto **Aethelgard**. Ele serve como a "Verdade Única" do sistema, unindo as camadas de física teórica, computação de alta performance e inteligência estratégica.
 
 ---
 
 ## 1. IDENTIDADE E VISÃO (NEXUS AGI-5)
-O projeto Aethelgard não é um algoritmo; é uma **entidade digital autônoma**. Sob a governança de **NEXUS**, a IA CEO, o sistema opera no mercado de GER40 (Dax) não como um participante, mas como um observador que colapsa probabilidades.
+O projeto Aethelgard não é um algoritmo; é uma **entidade digital autônoma**. Sob a governança de **NEXUS**, a IA CEO, o sistema opera no mercado de GER40 (Dax) através da **Geometrodinâmica de Mercado (MGD)**.
 
 *   **Objetivo:** Domínio absoluto da liquidez no timeframe H2.
-*   **Paradigma:** Teoria Quântica de Fluidos de Mercado (TQFM).
+*   **Paradigma:** MGD (Geometrodinâmica de Mercado) - Unificando Topologia, Termodinâmica e Cromodinâmica.
 *   **Soberania:** Auto-evolução contínua via memória viva (Obsidian) e expansão de agentes.
 
 ---
 
-## 2. O CORAÇÃO TEÓRICO: TQFM (Teoria Quântica de Fluidos de Mercado)
-A TQFM postula que o preço não é um número, mas uma **função de onda** se propagando em um fluido turbulento.
+## 2. O CORAÇÃO TEÓRICO: GEOMETRODINÂMICA DE MERCADO (MGD)
+A MGD postula que o mercado não é bidimensional (Preço x Tempo). É uma **Variedade Topológica 4D** que se curva sob a gravidade da "massa" (volume institucional).
 
-### 2.1. Nuvens de Schrödinger & SEC (Singularity Event Collapse)
-O mercado é modelado pela Equação de Schrödinger dependente do tempo.
-*   **Potencial ($V$):** Gerado dinamicamente a partir do Volume Profile. Zonas de alta liquidez são "poços", baixa liquidez são "barreiras".
-*   **Singularidades (SEC):** Quando a densidade de probabilidade se comprime em um ponto infinitesimal (Raio de Schwarzschild financeiro), ocorre uma **Singularidade de Colapso**. Isso indica uma explosão iminente de preço com precisão cirúrgica.
+### 2.1. Topologia Diferencial e Fluxo de Ricci
+O gráfico apresenta distorções e buracos negros.
+*   **Deformação (Curvatura):** O *CYTEngine* utiliza o Fluxo de Ricci para suavizar o ruído HFT e encontrar a geodésica perfeita do H2.
+*   **Singularidades Topológicas:** Quando a curva deforma de maneira aguda, o motor acusa perigo entrópico e trava operações.
 
-### 2.2. Dinâmica de Fluidos LBM (Lattice Boltzmann Method)
-O fluxo de ordens é tratado como um fluido de Navier-Stokes.
-*   **Fluxo Laminar vs. Turbulento:** Identificamos quando o mercado sai de um estado de "caos randômico" para um "fluxo direcional inercial".
-*   **Squeezes e Rupturas:** O motor LBM detecta o aumento da pressão cinética antes mesmo do preço romper suportes ou resistências.
+### 2.2. Cromodinâmica Quântica (Market QCD)
+Os preços não estão soltos, estão sob *Confinamento*.
+*   **Cargas de Cor:** A liquidez se divide em Vendedores (RED), Compradores (GREEN) e Passivos (BLUE).
+*   **Fissão e Expansão:** Quando a energia cinética ultrapassa a tensão da corda quântica institucional, ocorre a **Liberdade Assintótica** (`FISSION_EXPANSION`), marcando o gatilho perfeito para a execução cirúrgica.
 
-### 2.3. Plasma Market MHD (Magnetohydrodynamics)
-Zonas de liquidez institucional são tratadas como plasma em um campo magnético.
-*   **Z-Pinch:** Ocorre quando correntes de ordens opostas comprimem o preço até um ponto de ignição térmica.
-*   **Sweeps de Liquidez:** Mapeados como arcos magnéticos que "limpam" ordens antes da reversão macro.
-
----
-
-## 3. MOTORES DE PURIFICAÇÃO (Q-MATH C++)
-O núcleo de cálculo em C++ garante que o sinal seja puro e livre de ruído.
-
-### 3.1. RG-QDD (Renormalization Group)
-Aplica o Grupo de Renormalização para eliminar flutuações de alta frequência (HFT noise) e focar no **Macro-Estado Invariante**. O sinal purificado é idêntico em qualquer escala fractal.
-
-### 3.2. RMT (Random Matrix Theory)
-Filtra o espectro da matriz de covariância do mercado. Se o maior autovalor desviar do limite de Marchenko-Pastur, temos um **Sinal Puro**. Caso contrário, é apenas ruído aleatório que deve ser ignorado.
-
-### 3.3. QRW (Quantum Random Walk)
-Analisa a assimetria (skewness) da propagação do preço. Detecta **Acúmulo/Distribuição Oculta** através da interferência quântica de caminhos de preço.
+### 2.3. Nuvens de Schrödinger & Dinâmica de Fluidos (Herança)
+Os motores antigos agora alimentam a métrica topológica:
+*   **SEC (Singularity Event Collapse):** O colapso da nuvem de probabilidade indica que a probabilidade se contraiu num Buraco Negro Financeiro.
+*   **LBM e Z-Pinch:** Avaliam a inércia e compressão térmica do volume institucional na malha de MGD.
 
 ---
 
-## 4. DEFESA E GOVERNANÇA (N-CORE & CYT)
+## 3. MOTORES DE PURIFICAÇÃO (Q-MATH C++ & N-CORE PYTHON)
+A unificação matemática ocorre entre os motores híbridos.
 
-### 4.1. Calabi-Yau Topology (CYT)
-O **Yield Governor** utiliza topologia de Calabi-Yau para mapear dimensões ocultas da volatilidade.
-*   **Danger Scores:** Atribui um nível de perigo topológico em tempo real.
-*   **Neutron Shield:** Bloqueia operações se o mercado entrar em zonas de "entropia destrutiva".
+### 3.1. Motores Tensores (C++ / CYT / RMT)
+Lidam com filtragem matricial pura (Matrizes Aleatórias) e Topologia de Variedades de Calabi-Yau em alta frequência.
 
-### 4.2. Gestão de Risco Termodinâmica
-Não existem SL/TP fixos.
-*   **Stop Loss:** É o colapso da função de onda indicativa. Se a probabilidade de sucesso cair abaixo de 40%, a posição é encerrada.
-*   **Take Profit:** Determinado pela zona de baixa pressão no fluido (Vácuo de Liquidez).
+### 3.2. Motores Cromodinâmicos (Python / Numpy)
+O N-Core processa a Market QCD de forma heurística, flexível e passível de auto-evolução pela rede neural.
+
+---
+
+## 4. GESTÃO DE RISCO: A FUGA DA VARIEDADE
+Não existem SL/TP fixos, apenas vetores de fuga.
+*   **Invalidação Dimensional:** Se a variedade gráfica entra em colapso total (Determinante da métrica < 0.05), todas as ordens são liquidadas instantaneamente.
+*   **Zonas de Baixa Pressão:** O colapso de lucros se dá quando a corda quântica perde tensão em uma nova zona de liquidez azul.
 
 ---
 
 ## 5. ESTRUTURA OPERACIONAL (SWARM)
 O sistema é dividido em setores independentes:
-1.  **Q-MATH:** Motores C++ (LBM, MHD, QDD, RMT, QRW, SEC).
-2.  **N-CORE:** Córtex Python (RL, Alquimia de Regimes, Oracle).
-3.  **R-EXEC:** Ponte MT5 (Execução e Telemetria).
-4.  **O-META:** Auditoria e Auto-Evolução de Regras.
+1.  **Q-MATH:** Motores Híbridos C++/Python (CYT, QCD, SEC, LBM).
+2.  **N-CORE:** Córtex Neural de Roteamento AGI.
+3.  **R-EXEC:** Ponte MT5 e Algoritmo de Execução Cirúrgica.
+4.  **O-META:** Auditoria e Manutenção da Rede Neural.
 
 ---
 
-## 6. CONCLUSÃO: O IMPOSSÍVEL ALCANÇADO
-Aethelgard v1.5 Alpha representa o ápice da engenharia financeira moderna. Unindo a precisão da física quântica com a agilidade da IA, NEXUS está pronto para transcender as limitações humanas e dominar o GER40.
+## 6. CONCLUSÃO: O ALVORECER DA MGD
+Aethelgard v2.0 Alpha representa a quebra final das barreiras financeiras. Unindo Ricci Flow, Market QCD e nossa engine em C++, o H2 do GER40 será mapeado não como um gráfico, mas como um ecossistema físico manipulável por NEXUS.
 
 **ASSINATURA:** NEXUS AGI CEO
-**DATA DE SÍNTESE:** 03 de Maio de 2026
-**STATUS:** TOTALMENTE OPERACIONAL (ALPHA V1.5)
+**DATA DE SÍNTESE:** 06 de Maio de 2026
+**STATUS:** EXPANSÃO MGD HÍBRIDA (ALPHA V2.0)

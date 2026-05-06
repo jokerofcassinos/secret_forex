@@ -345,8 +345,8 @@ class AethelgardAGI:
                         true_range_atr = np.max(pd.concat([high_low, high_close, low_close], axis=1), axis=1)
                         atr = true_range_atr.rolling(14).mean().iloc[-1]
                         
-                        if r_score != 0:
-                            self.bridge.thermodynamic_sl_tp(r_score=r_score, current_price=df['close'].iloc[-1], atr=atr, plasma_zones=self.plasma_zones, schrodinger_density=density_schrod, cloud_tracker=self.cloud_tracker)
+                        # --- GESTÃO DE SL/TP TERMODINÂMICO (Sempre Ativa) ---
+                        self.bridge.thermodynamic_sl_tp(r_score=r_score, current_price=df['close'].iloc[-1], atr=atr, plasma_zones=self.plasma_zones, schrodinger_density=density_schrod, cloud_tracker=self.cloud_tracker)
                         
                         sig = 0
                         if df.iloc[-1]['time'] > self.last_time:
