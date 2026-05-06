@@ -119,37 +119,31 @@ void ParseAndDraw(string data)
       int totalCyt = ArraySize(hCyt);
       int boxIdxCyt = 0;
       
-      int c = 0;
-      while(c < totalCyt && c < iBars(_Symbol, _Period)) {
+      for(int c=0; c < totalCyt && c < iBars(_Symbol, _Period); c++) {
          int cytScore = (int)StringToInteger(hCyt[totalCyt - 1 - c]);
+         string cName = "NEXUS_CYT_HIST_" + IntegerToString(c);
+         
          if(cytScore > 50) { 
-            int start = c; int end = c;
-            int maxScore = cytScore;
-            while(end + 1 < totalCyt && end + 1 < iBars(_Symbol, _Period)) {
-               int nextScore = (int)StringToInteger(hCyt[totalCyt - 1 - (end + 1)]);
-               if(nextScore > 50) { end++; if(nextScore > maxScore) maxScore = nextScore; }
-               else if (end + 8 < totalCyt) {
-                  bool foundNext = false;
-                  for(int m=1; m<=8; m++) { if((int)StringToInteger(hCyt[totalCyt - 1 - (end + m)]) > 50) { end += m; foundNext = true; break; } }
-                  if(!foundNext) break;
-               } else break;
-            }
-            if((end - start + 1) >= 3) {
-               string cName = "NEXUS_CYT_ZONE_" + IntegerToString(boxIdxCyt);
-               if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-               ObjectSetInteger(0, cName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, start));
-               ObjectSetDouble(0, cName, OBJPROP_PRICE, 0, ChartGetDouble(0, CHART_PRICE_MAX));
-               ObjectSetInteger(0, cName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, end));
-               ObjectSetDouble(0, cName, OBJPROP_PRICE, 1, ChartGetDouble(0, CHART_PRICE_MIN));
-               ObjectSetInteger(0, cName, OBJPROP_COLOR, RGB(100, 0, 0));
-               ObjectSetInteger(0, cName, OBJPROP_FILL, false);
-               ObjectSetInteger(0, cName, OBJPROP_BACK, true);
-               boxIdxCyt++;
-            }
-            c = end + 1;
-         } else c++;
+            double pHigh = iHigh(_Symbol, _Period, c);
+            double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, c)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, c))) * 0.05;
+            if(atr_offset < 100 * _Point) atr_offset = 100 * _Point;
+            
+            if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_ARROW, 0, 0, 0);
+            ObjectSetInteger(0, cName, OBJPROP_TIME, iTime(_Symbol, _Period, c));
+            ObjectSetDouble(0, cName, OBJPROP_PRICE, pHigh + atr_offset * 3.5);
+            ObjectSetInteger(0, cName, OBJPROP_ARROWCODE, 251); // Cross
+            ObjectSetInteger(0, cName, OBJPROP_COLOR, RGB(183, 28, 28)); // Dark Red
+            ObjectSetInteger(0, cName, OBJPROP_WIDTH, 1);
+            ObjectSetInteger(0, cName, OBJPROP_ANCHOR, ANCHOR_BOTTOM);
+            ObjectSetInteger(0, cName, OBJPROP_BACK, false);
+            boxIdxCyt++;
+         } else {
+             ObjectDelete(0, cName);
+         }
       }
-      for(int k=boxIdxCyt; k<50; k++) ObjectDelete(0, "NEXUS_CYT_ZONE_"+IntegerToString(k));
+      for(int k=boxIdxCyt; k<200; k++) ObjectDelete(0, "NEXUS_CYT_HIST_"+IntegerToString(k));
+      // Cleanup caixas antigas q não vamos usar pra poluir
+      for(int k=0; k<50; k++) ObjectDelete(0, "NEXUS_CYT_ZONE_"+IntegerToString(k));
    }
 
    // 1.7 ATUALIZAÇÃO HISTÓRICA SEC (DESATIVADO)
@@ -189,11 +183,11 @@ void ParseAndDraw(string data)
       // Hierarquia Ultra-Ampliada: Vela -> Símbolo -> Caixa (Visibilidade Extrema)
       double symPrice, boxCenterPrice;
       if(isAbove) {
-         symPrice = pHigh + atr_offset * 5.0;         // Símbolo MUITO ACIMA
-         boxCenterPrice = pHigh + atr_offset * 12.0;   // Caixa MUITO ACIMA
+         symPrice = pHigh + atr_offset * 1.5;         // Símbolo ACIMA
+         boxCenterPrice = pHigh + atr_offset * 4.0;   // Caixa ACIMA
       } else {
-         symPrice = pLow - atr_offset * 5.0;          // Símbolo MUITO ABAIXO
-         boxCenterPrice = pLow - atr_offset * 12.0;    // Caixa MUITO ABAIXO
+         symPrice = pLow - atr_offset * 1.5;          // Símbolo ABAIXO
+         boxCenterPrice = pLow - atr_offset * 4.0;    // Caixa ABAIXO
       }
       
       if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_ARROW, 0, 0, 0);
@@ -201,33 +195,36 @@ void ParseAndDraw(string data)
       ObjectSetDouble(0, dName, OBJPROP_PRICE, symPrice);
       ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, isAbove ? 234 : 233);
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dName, OBJPROP_WIDTH, 4); // Símbolo grande
+      ObjectSetInteger(0, dName, OBJPROP_WIDTH, 2); // Símbolo sutil
       ObjectSetInteger(0, dName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
       ObjectSetInteger(0, dName, OBJPROP_BACK, false);
       
-      // Caixa do Label (Fundo Sólido - Escala Cinematográfica)
-      string labelTxt = (isAbove ? "▼ SELL SIGNAL LONG " : "▲ BUY SIGNAL LONG ") + DoubleToString(iClose(_Symbol, _Period, d), _Digits);
-      double boxWidthPrice = atr_offset * 3.0;
+      string labelTxt = (isAbove ? "▼ LONG " : "▲ LONG ") + DoubleToString(iClose(_Symbol, _Period, d), _Digits);
       
-      if(ObjectFind(0, dBoxName) < 0) ObjectCreate(0, dBoxName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-      ObjectSetInteger(0, dBoxName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, d) - PeriodSeconds(_Period) * 4);
-      ObjectSetDouble(0, dBoxName, OBJPROP_PRICE, 0, boxCenterPrice + boxWidthPrice);
-      ObjectSetInteger(0, dBoxName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, d) + PeriodSeconds(_Period) * 4);
-      ObjectSetDouble(0, dBoxName, OBJPROP_PRICE, 1, boxCenterPrice - boxWidthPrice);
-      ObjectSetInteger(0, dBoxName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dBoxName, OBJPROP_FILL, true);
-      ObjectSetInteger(0, dBoxName, OBJPROP_BACK, false); 
-      ObjectSetInteger(0, dBoxName, OBJPROP_SELECTABLE, false);
+      // Cleanup da caixa antiga (fundo sólido opaco) para não haver overlap
+      ObjectDelete(0, dBoxName);
       
-      // Texto dentro da Caixa
+      // Linha guia sutil conectando o texto ao preco real do simbolo
+      string dLineName = "NEXUS_DOT_LINE_" + IntegerToString(d);
+      if(ObjectFind(0, dLineName) < 0) ObjectCreate(0, dLineName, OBJ_TREND, 0, 0, 0, 0, 0);
+      ObjectSetInteger(0, dLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, d));
+      ObjectSetDouble(0, dLineName, OBJPROP_PRICE, 0, isAbove ? symPrice + atr_offset : symPrice - atr_offset);
+      ObjectSetInteger(0, dLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, d));
+      ObjectSetDouble(0, dLineName, OBJPROP_PRICE, 1, boxCenterPrice);
+      ObjectSetInteger(0, dLineName, OBJPROP_COLOR, dClr);
+      ObjectSetInteger(0, dLineName, OBJPROP_STYLE, STYLE_DOT);
+      ObjectSetInteger(0, dLineName, OBJPROP_RAY_RIGHT, false);
+      ObjectSetInteger(0, dLineName, OBJPROP_BACK, true);
+
+      // Texto Limpo (Sem caixa)
       if(ObjectFind(0, dTextName) < 0) ObjectCreate(0, dTextName, OBJ_TEXT, 0, 0, 0);
       ObjectSetInteger(0, dTextName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
-      ObjectSetDouble(0, dTextName, OBJPROP_PRICE, boxCenterPrice);
+      ObjectSetDouble(0, dTextName, OBJPROP_PRICE, isAbove ? boxCenterPrice + atr_offset : boxCenterPrice - atr_offset);
       ObjectSetString(0, dTextName, OBJPROP_TEXT, labelTxt);
-      ObjectSetString(0, dTextName, OBJPROP_FONT, "Segoe UI Bold");
-      ObjectSetInteger(0, dTextName, OBJPROP_FONTSIZE, 10); // Fonte Legível
-      ObjectSetInteger(0, dTextName, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, dTextName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+      ObjectSetString(0, dTextName, OBJPROP_FONT, "Consolas");
+      ObjectSetInteger(0, dTextName, OBJPROP_FONTSIZE, 8); 
+      ObjectSetInteger(0, dTextName, OBJPROP_COLOR, dClr);
+      ObjectSetInteger(0, dTextName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
       ObjectSetInteger(0, dTextName, OBJPROP_BACK, false);
    }
 
@@ -264,31 +261,21 @@ void ParseAndDraw(string data)
       ObjectSetDouble(0, sName, OBJPROP_PRICE, symPrice);
       ObjectSetInteger(0, sName, OBJPROP_ARROWCODE, isBuy ? 233 : 234);
       ObjectSetInteger(0, sName, OBJPROP_COLOR, sClr);
-      ObjectSetInteger(0, sName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, sName, OBJPROP_WIDTH, 1);
       ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM));
       ObjectSetInteger(0, sName, OBJPROP_BACK, false);
       
-      string labelTxt = (isBuy ? "▲ VOL " : "▼ VOL ") + DoubleToString(iClose(_Symbol, _Period, j), _Digits);
-      double boxWidthPrice = atr_offset * 0.8;
-      
-      if(ObjectFind(0, sBoxName) < 0) ObjectCreate(0, sBoxName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-      ObjectSetInteger(0, sBoxName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, j) - PeriodSeconds(_Period)/1.5);
-      ObjectSetDouble(0, sBoxName, OBJPROP_PRICE, 0, boxCenterPrice + boxWidthPrice);
-      ObjectSetInteger(0, sBoxName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, j) + PeriodSeconds(_Period)/1.5);
-      ObjectSetDouble(0, sBoxName, OBJPROP_PRICE, 1, boxCenterPrice - boxWidthPrice);
-      ObjectSetInteger(0, sBoxName, OBJPROP_COLOR, sClr);
-      ObjectSetInteger(0, sBoxName, OBJPROP_FILL, true);
-      ObjectSetInteger(0, sBoxName, OBJPROP_BACK, false);
-      ObjectSetInteger(0, sBoxName, OBJPROP_SELECTABLE, false);
+      ObjectDelete(0, sBoxName); // Cleanup old boxes
+      string labelTxt = (isBuy ? "▲ V " : "▼ V ") + DoubleToString(iClose(_Symbol, _Period, j), _Digits);
       
       if(ObjectFind(0, sTextName) < 0) ObjectCreate(0, sTextName, OBJ_TEXT, 0, 0, 0);
       ObjectSetInteger(0, sTextName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
       ObjectSetDouble(0, sTextName, OBJPROP_PRICE, boxCenterPrice);
       ObjectSetString(0, sTextName, OBJPROP_TEXT, labelTxt);
-      ObjectSetString(0, sTextName, OBJPROP_FONT, "Segoe UI Bold");
-      ObjectSetInteger(0, sTextName, OBJPROP_FONTSIZE, 8);
-      ObjectSetInteger(0, sTextName, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, sTextName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+      ObjectSetString(0, sTextName, OBJPROP_FONT, "Consolas");
+      ObjectSetInteger(0, sTextName, OBJPROP_FONTSIZE, 7);
+      ObjectSetInteger(0, sTextName, OBJPROP_COLOR, sClr);
+      ObjectSetInteger(0, sTextName, OBJPROP_ANCHOR, isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM);
       ObjectSetInteger(0, sTextName, OBJPROP_BACK, false);
    }
    
@@ -379,33 +366,67 @@ void ParseAndDraw(string data)
          ObjectSetDouble(0, qName, OBJPROP_PRICE, symPrice);
          ObjectSetInteger(0, qName, OBJPROP_ARROWCODE, isBuy ? 233 : 234); 
          ObjectSetInteger(0, qName, OBJPROP_COLOR, corporateClr);
-         ObjectSetInteger(0, qName, OBJPROP_WIDTH, 4); // QCD Símbolo mais grosso
+         ObjectSetInteger(0, qName, OBJPROP_WIDTH, 2); // Símbolo sutil
          ObjectSetInteger(0, qName, OBJPROP_ANCHOR, (isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM));
          ObjectSetInteger(0, qName, OBJPROP_BACK, false);
          
-         string labelTxt = (isBuy ? "▲ BUY SIGNAL SHORT " : "▼ SELL SIGNAL SHORT ") + DoubleToString(iClose(_Symbol, _Period, q), _Digits);
-         double boxWidthPrice = atr_offset * 1.8;
+         string labelTxt = (isBuy ? "▲ SHORT " : "▼ SHORT ") + DoubleToString(iClose(_Symbol, _Period, q), _Digits);
          
-         if(ObjectFind(0, qBoxName) < 0) ObjectCreate(0, qBoxName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-         ObjectSetInteger(0, qBoxName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, q) - PeriodSeconds(_Period) * 2);
-         ObjectSetDouble(0, qBoxName, OBJPROP_PRICE, 0, boxCenterPrice + boxWidthPrice);
-         ObjectSetInteger(0, qBoxName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, q) + PeriodSeconds(_Period) * 2);
-         ObjectSetDouble(0, qBoxName, OBJPROP_PRICE, 1, boxCenterPrice - boxWidthPrice);
-         ObjectSetInteger(0, qBoxName, OBJPROP_COLOR, corporateClr);
-         ObjectSetInteger(0, qBoxName, OBJPROP_FILL, true);
-         ObjectSetInteger(0, qBoxName, OBJPROP_BACK, false);
-         ObjectSetInteger(0, qBoxName, OBJPROP_SELECTABLE, false);
+         // Remove a caixa antiga se existir
+         ObjectDelete(0, qBoxName);
          
+         // Linha guia conectando o texto ao preço
+         string qLineName = "NEXUS_QCD_LINE_" + IntegerToString(q);
+         if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_TREND, 0, 0, 0, 0, 0);
+         ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, q));
+         ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, isBuy ? symPrice - atr_offset : symPrice + atr_offset);
+         ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, q));
+         ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 1, boxCenterPrice);
+         ObjectSetInteger(0, qLineName, OBJPROP_COLOR, corporateClr);
+         ObjectSetInteger(0, qLineName, OBJPROP_STYLE, STYLE_DOT);
+         ObjectSetInteger(0, qLineName, OBJPROP_RAY_RIGHT, false);
+         ObjectSetInteger(0, qLineName, OBJPROP_BACK, true);
+
+         // Texto Minimalista
          if(ObjectFind(0, qTextName) < 0) ObjectCreate(0, qTextName, OBJ_TEXT, 0, 0, 0);
          ObjectSetInteger(0, qTextName, OBJPROP_TIME, iTime(_Symbol, _Period, q));
-         ObjectSetDouble(0, qTextName, OBJPROP_PRICE, boxCenterPrice);
+         ObjectSetDouble(0, qTextName, OBJPROP_PRICE, isBuy ? boxCenterPrice - atr_offset : boxCenterPrice + atr_offset);
          ObjectSetString(0, qTextName, OBJPROP_TEXT, labelTxt);
-         ObjectSetString(0, qTextName, OBJPROP_FONT, "Segoe UI Bold");
-         ObjectSetInteger(0, qTextName, OBJPROP_FONTSIZE, 9);
-         ObjectSetInteger(0, qTextName, OBJPROP_COLOR, clrWhite);
-         ObjectSetInteger(0, qTextName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+         ObjectSetString(0, qTextName, OBJPROP_FONT, "Consolas");
+         ObjectSetInteger(0, qTextName, OBJPROP_FONTSIZE, 8);
+         ObjectSetInteger(0, qTextName, OBJPROP_COLOR, corporateClr);
+         ObjectSetInteger(0, qTextName, OBJPROP_ANCHOR, isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM);
          ObjectSetInteger(0, qTextName, OBJPROP_BACK, false);
       }
+   }
+
+   // 6. ATUALIZAÇÃO DA DINÂMICA DE FLUIDOS (LBM HISTORY)
+   string hLbm[]; StringSplit(parts[15], ',', hLbm);
+   int tLbm = ArraySize(hLbm);
+   for(int k=0; k < tLbm && k < iBars(_Symbol, _Period); k++) {
+      int lVal = (int)StringToInteger(hLbm[tLbm - 1 - k]);
+      string lName = "NEXUS_LBM_" + IntegerToString(k);
+      
+      if(lVal == 0) { ObjectDelete(0, lName); continue; }
+      
+      color lClr = (lVal == 1) ? RGB(66, 165, 245) : RGB(171, 71, 188); // Azul para Bull, Roxo para Bear
+      double pHigh = iHigh(_Symbol, _Period, k);
+      double pLow = iLow(_Symbol, _Period, k);
+      bool isBull = (lVal == 1);
+      
+      double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, k)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, k))) * 0.05;
+      if(atr_offset < 100 * _Point) atr_offset = 100 * _Point;
+
+      double symPrice = isBull ? pLow - atr_offset * 1.5 : pHigh + atr_offset * 1.5;
+
+      if(ObjectFind(0, lName) < 0) ObjectCreate(0, lName, OBJ_ARROW, 0, 0, 0);
+      ObjectSetInteger(0, lName, OBJPROP_TIME, iTime(_Symbol, _Period, k));
+      ObjectSetDouble(0, lName, OBJPROP_PRICE, symPrice);
+      ObjectSetInteger(0, lName, OBJPROP_ARROWCODE, 116); // Diamante
+      ObjectSetInteger(0, lName, OBJPROP_COLOR, lClr);
+      ObjectSetInteger(0, lName, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, lName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+      ObjectSetInteger(0, lName, OBJPROP_BACK, false);
    }
 
    ChartRedraw(0);
@@ -524,7 +545,14 @@ string GetZPShort(string zp) { if(zp == "NEUTRAL" || zp == "") return "Neutral";
 color GetZPColor(string zp) { return (zp == "NEUTRAL" || zp == "") ? RGB(120, 123, 134) : RGB(255, 202, 40); }
 string GetQRWShort(string qrw) { if(qrw == "NEUTRAL" || qrw == "") return "No Interf."; if(qrw == "HIDDEN_ACCUMULATION_BULL") return "Accumulation"; if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return "Distribution"; return qrw; }
 color GetQRWColor(string qrw) { if(qrw == "HIDDEN_ACCUMULATION_BULL") return RGB(38, 198, 218); if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return RGB(255, 167, 38); return RGB(120, 123, 134); }
-string GetRMTShort(string rmt) { if(StringFind(rmt, "PURE_SIGNAL") >= 0) return "Pure Signal"; return "Noise"; }
+string GetRMTShort(string rmt) { 
+    if(StringFind(rmt, "PURE_SIGNAL") >= 0) {
+        string res = rmt;
+        StringReplace(res, "PURE_SIGNAL_", "Pure ");
+        return res;
+    }
+    return "Noise"; 
+}
 color GetRMTColor(string rmt) { if(StringFind(rmt, "PURE_SIGNAL") >= 0) return RGB(255, 213, 79); return RGB(120, 123, 134); }
 void DrawHUDText(string name, string text, int x, int y, color clr, int fontSize, bool isRightAligned=false, int corner=CORNER_RIGHT_UPPER)
 {
@@ -586,14 +614,14 @@ void DrawModernDashboard(string status, double instAvg, double health, string qd
 
     DrawHUDRow("NEXUS_HUD_L_1", "Regime", GetStatusShort(status), GetStatusColor(status), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_2", "Confidence", DoubleToString(health * 100, 1) + "%", GetHealthColor(health), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_3", "Purification", qdd, (qdd == "PURIFYING" ? RGB(38, 166, 154) : clrGray), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_4", "LBM Flow", GetLBMShort(lbm), GetLBMColor(lbm), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_5", "MHD Plasma", GetZPShort(zp), GetZPColor(zp), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_3", "Entanglement", qdd, (qdd == "PURIFYING" ? RGB(38, 166, 154) : clrGray), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_4", "LBM Fluid", GetLBMShort(lbm), GetLBMColor(lbm), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_5", "AdS/CFT Bulk", GetZPShort(zp), GetZPColor(zp), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_6", "QRW Flux", GetQRWShort(qrw), GetQRWColor(qrw), baseX, rowY, panelW, corner); rowY += rowH;
-    DrawHUDRow("NEXUS_HUD_L_7", "RMT Signal", GetRMTShort(rmt), GetRMTColor(rmt), baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_7", "S-Matrix Amp", GetRMTShort(rmt), GetRMTColor(rmt), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
 
     // Limpar objetos de alerta residuais se existirem
     ObjectDelete(0, "NEXUS_SEC_ICON");
     ObjectDelete(0, "NEXUS_SEC_ALERT");
-    }
+}

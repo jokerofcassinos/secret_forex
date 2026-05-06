@@ -47,8 +47,8 @@ def cpp_flag(compiler):
 
 class BuildExt(build_ext):
     c_opts = {
-        'msvc': ['/EHsc', '/O2'],
-        'unix': ['-O3', '-ffast-math']
+        'msvc': ['/EHsc', '/O2', '/openmp'],
+        'unix': ['-O3', '-ffast-math', '-fopenmp']
     }
     
     if sys.platform == 'darwin':

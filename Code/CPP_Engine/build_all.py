@@ -39,6 +39,7 @@ def build_engine(name, src):
         "-std=c++17",
         "-D_USE_MATH_DEFINES",
         "-DNDEBUG",
+        "-fopenmp",
         f"-I{PYBIND_INC}",
         f"-I{PY_INC}",
         f"-L{PY_LIBS}",

@@ -152,6 +152,22 @@ class AethelgardSwarm:
 
         qcd_hist_tracker = MarketQCDTracker(lookback_window=20)
         
+        # Tentativa de instanciar C++ para Retrospectiva Histórica (Se houver falha, mocka para 0)
+        try:
+            import sys
+            import os
+            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'Code/CPP_Engine/src/cyt')))
+            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'Code/CPP_Engine/src/lbm')))
+            if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
+                os.add_dll_directory(r"D:\msys64\mingw64\bin")
+            import cyt_engine
+            import lbm_engine
+            cyt_hist = cyt_engine.CYTEngine()
+            lbm_hist = lbm_engine.LBMEngine(200, 1.0)
+            has_cpp_hist = True
+        except:
+            has_cpp_hist = False
+        
         scores_hist = []
         for i in range(len(df)):
             if i < window_calc:
@@ -166,11 +182,11 @@ class AethelgardSwarm:
                 continue
             
             slice_df = df.iloc[i-window_calc:i+1]
+            curr_h = df.iloc[i]
             r_score, conf = self.q_logic.advanced_regime_score(slice_df, self.prev_s, self.prev_c)
             
             sig = 0
             if r_score != 0:
-                curr_h = df.iloc[i]
                 body_h = abs(curr_h['close'] - curr_h['open'])
                 atr_val = df['atr_static'].iloc[i]
                 if not np.isnan(atr_val) and body_h > (atr_val * 1.8):
@@ -178,10 +194,58 @@ class AethelgardSwarm:
             
             self.regimes_cache.append(f"{r_score}|{conf}")
             self.signals_cache.append(str(sig))
-            self.lbm_cache.append("0")
+            
+            # --- Retrospectiva Histórica de Alta Frequência (Física) ---
+            lbm_sig_hist = "0"
+            cyt_danger_hist = "0"
+            if has_cpp_hist and (i % 3 == 0): # Aumentado a frequência de amostragem histórica para M5/H1 (i % 3 em vez de 5)
+                try:
+                    # LBM Mocking Histórico
+                    data_10d = np.zeros((10, len(slice_df)))
+                    data_10d[0, :] = slice_df['open'].values
+                    data_10d[1, :] = slice_df['high'].values
+                    data_10d[2, :] = slice_df['low'].values
+                    data_10d[3, :] = slice_df['close'].values
+                    data_10d[4, :] = slice_df['tick_volume'].values
+                    data_10d[5, :] = slice_df['close'].pct_change().bfill().values
+                    data_10d[6, :] = (slice_df['high'] - slice_df['low']).values
+                    data_10d[7, :] = slice_df['close'].rolling(5).mean().bfill().values
+                    data_10d[8, :] = slice_df['tick_volume'].rolling(5).mean().bfill().values
+                    data_10d[9, :] = (slice_df['close'] - slice_df['open']).values
+                    
+                    danger_array = cyt_hist.calculate_danger_zones(data_10d, 20, 0.5)
+                    # Aumentado o rigor da Entropia de Ricci (CYT)
+                    if len(danger_array) > 0 and danger_array[-1] > 85: 
+                        cyt_danger_hist = str(int(danger_array[-1]))
+                        
+                    # Simulação LBM para passado com Rigor Termodinâmico
+                    lbm_density, lbm_velocity = lbm_hist.get_density(), lbm_hist.get_velocity()
+                    avg_vol = slice_df['tick_volume'].mean()
+                    current_vol = slice_df['tick_volume'].iloc[-1]
+                    
+                    if avg_vol > 0:
+                        vol_spike_ratio = current_vol / avg_vol
+                        lbm_hist.inject_liquidity(100, vol_spike_ratio, 0.0) 
+                        lbm_hist.step()
+                        
+                        # Checagem de Squeeze Rupture: Volume deve ser 2.5x maior que a média (Choque real)
+                        if vol_spike_ratio > 2.5:
+                            momentum = slice_df['close'].iloc[-1] - slice_df['open'].iloc[-1]
+                            body_size = abs(momentum)
+                            atr_val = df['atr_static'].iloc[i]
+                            # E o corpo da vela deve ser maior que o ATR (Deslocamento fluido confirmado)
+                            if not np.isnan(atr_val) and body_size > atr_val:
+                                if momentum > 0: lbm_sig_hist = "1" # Bull Squeeze Histórico
+                                elif momentum < 0: lbm_sig_hist = "2" # Bear Squeeze Histórico
+
+                except Exception as e:
+                    pass
+            
+            self.lbm_cache.append(lbm_sig_hist)
             self.z_pinch_cache.append("0")
             self.qrw_cache.append("0")
             
+            # QCD Fission Retrospective
             qcd_sig = qcd_hist_tracker.detect_fission(slice_df)
             if "FISSION_EXPANSION_UP" in qcd_sig: 
                 self.qcd_cache.append("1")
@@ -190,10 +254,9 @@ class AethelgardSwarm:
             elif "FISSION" in qcd_sig:
                 self.qcd_cache.append("1" if curr_h['close'] > curr_h['open'] else "2")
             else:
-                # If there's an existing fission in this bar (not fully possible historically per tick, but just fallback to 0)
                 self.qcd_cache.append("0")
                 
-            self.cyt_danger_cache.append("0")
+            self.cyt_danger_cache.append(cyt_danger_hist)
             self.sec_cache.append("0|0|0")
             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
 
@@ -203,7 +266,7 @@ class AethelgardSwarm:
         self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df, scores_hist)]
         self.last_time = df.iloc[-1]['time']
         self.rht_cache = ["0"] * 300
-        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot N-Core Concluído.")
+        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot N-Core Concluído. Memória Quântica Preenchida.")
 
     def live_evolution_loop(self):
         global nexus_data_str, current_mt5_tf

@@ -4,7 +4,7 @@ import sys
 import os
 
 # Configuração de compilação otimizada para Windows
-extra_compile_args = ['/O2', '/fp:fast', '/DNDEBUG'] if sys.platform == 'win32' else ['-O3', '-ffast-math']
+extra_compile_args = ['/O2', '/fp:fast', '/DNDEBUG', '/openmp'] if sys.platform == 'win32' else ['-O3', '-ffast-math']
 
 ext_modules = [
     Extension(

@@ -4,6 +4,9 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -19,16 +22,12 @@ private:
     const double w1 = 1.0 / 6.0;
     const double w2 = 1.0 / 6.0;
     const double cs2 = 1.0 / 3.0;
-    // FIX P1-09: Fator de decaimento de massa
     double mass_decay;
 
 public:
-    // FIX P0-08: Default tau=1.0 para estabilidade
     LBMEngine(int N, double relaxation_time = 1.0) : Nx(N), tau(relaxation_time), mass_decay(0.995) {
-        // FIX P0-08: Clamp tau para zona segura
         if(tau < 0.501) tau = 0.501;
         if(tau < 1.0) {
-            // Warning range: funciona mas pode gerar artefatos
             std::cout << "[LBM] WARNING: tau=" << tau << " is in over-relaxation zone. Recommend tau>=1.0" << std::endl;
         }
         f0.resize(Nx, w0); f1.resize(Nx, w1); f2.resize(Nx, w2);
@@ -36,24 +35,20 @@ public:
         rho.resize(Nx, 1.0); u.resize(Nx, 0.0);
     }
 
-    // FIX P0-09: Momentum agora é proporcional à força do candle
     void inject_liquidity(int idx, double volume_mass, double directional_momentum) {
+        py::gil_scoped_release release;
         if(idx >= 0 && idx < Nx) {
             rho[idx] += volume_mass;
-            // FIX P0-09: Clamp momentum para manter u < cs = 1/sqrt(3) ≈ 0.577
-            double max_u = 0.3; // Margem de segurança sobre cs
+            double max_u = 0.3; 
             double clamped_momentum = std::max(-max_u, std::min(max_u, directional_momentum));
-            // Média ponderada entre momentum existente e novo
             double total_mass = rho[idx];
             if(total_mass > 1e-9) {
                 u[idx] = (u[idx] * (total_mass - volume_mass) + clamped_momentum * volume_mass) / total_mass;
             }
-            // Recalcula equilíbrio
             double u2 = u[idx] * u[idx];
             f0[idx] = rho[idx] * w0 * (1.0 - u2 / (2.0 * cs2));
             f1[idx] = rho[idx] * w1 * (1.0 + u[idx] / cs2 + u2 / (2.0 * cs2 * cs2) - u2 / (2.0 * cs2));
             f2[idx] = rho[idx] * w2 * (1.0 - u[idx] / cs2 + u2 / (2.0 * cs2 * cs2) - u2 / (2.0 * cs2));
-            // Clamp para evitar distribuições negativas
             if(f0[idx] < 0) f0[idx] = 0;
             if(f1[idx] < 0) f1[idx] = 0;
             if(f2[idx] < 0) f2[idx] = 0;
@@ -61,14 +56,16 @@ public:
     }
 
     void step() {
-        // FIX P1-09: Decaimento de massa para evitar acumulação infinita
+        py::gil_scoped_release release;
+
+        #pragma omp parallel for
         for (int i = 0; i < Nx; ++i) {
             f0[i] *= mass_decay;
             f1[i] *= mass_decay;
             f2[i] *= mass_decay;
         }
 
-        // Passo 1: Colisão (BGK)
+        #pragma omp parallel for
         for (int i = 0; i < Nx; ++i) {
             rho[i] = f0[i] + f1[i] + f2[i];
             if(rho[i] > 1e-9) {
@@ -83,48 +80,48 @@ public:
             f0[i] = f0[i] - (1.0 / tau) * (f0[i] - feq0);
             f1[i] = f1[i] - (1.0 / tau) * (f1[i] - feq1);
             f2[i] = f2[i] - (1.0 / tau) * (f2[i] - feq2);
-            // P0-08: Clamp post-collision para garantir positividade
             if(f0[i] < 0) f0[i] = 0;
             if(f1[i] < 0) f1[i] = 0;
             if(f2[i] < 0) f2[i] = 0;
         }
 
-        // Passo 2: Streaming
+        #pragma omp parallel for
         for (int i = 0; i < Nx; ++i) {
             f0_new[i] = f0[i];
             if (i - 1 >= 0) f1_new[i] = f1[i - 1]; else f1_new[i] = f2[i];
             if (i + 1 < Nx) f2_new[i] = f2[i + 1]; else f2_new[i] = f1[i];
         }
-        f0 = f0_new; f1 = f1_new; f2 = f2_new;
+        
+        // Cópia paralela
+        #pragma omp parallel for
+        for (int i = 0; i < Nx; ++i) {
+            f0[i] = f0_new[i];
+            f1[i] = f1_new[i];
+            f2[i] = f2_new[i];
+        }
     }
 
     py::array_t<double> get_density() {
         return py::array_t<double>({Nx}, {sizeof(double)}, rho.data(), py::cast(this));
     }
+    
     py::array_t<double> get_velocity() {
         return py::array_t<double>({Nx}, {sizeof(double)}, u.data(), py::cast(this));
     }
 
-    /**
-     * @brief Calcula o Número de Deborah.
-     */
     double calculate_deborah_number(double anomaly_duration) {
         if (anomaly_duration <= 0.0) return 0.0;
         return tau / anomaly_duration;
     }
 
-    /**
-     * @brief Avalia se o choque é viscoelasticamente absorvido (pavio).
-     */
     bool is_viscoelastic_absorption(double anomaly_duration) {
         double De = calculate_deborah_number(anomaly_duration);
-        // Se De > 1.2, o mercado se comporta como sólido não-newtoniano (rebatendo o preço).
         return (De > 1.2); 
     }
 };
 
 PYBIND11_MODULE(lbm_engine, m) {
-    m.doc() = "Lattice Boltzmann Method v2.0 - Viscoelastic Fluid Dynamics Engine";
+    m.doc() = "Lattice Boltzmann Method v3.0 - Viscoelastic Fluid Dynamics Engine (OpenMP)";
     py::class_<LBMEngine>(m, "LBMEngine")
         .def(py::init<int, double>(), py::arg("N"), py::arg("relaxation_time") = 1.0)
         .def("inject_liquidity", &LBMEngine::inject_liquidity)

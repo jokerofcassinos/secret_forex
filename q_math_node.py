@@ -10,6 +10,7 @@ import MetaTrader5 as mt5
 import pickle
 import sys
 import zmq
+import concurrent.futures
 
 from Code.N_Core.swarm_bus import create_subscriber, create_reply_server, PORT_TICK_FEED, PORT_Q_MATH, TOPIC_MARKET_BAR
 
@@ -59,7 +60,7 @@ class QMathNode:
         self.state_lock = threading.Lock()
 
     def process_market_data(self, df, tf=None):
-        """Processa a barra recebida e atualiza os motores C++"""
+        """Processa a barra recebida e atualiza os motores C++ EM PARALELO"""
         try:
             # Se mudou o timeframe, destroi a física antiga para resetar
             if tf is not None and getattr(self, "active_tf", None) != tf:
@@ -95,118 +96,140 @@ class QMathNode:
             if self.qcd_tracker is None:
                 self.qcd_tracker = MarketQCDTracker(lookback_window=20)
 
-            # Atualização dos Trackers Pesados
             current_close = df['close'].iloc[-1]
             
-            # 1. LBM Step
-            lbm_signal = "LAMINAR_FLOW"
-            try:
-                lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(df.tail(10), steps=5)
-                if lbm_density is not None and lbm_velocity is not None:
-                    lbm_signal = self.lbm_tracker.detect_squeeze_rupture(current_close, lbm_density, lbm_velocity)
-            except Exception as e:
-                print(f"[Q-Math] Erro LBM: {e}")
+            # Funções helper para execução paralela (GIL Released in C++)
+            def run_lbm():
+                lbm_signal = "LAMINAR_FLOW"
+                try:
+                    lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(df.tail(10), steps=5)
+                    if lbm_density is not None and lbm_velocity is not None:
+                        lbm_signal = self.lbm_tracker.detect_squeeze_rupture(current_close, lbm_density, lbm_velocity)
+                except Exception as e:
+                    print(f"[Q-Math] Erro LBM: {e}")
+                return {"lbm_signal": lbm_signal}
 
-            # 2. Schrödinger Step
-            cloud_str = "0.0001:"
-            prob_density = None
-            sec_metrics = None
-            try:
-                # Usa 200 barras como o monólito fazia para dar massa à nuvem
-                density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=0.2, steps=5)
-                prob_density = density_schrod
-                sec_metrics = self.cloud_tracker.get_singularity_metrics()
-                
-                if density_schrod is not None:
+            def run_schrodinger():
+                cloud_str = "0.0001:"
+                prob_density = None
+                sec_metrics = None
+                try:
+                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=0.2, steps=5)
+                    prob_density = density_schrod
+                    sec_metrics = self.cloud_tracker.get_singularity_metrics()
+                    if density_schrod is not None:
+                        import numpy as np
+                        cloud_str = f"{self.cloud_tracker.dx:.4f}:"
+                        max_d = np.max(density_schrod)
+                        cloud_arr = []
+                        for i, d in enumerate(density_schrod):
+                            if d > max_d * 0.10: 
+                                p = self.cloud_tracker.index_to_price(i)
+                                cloud_arr.append(f"{p:.2f}|{d:.4f}")
+                        cloud_str += ",".join(cloud_arr)
+                except Exception as e:
+                    print(f"[Q-Math] Erro Schrödinger: {e}")
+                return {"prob_density": prob_density, "sec_metrics": sec_metrics, "cloud_str": cloud_str}
+
+            def run_plasma():
+                z_pinch_signal = "NEUTRAL"
+                try:
+                    curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
+                    plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df.tail(200), lookback=200)
+                    z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, plasma_zones)
+                    if z_idx > 90.0:
+                        z_pinch_signal = f"Z_PINCH_{z_type}"
+                except Exception as e:
+                    pass
+                return {"z_pinch_signal": z_pinch_signal}
+
+            def run_rmt():
+                rmt_signal = "NOISE"
+                is_pure = False
+                try:
+                    _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df.tail(200))
+                    if is_pure: rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
+                except Exception as e:
+                    pass
+                return {"rmt_signal": rmt_signal, "is_pure": is_pure}
+
+            def run_qrw():
+                qrw_signal = "NEUTRAL"
+                try:
+                    if self.qrw_tracker.is_in_range(df, lookback=20):
+                        _, qrw_signal = self.qrw_tracker.process_qrw_skewness(df, lookback=20)
+                except Exception as e:
+                    pass
+                return {"qrw_signal": qrw_signal}
+
+            def run_qcd():
+                qcd_signal = "CONFINED"
+                try:
+                    qcd_signal = self.qcd_tracker.detect_fission(df)
+                except Exception as e:
+                    print(f"[Q-Math] Erro Market QCD: {e}")
+                return {"qcd_signal": qcd_signal}
+
+            def run_cyt():
+                ricci_curvature = 0.0
+                cyt_danger = 0.0
+                try:
                     import numpy as np
-                    cloud_str = f"{self.cloud_tracker.dx:.4f}:"
-                    max_d = np.max(density_schrod)
-                    cloud_arr = []
-                    for i, d in enumerate(density_schrod):
-                        if d > max_d * 0.10: 
-                            p = self.cloud_tracker.index_to_price(i)
-                            cloud_arr.append(f"{p:.2f}|{d:.4f}")
-                    cloud_str += ",".join(cloud_arr)
-            except Exception as e:
-                print(f"[Q-Math] Erro Schrödinger: {e}")
+                    recent_df = df.tail(200).copy()
+                    N = len(recent_df)
+                    data_10d = np.zeros((10, N))
+                    data_10d[0, :] = recent_df['open'].values
+                    data_10d[1, :] = recent_df['high'].values
+                    data_10d[2, :] = recent_df['low'].values
+                    data_10d[3, :] = recent_df['close'].values
+                    data_10d[4, :] = recent_df['tick_volume'].values
+                    data_10d[5, :] = recent_df['close'].pct_change().bfill().values
+                    data_10d[6, :] = (recent_df['high'] - recent_df['low']).values
+                    data_10d[7, :] = recent_df['close'].rolling(5).mean().bfill().values
+                    data_10d[8, :] = recent_df['tick_volume'].rolling(5).mean().bfill().values
+                    data_10d[9, :] = (recent_df['close'] - recent_df['open']).values
+                    
+                    flow = self.cyt.analyze_manifold_flow(data_10d)
+                    def_array = flow["deformation"]
+                    danger_array = self.cyt.calculate_danger_zones(data_10d, 20, 0.5)
+                    if len(def_array) > 0:
+                        ricci_curvature = def_array[-1]
+                        cyt_danger = danger_array[-1]
+                except Exception as e:
+                    print(f"[Q-Math] Erro CYT Ricci Flow: {e}")
+                return {"ricci_curvature": ricci_curvature, "cyt_danger": cyt_danger}
 
-            # 3. Plasma / Z-Pinch Step
-            z_pinch_signal = "NEUTRAL"
-            try:
-                curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
-                plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df.tail(200), lookback=200)
-                z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, plasma_zones)
-                if z_idx > 90.0:
-                    z_pinch_signal = f"Z_PINCH_{z_type}"
-            except Exception as e:
-                pass
-
-            # 4. RMT Step
-            rmt_signal = "NOISE"
-            try:
-                _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df.tail(200))
-                if is_pure: rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
-            except Exception as e:
-                pass
-
-            # 5. QRW Step
-            qrw_signal = "NEUTRAL"
-            try:
-                if self.qrw_tracker.is_in_range(df, lookback=20):
-                    _, qrw_signal = self.qrw_tracker.process_qrw_skewness(df, lookback=20)
-            except Exception as e:
-                pass
-
-            # 6. Market QCD Step
-            qcd_signal = "CONFINED"
-            try:
-                qcd_signal = self.qcd_tracker.detect_fission(df)
-            except Exception as e:
-                print(f"[Q-Math] Erro Market QCD: {e}")
-
-            # 7. CYT Ricci Flow Step
-            ricci_curvature = 0.0
-            cyt_danger = 0.0
-            try:
-                import numpy as np
-                recent_df = df.tail(200).copy()
-                N = len(recent_df)
-                data_10d = np.zeros((10, N))
-                data_10d[0, :] = recent_df['open'].values
-                data_10d[1, :] = recent_df['high'].values
-                data_10d[2, :] = recent_df['low'].values
-                data_10d[3, :] = recent_df['close'].values
-                data_10d[4, :] = recent_df['tick_volume'].values
-                data_10d[5, :] = recent_df['close'].pct_change().bfill().values
-                data_10d[6, :] = (recent_df['high'] - recent_df['low']).values
-                data_10d[7, :] = recent_df['close'].rolling(5).mean().bfill().values
-                data_10d[8, :] = recent_df['tick_volume'].rolling(5).mean().bfill().values
-                data_10d[9, :] = (recent_df['close'] - recent_df['open']).values
+            # Orquestração Paralela de Física
+            with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+                futures = [
+                    executor.submit(run_lbm),
+                    executor.submit(run_schrodinger),
+                    executor.submit(run_plasma),
+                    executor.submit(run_rmt),
+                    executor.submit(run_qrw),
+                    executor.submit(run_qcd),
+                    executor.submit(run_cyt)
+                ]
                 
-                flow = self.cyt.analyze_manifold_flow(data_10d)
-                def_array = flow["deformation"]
-                danger_array = self.cyt.calculate_danger_zones(data_10d, 20, 0.5)
-                if len(def_array) > 0:
-                    ricci_curvature = def_array[-1]
-                    cyt_danger = danger_array[-1]
-            except Exception as e:
-                print(f"[Q-Math] Erro CYT Ricci Flow: {e}")
+                results = {}
+                for future in concurrent.futures.as_completed(futures):
+                    results.update(future.result())
 
             # Atualização atômica do estado que será lido pelo AGI_CORE
             with self.state_lock:
                 self.current_state["status"] = "ACTIVE"
                 self.current_state["latest_price"] = current_close
-                self.current_state["cloud_prob"] = prob_density if prob_density is not None else []
-                self.current_state["sec_metrics"] = sec_metrics
-                self.current_state["cloud_str"] = cloud_str
-                self.current_state["lbm_signal"] = lbm_signal
-                self.current_state["z_pinch_signal"] = z_pinch_signal
-                self.current_state["rmt_signal"] = rmt_signal
-                self.current_state["qrw_signal"] = qrw_signal
-                self.current_state["is_pure"] = is_pure if 'is_pure' in locals() else False
-                self.current_state["qcd_signal"] = qcd_signal
-                self.current_state["ricci_curvature"] = ricci_curvature
-                self.current_state["cyt_danger"] = cyt_danger
+                self.current_state["cloud_prob"] = results.get("prob_density", [])
+                self.current_state["sec_metrics"] = results.get("sec_metrics")
+                self.current_state["cloud_str"] = results.get("cloud_str", "0.0001:")
+                self.current_state["lbm_signal"] = results.get("lbm_signal", "LAMINAR_FLOW")
+                self.current_state["z_pinch_signal"] = results.get("z_pinch_signal", "NEUTRAL")
+                self.current_state["rmt_signal"] = results.get("rmt_signal", "NOISE")
+                self.current_state["qrw_signal"] = results.get("qrw_signal", "NEUTRAL")
+                self.current_state["is_pure"] = results.get("is_pure", False)
+                self.current_state["qcd_signal"] = results.get("qcd_signal", "CONFINED")
+                self.current_state["ricci_curvature"] = results.get("ricci_curvature", 0.0)
+                self.current_state["cyt_danger"] = results.get("cyt_danger", 0.0)
 
         except Exception as e:
             print(f"❌ Q-MATH :: Erro no processamento interno: {e}")

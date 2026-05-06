@@ -1,6 +1,6 @@
 @echo off
-title NEXUS-QUANT AGI SWARM v2.0
-color 0A
+title NEXUS-QUANT AGI SWARM v3.0 (SINGULARITY)
+color 0B
 
 echo ===================================================
 echo     LIMPANDO PROCESSOS FANTASMAS (PREVENCAO MEMORY LEAK)
@@ -11,23 +11,26 @@ set SYMBOL=%~1
 if "%SYMBOL%"=="" set SYMBOL=GER40.cash
 
 echo ===================================================
-echo     NEXUS-QUANT :: INICIANDO ZERO-MQ SWARM
+echo     NEXUS AGI CEO :: INICIANDO A MATRIX V3.0
 echo     ATIVO ALVO: %SYMBOL%
+echo     MOTOR FISICO: O Colisor (C++ OpenMP)
 echo ===================================================
 echo.
-echo Iniciando Q-MATH Node (Calculos C++)...
+
+echo [1/3] Iniciando Q-MATH Node (O Colisor Matematico)...
 start "Q-MATH NODE [%SYMBOL%]" cmd /k "python q_math_node.py"
 timeout /t 2 /nobreak >nul
 
-echo Iniciando AGI CORE (Orquestrador Neural)...
-start "AGI CORE [%SYMBOL%]" cmd /k "python Aethelgard_Swarm.py --symbol %SYMBOL%"
+echo [2/3] Iniciando N-CORE (Cerebro Assincrono)...
+start "N-CORE SWARM [%SYMBOL%]" cmd /k "python Aethelgard_Swarm.py --symbol %SYMBOL%"
 timeout /t 2 /nobreak >nul
 
-echo Iniciando NEXUS ROUTER (Conexao MT5 PUB/SUB)...
+echo [3/3] Iniciando NEXUS ROUTER (Injecao Zero-MQ)...
 start "NEXUS ROUTER [%SYMBOL%]" cmd /k "python nexus_router.py --symbol %SYMBOL%"
 
 echo.
 echo ===================================================
-echo Swarm Operacional! Verifique as 3 janelas do terminal.
+echo 🌌 SINGULARIDADE ALCANCADA! 
+echo Verifique as 3 janelas do terminal. Aguardando MT5 HFT Bridge.
 echo ===================================================
 pause

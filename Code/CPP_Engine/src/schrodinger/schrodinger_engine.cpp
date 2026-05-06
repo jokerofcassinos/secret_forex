@@ -5,6 +5,9 @@
 #include <complex>
 #include <cmath>
 #include <iostream>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace py = pybind11;
 using Complex = std::complex<double>;
@@ -41,7 +44,10 @@ public:
     }
 
     void initialize_gaussian(double x0, double sigma, double k0) {
+        py::gil_scoped_release release;
         double norm = 0.0;
+        
+        #pragma omp parallel for reduction(+:norm)
         for (int i = 0; i < Nx; ++i) {
             double x = i * dx;
             double envelope = std::exp(-0.5 * std::pow((x - x0) / sigma, 2));
@@ -49,8 +55,14 @@ public:
             norm += std::norm(psi[i]) * dx;
         }
         norm = std::sqrt(norm);
-        if(norm > 1e-15) { for (int i = 0; i < Nx; ++i) psi[i] /= norm; }
-        update_probability_density();
+        
+        if(norm > 1e-15) { 
+            #pragma omp parallel for
+            for (int i = 0; i < Nx; ++i) psi[i] /= norm; 
+        }
+        
+        #pragma omp parallel for
+        for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
     }
 
     void update_potential(const std::vector<double>& new_V) {
@@ -59,6 +71,7 @@ public:
     }
 
     void step_forward(double dt, double mass) {
+        py::gil_scoped_release release;
         Complex I(0.0, 1.0);
         double hbar = 1.0;
         double r_mag = dt / (4.0 * mass * dx * dx);
@@ -70,6 +83,8 @@ public:
         for(int sub = 0; sub < substeps; ++sub) {
             Complex r = (I * hbar * effective_dt) / (4.0 * mass * dx * dx);
             std::vector<Complex> d(Nx, 0.0);
+            
+            #pragma omp parallel for
             for (int i = 1; i < Nx - 1; ++i) {
                 Complex v_complex(V[i], -absorb_profile[i]);
                 Complex v_term = (I * effective_dt * v_complex) / (2.0 * hbar);
@@ -81,6 +96,8 @@ public:
 
             std::vector<Complex> c_prime(Nx, 0.0), d_prime(Nx, 0.0);
             c_prime[0] = gamma_arr[0] / beta[0]; d_prime[0] = d[0] / beta[0];
+            
+            // Thomas Algorithm (Sequential)
             for (int i = 1; i < Nx; ++i) {
                 Complex denom = beta[i] - alpha[i] * c_prime[i-1];
                 if(std::abs(denom) < 1e-15) denom = Complex(1e-15, 0.0);
@@ -92,32 +109,61 @@ public:
             for (int i = Nx - 2; i >= 0; --i) psi[i] = d_prime[i] - c_prime[i] * psi[i+1];
         }
         
-        // Auto-normalize to compensate for probability loss at the absorbing boundaries.
-        // This makes the remaining wave pool naturally into the potential well.
         double norm = 0.0;
+        #pragma omp parallel for reduction(+:norm)
         for (int i = 0; i < Nx; ++i) norm += std::norm(psi[i]) * dx;
         norm = std::sqrt(norm);
+        
         if(norm > 1e-15) {
+            #pragma omp parallel for
             for (int i = 0; i < Nx; ++i) psi[i] /= norm;
         }
         
-        update_probability_density();
+        #pragma omp parallel for
+        for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
     }
 
     void recenter_wave(double new_x0, double sigma) {
+        py::gil_scoped_release release;
         double com = 0.0, total_prob = 0.0;
+        
+        #pragma omp parallel for reduction(+:com, total_prob)
         for(int i = 0; i < Nx; ++i) {
             double p = std::norm(psi[i]); com += i * dx * p; total_prob += p;
         }
         if(total_prob > 1e-15) com /= total_prob;
         
-        // Relaxed recentering threshold: only jump if completely lost (> 10 sigma)
         if(std::abs(new_x0 - com) > sigma * 10.0) {
-            initialize_gaussian(new_x0, sigma, 0.0);
+            // we must acquire GIL if calling another Python-exposed function? 
+            // No, initialize_gaussian handles its own internal things.
+            // But wait, initialize_gaussian releases GIL internally, so we shouldn't nest GIL release inside a GIL release without care.
+            // However, we just call the C++ function here. The nested release in pybind11 is generally fine or can be avoided.
+        }
+    }
+    
+    // We refactor recenter_wave to avoid double gil release issues
+    void recenter_wave_safe(double new_x0, double sigma) {
+        double com = 0.0, total_prob = 0.0;
+        for(int i = 0; i < Nx; ++i) {
+            double p = std::norm(psi[i]); com += i * dx * p; total_prob += p;
+        }
+        if(total_prob > 1e-15) com /= total_prob;
+        if(std::abs(new_x0 - com) > sigma * 10.0) {
+            double norm = 0.0;
+            for (int i = 0; i < Nx; ++i) {
+                double x = i * dx;
+                double envelope = std::exp(-0.5 * std::pow((x - new_x0) / sigma, 2));
+                psi[i] = Complex(envelope, 0.0);
+                norm += std::norm(psi[i]) * dx;
+            }
+            norm = std::sqrt(norm);
+            if(norm > 1e-15) { for (int i = 0; i < Nx; ++i) psi[i] /= norm; }
+            for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
         }
     }
 
     void update_probability_density() {
+        #pragma omp parallel for
         for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
     }
 
@@ -127,13 +173,11 @@ public:
 
     double get_center_of_mass() {
         double com = 0.0, total = 0.0;
+        #pragma omp parallel for reduction(+:com, total)
         for(int i = 0; i < Nx; ++i) { double p = prob_density[i]; com += i * dx * p; total += p; }
         return (total > 1e-15) ? (com / total) : (Nx * dx / 2.0);
     }
 
-    /**
-     * @brief Calcula métricas de Singularidade Estocástica (SEC).
-     */
     py::dict calculate_singularity_metrics(double price_min, double price_max) {
         double max_p = 0.0;
         int peak_idx = 0;
@@ -147,52 +191,61 @@ public:
                 peak_idx = i;
             }
         }
-
-        // Singularity Strength: Concentração de massa no pico
-        double strength = (total_mass > 1e-15) ? (max_p / total_mass) : 0.0;
         
-        // Schwarzschild Radius Financeiro: Proporcional à força da singularidade
-        // Se a força > 0.15, o horizonte de eventos começa a se formar.
-        double rs = strength * 50.0; // Escalonamento para o grid Nx
+        double strength = (total_mass > 1e-15) ? (max_p / total_mass) : 0.0;
+        double rs = strength * 50.0; 
         
         py::dict res;
         res["singularity_strength"] = strength;
         res["schwarzschild_radius"] = rs;
         res["peak_price"] = price_min + (peak_idx * (price_max - price_min) / Nx);
-        res["is_collapsed"] = (strength > 0.04); // Horizonte de Não-Retorno
+        res["is_collapsed"] = (strength > 0.04);
 
         return res;
     }
 
-    /**
-     * @brief Calcula a Probabilidade de Tunelamento Quântico.
-     * Retorna a probabilidade da partícula (preço) tunelar a barreira sem massa real.
-     */
     double calculate_tunneling_probability(double barrier_energy, double particle_energy, double volume_mass) {
-        if (particle_energy > barrier_energy) {
-            return 1.0; // Passou livremente
-        }
-        
-        double L = 1.0; // Espessura teórica da barreira
+        if (particle_energy > barrier_energy) return 1.0; 
+        double L = 1.0; 
         double hbar = 1.0;
-        
-        // Aproximação WKB. volume_mass baixo (pavio) -> exp alto -> T alto -> é tunelamento, ignorar SL.
-        // volume_mass alto (reversão) -> exp baixo -> T baixo -> NÃO tunelou, quebrou a barreira real.
         double exponent = -2.0 * L * std::sqrt(2.0 * std::max(0.01, volume_mass) * (barrier_energy - particle_energy)) / hbar;
         return std::exp(exponent);
+    }
+
+    /**
+     * @brief Calcula a Amplitude de Transição da Matriz-S (S-Matrix Scattering).
+     * Mede a aniquilação de Vácuos de Dirac (antigos FVGs) como espalhamento bosônico.
+     * Retorna a probabilidade da transição de estado (0.0 a 1.0).
+     */
+    double calculate_s_matrix_scattering(double in_state_energy, double out_state_energy, double vacuum_density) {
+        // Amplitude de Transição S_fi = <out|S|in>
+        // Aproximação Born para espalhamento em potencial central (Vácuo de Dirac)
+        double delta_E = std::abs(out_state_energy - in_state_energy);
+        
+        // Se a diferença de energia for muito alta, a probabilidade de espalhamento cai (decoerência)
+        // A densidade do vácuo atua como a constante de acoplamento (coupling constant)
+        double coupling = std::max(0.001, vacuum_density);
+        
+        double amplitude = coupling / (delta_E + coupling);
+        
+        // A probabilidade de aniquilação é a amplitude ao quadrado (Regra de Born)
+        double annihilation_prob = std::pow(amplitude, 2);
+        
+        return std::min(1.0, annihilation_prob);
     }
 };
 
 PYBIND11_MODULE(schrodinger_engine, m) {
-    m.doc() = "Quantum Cloud Solver v3.0 - SEC Singularity Engine with Quantum Tunneling";
+    m.doc() = "Quantum Cloud Solver v5.0 - Holographic Principle & S-Matrix Scattering";
     py::class_<QuantumCloudSolver>(m, "QuantumCloudSolver")
         .def(py::init<int, double>())
         .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian, py::arg("x0"), py::arg("sigma"), py::arg("k0"))
         .def("update_potential", &QuantumCloudSolver::update_potential, py::arg("new_V"))
         .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("mass"))
-        .def("recenter_wave", &QuantumCloudSolver::recenter_wave, py::arg("new_x0"), py::arg("sigma"))
+        .def("recenter_wave", &QuantumCloudSolver::recenter_wave_safe, py::arg("new_x0"), py::arg("sigma"))
         .def("get_probability_density", &QuantumCloudSolver::get_probability_density, py::return_value_policy::reference_internal)
         .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass)
         .def("calculate_singularity_metrics", &QuantumCloudSolver::calculate_singularity_metrics, py::arg("price_min"), py::arg("price_max"))
-        .def("calculate_tunneling_probability", &QuantumCloudSolver::calculate_tunneling_probability, py::arg("barrier_energy"), py::arg("particle_energy"), py::arg("volume_mass"));
+        .def("calculate_tunneling_probability", &QuantumCloudSolver::calculate_tunneling_probability, py::arg("barrier_energy"), py::arg("particle_energy"), py::arg("volume_mass"))
+        .def("calculate_s_matrix_scattering", &QuantumCloudSolver::calculate_s_matrix_scattering, py::arg("in_state_energy"), py::arg("out_state_energy"), py::arg("vacuum_density"));
 }
