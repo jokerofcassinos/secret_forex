@@ -159,8 +159,6 @@ public:
      * Recebe uma matriz [num_timeframes][num_bars].
      */
     double calculate_global_fidelity(py::array_t<double> multi_tf_data, int cutoff_level) {
-        py::gil_scoped_release release;
-        
         py::buffer_info buf = multi_tf_data.request();
         if (buf.ndim != 2) throw std::runtime_error("Entrada deve ser 2D [timeframes][bars]");
 
@@ -170,6 +168,9 @@ public:
 
         if (num_tfs < 2) return 1.0;
 
+        // Libera GIL apenas após ter os dados brutos em mãos
+        py::gil_scoped_release release;
+        
         std::vector<std::vector<double>> normalized_momentums(num_tfs);
 
         #pragma omp parallel for

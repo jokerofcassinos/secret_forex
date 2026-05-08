@@ -5,7 +5,14 @@ import os
 
 # Configuração de caminhos para encontrar as DLLs
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(current_dir, '..', '..'))
+root_path = os.path.dirname(os.path.dirname(current_dir))
+
+if sys.platform == 'win32':
+    if os.path.exists(r"D:\msys64\mingw64\bin"):
+        os.add_dll_directory(r"D:\msys64\mingw64\bin")
+    os.add_dll_directory(root_path)
+
+sys.path.append(root_path)
 
 import qdd_engine
 
