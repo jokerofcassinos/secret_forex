@@ -13,6 +13,7 @@ string last_payload = "";
 int OnInit() { 
     EventSetTimer(1); 
     ChartSetInteger(0, CHART_SHOW_TRADE_LEVELS, false); // Esconde as setas nativas feias do MT5
+    ObjectsDeleteAll(0, "NEXUS_"); // LIMPEZA DE SEGURO AO CARREGAR
     return(INIT_SUCCEEDED); 
 }
 void OnDeinit(const int reason) { EventKillTimer(); ObjectsDeleteAll(0, "NEXUS_"); }
@@ -38,9 +39,15 @@ void UpdateDashboard()
 
 void ParseAndDraw(string data)
 {
+   // PROTOCOLO DE PURIFICAÇÃO GLOBAL (Anti-Fantasmas)
+   ObjectsDeleteAll(0, "NEXUS_DOT_");
+   ObjectsDeleteAll(0, "NEXUS_QCD_");
+   ObjectsDeleteAll(0, "NEXUS_QGC_"); // Garante limpeza de traços evaporados
+   
    string parts[];
    StringSplit(data, ';', parts);
    if(ArraySize(parts) < 10) return;
+
 
    string statusTxt = parts[2];
    string historyRegimes = parts[4]; 
@@ -113,7 +120,7 @@ void ParseAndDraw(string data)
    }
    for(int k=boxIdx; k<100; k++) ObjectDelete(0, "NEXUS_ZONE_"+IntegerToString(k));
 
-   // 1.5 ATUALIZAÇÃO ZONAS DE PERIGO CALABI-YAU (Apenas Bordas)
+   // 1.5 ATUALIZAÇÃO ZONAS DE PERIGO CALABI-YAU (ZONAS HOLOGRÁFICAS)
    if (StringLen(cytDanger) > 0) {
       string hCyt[]; StringSplit(cytDanger, ',', hCyt);
       int totalCyt = ArraySize(hCyt);
@@ -122,28 +129,31 @@ void ParseAndDraw(string data)
       for(int c=0; c < totalCyt && c < iBars(_Symbol, _Period); c++) {
          int cytScore = (int)StringToInteger(hCyt[totalCyt - 1 - c]);
          string cName = "NEXUS_CYT_HIST_" + IntegerToString(c);
-         
          if(cytScore > 50) { 
-            double pHigh = iHigh(_Symbol, _Period, c);
-            double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, c)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, c))) * 0.05;
-            if(atr_offset < 100 * _Point) atr_offset = 100 * _Point;
-            
-            if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_ARROW, 0, 0, 0);
-            ObjectSetInteger(0, cName, OBJPROP_TIME, iTime(_Symbol, _Period, c));
-            ObjectSetDouble(0, cName, OBJPROP_PRICE, pHigh + atr_offset * 3.5);
-            ObjectSetInteger(0, cName, OBJPROP_ARROWCODE, 251); // Cross
-            ObjectSetInteger(0, cName, OBJPROP_COLOR, RGB(183, 28, 28)); // Dark Red
-            ObjectSetInteger(0, cName, OBJPROP_WIDTH, 1);
-            ObjectSetInteger(0, cName, OBJPROP_ANCHOR, ANCHOR_BOTTOM);
-            ObjectSetInteger(0, cName, OBJPROP_BACK, false);
-            boxIdxCyt++;
-         } else {
-             ObjectDelete(0, cName);
-         }
-      }
-      for(int k=boxIdxCyt; k<200; k++) ObjectDelete(0, "NEXUS_CYT_HIST_"+IntegerToString(k));
-      // Cleanup caixas antigas q não vamos usar pra poluir
-      for(int k=0; k<50; k++) ObjectDelete(0, "NEXUS_CYT_ZONE_"+IntegerToString(k));
+             double pHigh = iHigh(_Symbol, _Period, c);
+             double pLow = iLow(_Symbol, _Period, c);
+             double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, c)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, c))) * 0.05;
+             if(atr_offset < 100 * _Point) atr_offset = 100 * _Point;
+             
+             bool isHighDanger = (iClose(_Symbol, _Period, c) > iOpen(_Symbol, _Period, c));
+             
+             if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
+             ObjectSetInteger(0, cName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, c) - PeriodSeconds(_Period)*1);
+             ObjectSetDouble(0, cName, OBJPROP_PRICE, 0, isHighDanger ? pHigh + atr_offset * 2.5 : pLow - atr_offset);
+             ObjectSetInteger(0, cName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, c) + PeriodSeconds(_Period)*1);
+             ObjectSetDouble(0, cName, OBJPROP_PRICE, 1, isHighDanger ? pHigh + atr_offset : pLow - atr_offset * 2.5);
+             
+             ObjectSetInteger(0, cName, OBJPROP_COLOR, RGB(229, 57, 53)); // Vermelho mais vivo
+             ObjectSetInteger(0, cName, OBJPROP_FILL, false); // APENAS BORDA para não confundir
+             ObjectSetInteger(0, cName, OBJPROP_WIDTH, 2);
+             ObjectSetInteger(0, cName, OBJPROP_BACK, false); // À frente do fundo, mas sem cobrir velas
+             boxIdxCyt++;
+          } else {
+              ObjectDelete(0, cName);
+          }
+       }
+       for(int k=boxIdxCyt; k<2000; k++) ObjectDelete(0, "NEXUS_CYT_HIST_"+IntegerToString(k));
+      for(int k=0; k<100; k++) ObjectDelete(0, "NEXUS_CYT_ZONE_"+IntegerToString(k));
    }
 
    // 1.7 ATUALIZAÇÃO HISTÓRICA SEC (DESATIVADO)
@@ -157,10 +167,8 @@ void ParseAndDraw(string data)
    for(int d=0; d < totalD && d < iBars(_Symbol, _Period); d++) {
       int dotVal = (int)StringToInteger(hDots[totalD - 1 - d]);
       string dName = "NEXUS_DOT_" + IntegerToString(d);
-      string dTextName = "NEXUS_DOT_TXT_" + IntegerToString(d);
-      string dBoxName = "NEXUS_DOT_BOX_" + IntegerToString(d);
       
-      if(dotVal == 0) { ObjectDelete(0, dName); ObjectDelete(0, dTextName); ObjectDelete(0, dBoxName); continue; }
+      if(dotVal == 0) { ObjectDelete(0, dName); continue; }
       
       color dClr = clrBlack;
       bool isAbove = (dotVal == 2 || dotVal == 21 || dotVal == 22 || dotVal == 23);
@@ -173,59 +181,21 @@ void ParseAndDraw(string data)
       else if(dotVal == 22) dClr = RGB(198, 40, 40);
       else if(dotVal == 23) dClr = RGB(183, 28, 28);
       
-      if(dClr == clrBlack) { ObjectDelete(0, dName); ObjectDelete(0, dTextName); ObjectDelete(0, dBoxName); continue; }
+      if(dClr == clrBlack) { ObjectDelete(0, dName); continue; }
       
       double pHigh = iHigh(_Symbol, _Period, d);
       double pLow = iLow(_Symbol, _Period, d);
       double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, d)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, d))) * 0.05;
       if(atr_offset < 150 * _Point) atr_offset = 150 * _Point;
 
-      // Hierarquia Ultra-Ampliada: Vela -> Símbolo -> Caixa (Visibilidade Extrema)
-      double symPrice, boxCenterPrice;
-      if(isAbove) {
-         symPrice = pHigh + atr_offset * 1.5;         // Símbolo ACIMA
-         boxCenterPrice = pHigh + atr_offset * 4.0;   // Caixa ACIMA
-      } else {
-         symPrice = pLow - atr_offset * 1.5;          // Símbolo ABAIXO
-         boxCenterPrice = pLow - atr_offset * 4.0;    // Caixa ABAIXO
-      }
-      
       if(ObjectFind(0, dName) < 0) ObjectCreate(0, dName, OBJ_ARROW, 0, 0, 0);
       ObjectSetInteger(0, dName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
-      ObjectSetDouble(0, dName, OBJPROP_PRICE, symPrice);
+      ObjectSetDouble(0, dName, OBJPROP_PRICE, isAbove ? pHigh + atr_offset : pLow - atr_offset);
       ObjectSetInteger(0, dName, OBJPROP_ARROWCODE, isAbove ? 234 : 233);
       ObjectSetInteger(0, dName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dName, OBJPROP_WIDTH, 2); // Símbolo sutil
+      ObjectSetInteger(0, dName, OBJPROP_WIDTH, 1); 
       ObjectSetInteger(0, dName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
       ObjectSetInteger(0, dName, OBJPROP_BACK, false);
-      
-      string labelTxt = (isAbove ? "▼ LONG " : "▲ LONG ") + DoubleToString(iClose(_Symbol, _Period, d), _Digits);
-      
-      // Cleanup da caixa antiga (fundo sólido opaco) para não haver overlap
-      ObjectDelete(0, dBoxName);
-      
-      // Linha guia sutil conectando o texto ao preco real do simbolo
-      string dLineName = "NEXUS_DOT_LINE_" + IntegerToString(d);
-      if(ObjectFind(0, dLineName) < 0) ObjectCreate(0, dLineName, OBJ_TREND, 0, 0, 0, 0, 0);
-      ObjectSetInteger(0, dLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, d));
-      ObjectSetDouble(0, dLineName, OBJPROP_PRICE, 0, isAbove ? symPrice + atr_offset : symPrice - atr_offset);
-      ObjectSetInteger(0, dLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, d));
-      ObjectSetDouble(0, dLineName, OBJPROP_PRICE, 1, boxCenterPrice);
-      ObjectSetInteger(0, dLineName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dLineName, OBJPROP_STYLE, STYLE_DOT);
-      ObjectSetInteger(0, dLineName, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, dLineName, OBJPROP_BACK, true);
-
-      // Texto Limpo (Sem caixa)
-      if(ObjectFind(0, dTextName) < 0) ObjectCreate(0, dTextName, OBJ_TEXT, 0, 0, 0);
-      ObjectSetInteger(0, dTextName, OBJPROP_TIME, iTime(_Symbol, _Period, d));
-      ObjectSetDouble(0, dTextName, OBJPROP_PRICE, isAbove ? boxCenterPrice + atr_offset : boxCenterPrice - atr_offset);
-      ObjectSetString(0, dTextName, OBJPROP_TEXT, labelTxt);
-      ObjectSetString(0, dTextName, OBJPROP_FONT, "Consolas");
-      ObjectSetInteger(0, dTextName, OBJPROP_FONTSIZE, 8); 
-      ObjectSetInteger(0, dTextName, OBJPROP_COLOR, dClr);
-      ObjectSetInteger(0, dTextName, OBJPROP_ANCHOR, isAbove ? ANCHOR_BOTTOM : ANCHOR_TOP);
-      ObjectSetInteger(0, dTextName, OBJPROP_BACK, false);
    }
 
    // 3. ATUALIZAÇÃO DOS SINAIS DE VOLUME
@@ -247,36 +217,25 @@ void ParseAndDraw(string data)
       double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, j)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, j))) * 0.05;
       if(atr_offset < 100 * _Point) atr_offset = 100 * _Point;
 
-      double symPrice, boxCenterPrice;
-      if(isBuy) {
-         symPrice = pLow - atr_offset;         // Símbolo ABAIXO da vela
-         boxCenterPrice = pLow - atr_offset * 3.0; // Caixa ABAIXO do símbolo
-      } else {
-         symPrice = pHigh + atr_offset;        // Símbolo ACIMA da vela
-         boxCenterPrice = pHigh + atr_offset * 3.0; // Caixa ACIMA do símbolo
-      }
-
       if(ObjectFind(0, sName) < 0) ObjectCreate(0, sName, OBJ_ARROW, 0, 0, 0);
       ObjectSetInteger(0, sName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
-      ObjectSetDouble(0, sName, OBJPROP_PRICE, symPrice);
+      ObjectSetDouble(0, sName, OBJPROP_PRICE, isBuy ? pLow - atr_offset * 1.5 : pHigh + atr_offset * 1.5);
       ObjectSetInteger(0, sName, OBJPROP_ARROWCODE, isBuy ? 233 : 234);
       ObjectSetInteger(0, sName, OBJPROP_COLOR, sClr);
-      ObjectSetInteger(0, sName, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(0, sName, OBJPROP_WIDTH, 2);
       ObjectSetInteger(0, sName, OBJPROP_ANCHOR, (isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM));
-      ObjectSetInteger(0, sName, OBJPROP_BACK, false);
       
-      ObjectDelete(0, sBoxName); // Cleanup old boxes
-      string labelTxt = (isBuy ? "▲ V " : "▼ V ") + DoubleToString(iClose(_Symbol, _Period, j), _Digits);
-      
+      // Texto Minimalista para Sinais de Volume
       if(ObjectFind(0, sTextName) < 0) ObjectCreate(0, sTextName, OBJ_TEXT, 0, 0, 0);
       ObjectSetInteger(0, sTextName, OBJPROP_TIME, iTime(_Symbol, _Period, j));
-      ObjectSetDouble(0, sTextName, OBJPROP_PRICE, boxCenterPrice);
-      ObjectSetString(0, sTextName, OBJPROP_TEXT, labelTxt);
+      ObjectSetDouble(0, sTextName, OBJPROP_PRICE, isBuy ? pLow - atr_offset * 2.5 : pHigh + atr_offset * 2.5);
+      ObjectSetString(0, sTextName, OBJPROP_TEXT, (isBuy ? "BUY " : "SELL "));
       ObjectSetString(0, sTextName, OBJPROP_FONT, "Consolas");
       ObjectSetInteger(0, sTextName, OBJPROP_FONTSIZE, 7);
       ObjectSetInteger(0, sTextName, OBJPROP_COLOR, sClr);
       ObjectSetInteger(0, sTextName, OBJPROP_ANCHOR, isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM);
-      ObjectSetInteger(0, sTextName, OBJPROP_BACK, false);
+      
+      ObjectDelete(0, sBoxName);
    }
    
    // 4. ATUALIZAÇÃO DA NUVEM QUÂNTICA (Revertido para cinemático)
@@ -291,8 +250,9 @@ void ParseAndDraw(string data)
             string cVal[]; StringSplit(cloudBins[b], '|', cVal);
             if(ArraySize(cVal) == 2) { double den = StringToDouble(cVal[1]); if(den > maxDensity) maxDensity = den; }
          }
-         datetime tStart = iTime(_Symbol, _Period, MathMin(100, iBars(_Symbol, _Period)-1));
-         datetime tEnd = TimeCurrent() + PeriodSeconds() * 20;
+         // Suavização Visual: Redução da extensão horizontal para não cobrir o gráfico todo
+         datetime tStart = iTime(_Symbol, _Period, 0); // Começa no candle atual
+         datetime tEnd = TimeCurrent() + PeriodSeconds(_Period) * 10; // Projeta um pouco para frente
          double dx = dx_val;
          double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
          for(int b=0; b<tCloud; b++) {
@@ -302,15 +262,19 @@ void ParseAndDraw(string data)
             double den = StringToDouble(cVal[1]);
             string bName = "NEXUS_QC_" + IntegerToString(b);
             string tagName = "NEXUS_QCTAG_" + IntegerToString(b);
-            if(den < maxDensity * 0.05) { ObjectDelete(0, bName); ObjectDelete(0, tagName); continue; }
+            
+            // Filtro mais rigoroso: Mostra apenas nuvens com >30% da densidade máxima
+            if(den < maxDensity * 0.30) { ObjectDelete(0, bName); ObjectDelete(0, tagName); continue; }
+            
             double ratio = den / maxDensity;
             ratio = MathPow(ratio, 3.0); if(ratio > 1.0) ratio = 1.0;
             uchar rVal, gVal, bVal;
             
+            // Cores mais escuras e discretas para o fundo
             if(pLevel > currentPrice) { 
-                rVal = (uchar)(15 + (120 - 15) * ratio); gVal = (uchar)(18 + (20 - 18) * ratio); bVal = (uchar)(25 + (20 - 25) * ratio); 
+                rVal = (uchar)(10 + (80 - 10) * ratio); gVal = (uchar)(12 + (15 - 12) * ratio); bVal = (uchar)(18 + (15 - 18) * ratio); 
             } else { 
-                rVal = (uchar)(15 + (10 - 15) * ratio); gVal = (uchar)(18 + (90 - 18) * ratio); bVal = (uchar)(25 + (110 - 25) * ratio); 
+                rVal = (uchar)(10 + (5 - 10) * ratio); gVal = (uchar)(12 + (60 - 12) * ratio); bVal = (uchar)(18 + (80 - 18) * ratio); 
             }
             
             if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
@@ -400,7 +364,7 @@ void ParseAndDraw(string data)
       }
    }
 
-   // 6. ATUALIZAÇÃO DA DINÂMICA DE FLUIDOS (LBM HISTORY)
+   // 6. ATUALIZAÇÃO DA DINÂMICA DE FLUIDOS (LBM ZONAS DE SQUEEZE/COMPRESSÃO)
    string hLbm[]; StringSplit(parts[15], ',', hLbm);
    int tLbm = ArraySize(hLbm);
    for(int k=0; k < tLbm && k < iBars(_Symbol, _Period); k++) {
@@ -409,27 +373,35 @@ void ParseAndDraw(string data)
       
       if(lVal == 0) { ObjectDelete(0, lName); continue; }
       
-      color lClr = (lVal == 1) ? RGB(66, 165, 245) : RGB(171, 71, 188); // Azul para Bull, Roxo para Bear
+      color lClr = (lVal == 1) ? RGB(66, 165, 245) : (lVal == 2 ? RGB(171, 71, 188) : clrGold); 
       double pHigh = iHigh(_Symbol, _Period, k);
       double pLow = iLow(_Symbol, _Period, k);
-      bool isBull = (lVal == 1);
       
       double atr_offset = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, k)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, k))) * 0.05;
       if(atr_offset < 100 * _Point) atr_offset = 100 * _Point;
 
-      double symPrice = isBull ? pLow - atr_offset * 1.5 : pHigh + atr_offset * 1.5;
-
-      if(ObjectFind(0, lName) < 0) ObjectCreate(0, lName, OBJ_ARROW, 0, 0, 0);
-      ObjectSetInteger(0, lName, OBJPROP_TIME, iTime(_Symbol, _Period, k));
-      ObjectSetDouble(0, lName, OBJPROP_PRICE, symPrice);
-      ObjectSetInteger(0, lName, OBJPROP_ARROWCODE, 116); // Diamante
+      if(ObjectFind(0, lName) < 0) ObjectCreate(0, lName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
+      ObjectSetInteger(0, lName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, k) - PeriodSeconds(_Period)*1);
+      ObjectSetInteger(0, lName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, k) + PeriodSeconds(_Period)*1);
+      
+      if(lVal == 1) { // Rupture Bull (Blue)
+          ObjectSetDouble(0, lName, OBJPROP_PRICE, 0, pLow - atr_offset);
+          ObjectSetDouble(0, lName, OBJPROP_PRICE, 1, pLow - atr_offset * 3.0);
+      } else if(lVal == 2) { // Rupture Bear (Purple)
+          ObjectSetDouble(0, lName, OBJPROP_PRICE, 0, pHigh + atr_offset * 3.0);
+          ObjectSetDouble(0, lName, OBJPROP_PRICE, 1, pHigh + atr_offset);
+      } else if(lVal == 3) { // Quantum Squeeze (Gold)
+          ObjectSetDouble(0, lName, OBJPROP_PRICE, 0, pHigh + atr_offset * 1.5);
+          ObjectSetDouble(0, lName, OBJPROP_PRICE, 1, pLow - atr_offset * 1.5);
+      }
+      
       ObjectSetInteger(0, lName, OBJPROP_COLOR, lClr);
+      ObjectSetInteger(0, lName, OBJPROP_FILL, true);
       ObjectSetInteger(0, lName, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, lName, OBJPROP_ANCHOR, ANCHOR_CENTER);
-      ObjectSetInteger(0, lName, OBJPROP_BACK, false);
+      ObjectSetInteger(0, lName, OBJPROP_BACK, true);
    }
 
-   // 7. DECAIMENTO HAWKING (QGC)
+   // 7. DECAIMENTO HAWKING (QGC) - ZONAS DE EVAPORAÇÃO
    string qgcData = (ArraySize(parts) > 25) ? parts[25] : "";
    int qgcBoxIdx = 0;
    if(StringLen(qgcData) > 0) {
@@ -441,11 +413,11 @@ void ParseAndDraw(string data)
             double centerPrice = StringToDouble(qParts[1]);
             double massNorm = StringToDouble(qParts[2]);
             
-            // Desenhar fita Ciano espelhando o decaimento
             string qLineName = "NEXUS_QGC_" + IntegerToString(qgcBoxIdx);
+            
+            ObjectDelete(0, qLineName); // Força limpeza 
             if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_TREND, 0, 0, 0, 0, 0);
             
-            // A linha estica da origem (age) ate a vela atual (0)
             ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, age));
             ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, centerPrice);
             ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, 0));
@@ -453,18 +425,78 @@ void ParseAndDraw(string data)
             
             ObjectSetInteger(0, qLineName, OBJPROP_COLOR, RGB(0, 255, 255)); // Neon Cyan
             ObjectSetInteger(0, qLineName, OBJPROP_STYLE, STYLE_SOLID);
-            // Espessura decai com o tempo (massNorm vai de 0.5 a 10.0)
-            ObjectSetInteger(0, qLineName, OBJPROP_WIDTH, (int)MathMax(1, MathMin(5, massNorm)));
-            ObjectSetInteger(0, qLineName, OBJPROP_RAY_RIGHT, false);
+            ObjectSetInteger(0, qLineName, OBJPROP_WIDTH, (int)MathMax(1, MathMin(10, massNorm * 2.0))); 
+            ObjectSetInteger(0, qLineName, OBJPROP_RAY_RIGHT, true); 
             ObjectSetInteger(0, qLineName, OBJPROP_BACK, true);
+            
             qgcBoxIdx++;
          }
       }
    }
-   // Cleanup de linhas de decaimento evaporadas
-   for(int k=qgcBoxIdx; k<1000; k++) ObjectDelete(0, "NEXUS_QGC_"+IntegerToString(k));
+   // 9. QUANTUM DENSITY CLOUDS (SOMBREAMENTO DE FUNDO - HEATMAP v4.2)
+   string lbmHist = parts[15];
+   string lParts[]; StringSplit(lbmHist, ',', lParts);
+   int totalL = ArraySize(lParts);
+   int cloudIdx = 0;
+   
+   for(int k=0; k < totalL && k < iBars(_Symbol, _Period); k++) {
+      int lVal = (int)StringToInteger(lParts[totalL - 1 - k]);
+      if(lVal == 0) continue;
+      
+      // Fusão Visual: Tenta agrupar candles com a mesma polaridade em um bloco único
+      int startK = k;
+      int endK = k;
+      while(endK + 1 < totalL && endK + 1 < iBars(_Symbol, _Period)) {
+         int nextVal = (int)StringToInteger(lParts[totalL - 1 - (endK + 1)]);
+         if(nextVal == lVal) endK++; else break;
+      }
+      
+      string cName = "NEXUS_CLOUD_" + IntegerToString(cloudIdx);
+      color cClr = (lVal == 1) ? RGB(0, 25, 20) : (lVal == 2 ? RGB(35, 8, 15) : RGB(35, 35, 8));
+      
+      if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
+      ObjectSetInteger(0, cName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, startK) + PeriodSeconds(_Period)/2);
+      ObjectSetDouble(0, cName, OBJPROP_PRICE, 0, ChartGetDouble(0, CHART_PRICE_MAX));
+      ObjectSetInteger(0, cName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, endK) - PeriodSeconds(_Period)/2);
+      ObjectSetDouble(0, cName, OBJPROP_PRICE, 1, ChartGetDouble(0, CHART_PRICE_MIN));
+      
+      ObjectSetInteger(0, cName, OBJPROP_COLOR, cClr);
+      ObjectSetInteger(0, cName, OBJPROP_FILL, true);
+      ObjectSetInteger(0, cName, OBJPROP_BACK, true);
+      ObjectSetInteger(0, cName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+      
+      cloudIdx++;
+      k = endK; // Pula para o fim do bloco fundido
+   }
+   for(int k=cloudIdx; k<500; k++) ObjectDelete(0, "NEXUS_CLOUD_"+IntegerToString(k));
 
    ChartRedraw(0);
+}
+
+void DrawWyckoffHUD(string score, string phase, string div, string strength)
+{
+    int panelW = 220; int panelH = 140; int corner = CORNER_RIGHT_LOWER; 
+    int baseX = 50; int baseY = 100; // AFSTADO DO CANTO PARA NÃO BATER NAS ABAS
+    string bgName = "NEXUS_WYCKOFF_BG"; if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, bgName, OBJPROP_CORNER, corner); ObjectSetInteger(0, bgName, OBJPROP_XDISTANCE, baseX); ObjectSetInteger(0, bgName, OBJPROP_YDISTANCE, baseY);
+    ObjectSetInteger(0, bgName, OBJPROP_XSIZE, panelW); ObjectSetInteger(0, bgName, OBJPROP_YSIZE, panelH);
+    ObjectSetInteger(0, bgName, OBJPROP_BGCOLOR, RGB(15, 18, 25));
+    ObjectSetInteger(0, bgName, OBJPROP_COLOR, RGB(45, 50, 65));
+    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 200); // SEMPRE NO TOPO
+
+    DrawHUDText("W_TITLE", "WYCKOFF PRECISION", baseX + 15, baseY + panelH - 25, RGB(38, 166, 154), 9, true, corner);
+    
+    int rowY = baseY + 100; int rowH = 18;
+    DrawHUDRowWyck("W_SCORE", "NEXUS Score", score + " (Optimal)", RGB(66, 165, 245), baseX, rowY, panelW, corner); rowY -= rowH;
+    DrawHUDRowWyck("W_PHASE", "Phase", phase, RGB(255, 213, 79), baseX, rowY, panelW, corner); rowY -= rowH;
+    DrawHUDRowWyck("W_DIV", "Divergence", div, (div == "None" ? clrGray : RGB(239, 83, 80)), baseX, rowY, panelW, corner); rowY -= rowH;
+    DrawHUDRowWyck("W_STR", "Strength", strength, clrWhite, baseX, rowY, panelW, corner);
+}
+
+void DrawHUDRowWyck(string id, string label, string val, color valClr, int baseX, int y, int panelW, int corner)
+{
+    DrawHUDText(id + "_L", label, baseX + panelW - 15, y, RGB(140, 140, 145), 8, true, corner); 
+    DrawHUDText(id + "_V", val, baseX + 15, y, valClr, 8, false, corner);
 }
 
 void DrawLabel(string name, string text, int x, int y, color clr, int fontSize)
@@ -574,8 +606,18 @@ color GetStatusColor(string status) {
     return RGB(120, 123, 134);
 }
 color GetHealthColor(double h) { return (h < 0.3) ? RGB(239, 83, 80) : (h < 0.6 ? RGB(255, 167, 38) : RGB(38, 166, 154)); }
-string GetLBMShort(string lbm) { if(lbm == "FLUID_RUPTURE_BULL") return "Squeeze Bull"; if(lbm == "FLUID_RUPTURE_BEAR") return "Squeeze Bear"; return "Laminar Flow"; }
-color GetLBMColor(string lbm) { if(lbm == "FLUID_RUPTURE_BULL") return RGB(66, 165, 245); if(lbm == "FLUID_RUPTURE_BEAR") return RGB(171, 71, 188); return RGB(120, 123, 134); }
+string GetLBMShort(string lbm) { 
+    if(lbm == "FLUID_RUPTURE_BULL") return "Rupture Bull"; 
+    if(lbm == "FLUID_RUPTURE_BEAR") return "Rupture Bear"; 
+    if(lbm == "BOSONIC_SQUEEZE") return "Quantum Squeeze";
+    return "Laminar Flow"; 
+}
+color GetLBMColor(string lbm) { 
+    if(lbm == "FLUID_RUPTURE_BULL") return RGB(66, 165, 245); 
+    if(lbm == "FLUID_RUPTURE_BEAR") return RGB(171, 71, 188); 
+    if(lbm == "BOSONIC_SQUEEZE") return clrGold;
+    return RGB(120, 123, 134); 
+}
 string GetZPShort(string zp) { if(zp == "NEUTRAL" || zp == "") return "Neutral"; if(StringFind(zp, "Z_PINCH_") >= 0) { string sub[]; StringSplit(zp, '_', sub); if(ArraySize(sub) >= 3) return sub[2] + " " + sub[3]; } return zp; }
 color GetZPColor(string zp) { return (zp == "NEUTRAL" || zp == "") ? RGB(120, 123, 134) : RGB(255, 202, 40); }
 string GetQRWShort(string qrw) { if(qrw == "NEUTRAL" || qrw == "") return "No Interf."; if(qrw == "HIDDEN_ACCUMULATION_BULL") return "Accumulation"; if(qrw == "HIDDEN_DISTRIBUTION_BEAR") return "Distribution"; return qrw; }

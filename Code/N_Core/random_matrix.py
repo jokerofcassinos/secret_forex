@@ -67,8 +67,11 @@ class RandomMatrixTracker:
         # Extract Eigenvalue via Power Iteration in C++
         lambda_dom, power_ratio, lambda_max_mp = self.engine.extract_dominant_eigenvalue()
         
-        # Se a energia do Sinal Dominante for maior que 1.5x o limite do Ruído de Varejo (Marchenko-Pastur)
-        is_pure_signal = power_ratio > 1.5
+        # Calibração Absoluta: 
+        # O Limite de Marchenko-Pastur (lambda_max_mp) define o teto do ruído aleatório.
+        # Um sinal só é "Puro" se o Autovalor Dominante esmagar o limite do ruído.
+        # Aumentamos o rigor estatístico para 2.5x a variância do ruído para evitar falsos positivos.
+        is_pure_signal = power_ratio > 2.5
         
         return lambda_dom, power_ratio, is_pure_signal
 

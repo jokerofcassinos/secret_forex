@@ -44,6 +44,7 @@ class QRWTracker:
     def process_qrw_skewness(self, df_slice, lookback=20):
         """
         FIX P1-03: Passes ATR-calibrated scale factor to C++ engine.
+        Calibração Absoluta: Thresholds ajustados e Fator de Escala Logarítmico.
         """
         if not self.is_active or len(df_slice) < lookback:
             return 0.0, "NONE"
@@ -52,22 +53,25 @@ class QRWTracker:
         price_deltas = (recent['close'] - recent['open']).values
         volumes = recent.get('tick_volume', pd.Series(np.ones(lookback))).values
         
-        # FIX P1-03: Calculate ATR-based scale factor
+        # Calibração Absoluta: Fator de Escala Logarítmico
+        # Evita que volumes monstruosos esmaguem o passeios aleatório quântico
         tr1 = recent['high'] - recent['low']
         atr = tr1.mean()
         vol_mean = np.mean(volumes) if np.mean(volumes) > 0 else 1.0
-        # Scale factor: normalizes delta*volume product to ~O(1)
-        atr_scale = 1.0 / (atr * vol_mean + 1e-9)
         
-        # Compute skewness using C++ engine (now with atr_scale parameter)
+        # Scale factor amortecido
+        atr_scale = 1.0 / (atr * np.log1p(vol_mean) + 1e-9)
+        
+        # Compute skewness using C++ engine
         skewness = self.engine.compute_interference_skew(
             list(price_deltas), list(volumes), float(atr_scale)
         )
         
+        # Redução do threshold de 1.2 para 0.65 para capturar distribuições/acumulações mais sutis no US100
         signal = "NEUTRAL"
-        if skewness > 1.2:
+        if skewness > 0.65:
             signal = "HIDDEN_ACCUMULATION_BULL"
-        elif skewness < -1.2:
+        elif skewness < -0.65:
             signal = "HIDDEN_DISTRIBUTION_BEAR"
             
         return skewness, signal

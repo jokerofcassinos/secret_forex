@@ -13,9 +13,8 @@ if sys.platform == 'win32':
         except Exception: pass
 
 # Localiza extensões C++
-cpp_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'CPP_Engine'))
-if cpp_path not in sys.path:
-    sys.path.append(cpp_path)
+# Agora os binários residem na raiz do projeto, então importações diretas funcionam.
+
 
 try:
     import qdd_engine
@@ -360,6 +359,61 @@ class QuantumIndicators:
         gap = abs(ema_34.iloc[-1] - ema_89.iloc[-1])
         health = min(100, (gap / (atr * 4.0)) * 100)
         return int(health)
+
+    def calculate_nexus_score(self, df, density, velocity, regime):
+        """
+        NEXUS Wyckoff Score (0-100)
+        Funde Regime, LBM e Momentum para uma métrica única de dominância.
+        """
+        try:
+            # 1. Componente LBM (40%)
+            rho_peak = np.max(density)
+            rho_mean = np.mean(density)
+            lbm_score = np.clip((rho_peak / (rho_mean + 1e-9)) * 10, 0, 40)
+            
+            # 2. Componente Momentum (30%)
+            mom_score = np.clip(abs(velocity.mean()) * 100, 0, 30)
+            
+            # 3. Componente de Regime (30%)
+            reg_score = 30 if regime != 0 else 10
+            
+            total_score = lbm_score + mom_score + reg_score
+            return int(np.clip(total_score, 0, 100))
+        except:
+            return 50
+
+    def detect_divergences(self, df, density):
+        """
+        Detecta divergências entre Preço e Densidade Institucional (LBM).
+        """
+        if len(df) < 20: return "None"
+        
+        # Preço fazendo novas máximas vs Densidade caindo
+        price_trend = df['close'].iloc[-1] > df['close'].iloc[-10]
+        lbm_trend = np.max(density) < 50.0 # Exemplo simplificado
+        
+        if price_trend and lbm_trend: return "Bearish Div"
+        if not price_trend and not lbm_trend: return "Bullish Div"
+        return "None"
+
+    def get_market_state(self, df, density, velocity, regime):
+        """
+        Gera o estado consolidado para o Wyckoff HUD.
+        """
+        score = self.calculate_nexus_score(df, density, velocity, regime)
+        div = self.detect_divergences(df, density)
+        
+        # Tradução Wyckoff
+        state = "NEUTRAL"
+        if regime == 1: state = "ACCUMULATION" if score < 70 else "MARK-UP"
+        elif regime == 2: state = "DISTRIBUTION" if score < 70 else "MARK-DOWN"
+        
+        return {
+            "score": score,
+            "divergence": div,
+            "wyckoff_phase": state,
+            "strength": round(abs(float(velocity.mean()) * 10), 2)
+        }
 
     @staticmethod
     def calculate_rsi(prices, window=14):

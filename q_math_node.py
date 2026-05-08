@@ -1,5 +1,6 @@
 """
-Q-MATH NODE (ZMQ SUB / REP Node)
+Q-MATH NODE (ZMQ SUB / REP Node - v2.1)
+
 Função: Assina (SUB) os dados de mercado do NEXUS ROUTER.
 Atualiza em background todos os trackers pesados de C++ (LBM, Schrödinger, RMT).
 Levanta um servidor (REP) para que o AGI_CORE consulte os dados calculados instantaneamente.
@@ -9,8 +10,15 @@ import threading
 import MetaTrader5 as mt5
 import pickle
 import sys
+import os
 import zmq
 import concurrent.futures
+
+# [BOOTLOADER] Força reconhecimento dos binários Mingw64
+if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
+    os.add_dll_directory(r"D:\msys64\mingw64\bin")
+
+
 
 from Code.N_Core.swarm_bus import create_subscriber, create_reply_server, PORT_TICK_FEED, PORT_Q_MATH, TOPIC_MARKET_BAR
 
@@ -22,9 +30,8 @@ from Code.N_Core.random_matrix import RandomMatrixTracker
 from Code.N_Core.quantum_walk import QRWTracker
 from Code.N_Core.market_qcd import MarketQCDTracker
 
-import sys
-sys.path.append("Code/CPP_Engine")
 import cyt_engine
+
 
 class QMathNode:
     def __init__(self):
@@ -99,12 +106,13 @@ class QMathNode:
             current_close = df['close'].iloc[-1]
             
             # Funções helper para execução paralela (GIL Released in C++)
-            def run_lbm():
+            def run_lbm(regime=0):
                 lbm_signal = "LAMINAR_FLOW"
                 try:
-                    lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(df.tail(10), steps=5)
+                    # Passamos o slice_df completo para o novo motor v3.2
+                    lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(df.tail(150), steps=5)
                     if lbm_density is not None and lbm_velocity is not None:
-                        lbm_signal = self.lbm_tracker.detect_squeeze_rupture(current_close, lbm_density, lbm_velocity)
+                        lbm_signal = self.lbm_tracker.detect_squeeze_rupture(df.tail(150), lbm_density, lbm_velocity, current_regime=regime)
                 except Exception as e:
                     print(f"[Q-Math] Erro LBM: {e}")
                 return {"lbm_signal": lbm_signal}
@@ -202,7 +210,7 @@ class QMathNode:
             # Orquestração Paralela de Física
             with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
                 futures = [
-                    executor.submit(run_lbm),
+                    executor.submit(run_lbm, regime=getattr(self, "current_regime_context", 0)),
                     executor.submit(run_schrodinger),
                     executor.submit(run_plasma),
                     executor.submit(run_rmt),
@@ -264,8 +272,19 @@ class QMathNode:
         print(f"⚛️ Q-MATH :: Servidor de Respostas (REP) Iniciado na porta {PORT_Q_MATH}.")
         while self.is_running:
             try:
-                # Aguarda pedido do AGI CORE
+                # Aguarda pedido do AGI CORE (pode conter o regime atual)
                 message = self.rep_socket.recv()
+                
+                # Protocolo: "GET_STATE|r_score"
+                try:
+                    msg_str = message.decode('utf-8')
+                    if "|" in msg_str:
+                        _, r_score = msg_str.split("|")
+                        self.current_regime_context = int(r_score)
+                    else:
+                        self.current_regime_context = 0
+                except:
+                    self.current_regime_context = 0
                 
                 with self.state_lock:
                     # Empacota o estado atual e envia de volta imediatamente

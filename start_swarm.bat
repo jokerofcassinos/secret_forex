@@ -1,59 +1,40 @@
 @echo off
-setlocal EnableDelayedExpansion
-title NEXUS-QUANT AGI SWARM v3.0 (SINGULARITY)
-color 0B
+setlocal enabledelayedexpansion
+title [NEXUS EXECUTIVE TERMINAL]
 
-echo ===================================================
-echo     LIMPANDO PROCESSOS FANTASMAS (PREVENCAO MEMORY LEAK)
-echo ===================================================
-taskkill /F /IM python.exe /T >nul 2>&1
-
-echo ===================================================
-echo     NEXUS AGI CEO :: MATRIZ DE DECOLAGEM
-echo ===================================================
+:MENU
+cls
+echo ============================================================
+echo      🌌 AETHELGARD QUANTUM SWARM :: EXECUTIVE TERMINAL
+echo ============================================================
 echo.
-set /p SYMBOL="[INPUT] Digite o Ativo Alvo (Ex: GER40.cash, US100.cash) [Enter para GER40.cash]: "
-if "!SYMBOL!"=="" set SYMBOL=GER40.cash
+set /p ASSET=" > Digite o Ativo (ex: BTCUSD, GER40, US30): "
+if "%ASSET%"=="" goto MENU
 
 echo.
-echo ===================================================
-echo     INICIANDO A MATRIX V3.0 PARA: !SYMBOL!
-echo     MOTOR FISICO: O Colisor (C++ OpenMP)
-echo ===================================================
-echo.
+echo [1/3] Inicializando Matriz de Dados (Nexus Router)...
+start "AETHELGARD_ROUTER" /min cmd /k "D:\Python313\python.exe nexus_router.py --asset %ASSET%"
 
-echo [1/3] Iniciando Q-MATH Node (O Colisor Matematico)...
-start "Q-MATH NODE [!SYMBOL!]" cmd /c "title Q-MATH NODE && python q_math_node.py"
-timeout /t 2 /nobreak >nul
+timeout /t 2 >nul
+echo [2/3] Inicializando Colisor de Hadrons (Q-Math Node)...
+start "AETHELGARD_QMATH" /min cmd /k "D:\Python313\python.exe q_math_node.py"
 
-echo [2/3] Iniciando N-CORE (Cerebro Assincrono)...
-start "N-CORE SWARM [!SYMBOL!]" cmd /c "title N-CORE SWARM && python Aethelgard_Swarm.py --symbol !SYMBOL!"
-timeout /t 2 /nobreak >nul
-
-echo [3/3] Iniciando NEXUS ROUTER (Injecao Zero-MQ)...
-start "NEXUS ROUTER [!SYMBOL!]" cmd /c "title NEXUS ROUTER && python nexus_router.py --symbol !SYMBOL!"
+timeout /t 3 >nul
+echo [3/3] Inicializando Cerebro Neural (N-Core Swarm)...
+start "AETHELGARD_SWARM" cmd /k "D:\Python313\python.exe Aethelgard_Swarm.py --asset %ASSET%"
 
 echo.
-echo ===================================================
-echo 🌌 SINGULARIDADE ALCANCADA! 
-echo O Swarm esta operando nas 3 janelas abertas.
+echo ============================================================
+echo    SISTEMA ONLINE NO ATIVO: %ASSET%
+echo    Pressione QUALQUER TECLA para ENCERRAR e trocar de ativo
+echo ============================================================
+pause >nul
+
 echo.
-echo [ATENCAO] PARA DESLIGAR O ROBO COM SEGURANCA:
-echo Feche ESTA janela principal e o Windows matara a IA.
-echo ===================================================
+echo [!] Iniciando Protocolo de Limpeza...
+taskkill /F /FI "WINDOWTITLE eq AETHELGARD_*" /T >nul 2>&1
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq AETHELGARD_*" /T >nul 2>&1
 
-:: Mantem o script rodando de forma ociosa esperando fechar
-:LOOP
-timeout /t 10 >nul
-goto LOOP
-
-:: Trata o fechamento ou interrupcao (Ctrl+C)
-:END
-echo.
-echo Desligando Swarm...
-taskkill /F /FI "WINDOWTITLE eq Q-MATH NODE*" /T >nul 2>&1
-taskkill /F /FI "WINDOWTITLE eq N-CORE SWARM*" /T >nul 2>&1
-taskkill /F /FI "WINDOWTITLE eq NEXUS ROUTER*" /T >nul 2>&1
-taskkill /F /IM python.exe /T >nul 2>&1
-exit
-
+echo [!] Memoria Purificada.
+timeout /t 2 >nul
+goto MENU

@@ -8,14 +8,11 @@ if hasattr(os, 'add_dll_directory'):
     os.add_dll_directory(r"D:\msys64\mingw64\bin")
 
 # Importa o módulo C++ compilado
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../CPP_Engine")))
 try:
-    import cyt_engine.cp313_win_amd64 as cyt_engine_module
-except ImportError:
-    try:
-        import cyt_engine as cyt_engine_module
-    except ImportError as e:
-        raise RuntimeError(f"FALHA CRÍTICA: Motor CYT (C++) não encontrado. {e}")
+    import cyt_engine as cyt_engine_module
+except ImportError as e:
+    raise RuntimeError(f"FALHA CRÍTICA: Motor CYT (C++) não encontrado na raiz. {e}")
+
 
 class YieldGovernor:
     """

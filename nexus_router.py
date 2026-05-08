@@ -1,5 +1,6 @@
 """
-NEXUS ROUTER (ZMQ PUB Node)
+NEXUS ROUTER (ZMQ PUB Node - v2.1)
+
 Função: Extrair dados de mercado (Ticks/Bars) da API MT5 o mais rápido possível
 e realizar o Broadcast via rede ZeroMQ para o Swarm.
 Não possui lógica analítica pesada. Apenas Ingestão e Roteamento de Dados.
@@ -10,6 +11,15 @@ import pandas as pd
 import zmq
 import pickle
 import argparse
+import sys
+import os
+
+
+# [BOOTLOADER] Força reconhecimento dos binários Mingw64
+if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
+    os.add_dll_directory(r"D:\msys64\mingw64\bin")
+
+
 from Code.R_Exec.mt5_bridge import MT5NeuralBridge
 from Code.N_Core.swarm_bus import create_publisher, create_subscriber, PORT_TICK_FEED, PORT_CONTROL, TOPIC_MARKET_BAR, TOPIC_CONTROL
 
@@ -83,14 +93,13 @@ class NexusRouter:
         mt5.shutdown()
         print("📡 NEXUS ROUTER :: Desligado.")
 
-import argparse
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Nexus Router - ZMQ PUB")
-    parser.add_argument('--symbol', type=str, default="GER40.cash", help='Symbol to trade')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--asset', type=str, default="GER40.cash", help='Symbol to trade')
     args = parser.parse_args()
     
-    router = NexusRouter(symbol=args.symbol)
+    router = NexusRouter(symbol=args.asset)
+
     if router.startup():
         try:
             router.run_broadcast_loop()

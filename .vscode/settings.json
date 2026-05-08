@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "D:/Python313/python.exe",
+    "python.pythonPath": "D:/Python313/python.exe",
+    "python.analysis.extraPaths": [
+        "D:/AI Brain/US30"
+    ],
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.languageServer": "Pylance"
+}
