@@ -3,125 +3,177 @@
 #include <pybind11/stl.h>
 #include <vector>
 #include <cmath>
-#include <stdexcept>
 #include <numeric>
+#include <algorithm>
 
 namespace py = pybind11;
 
-// Teoria de Ressonância Holográfica de Tensores (RHT)
+/**
+ * 🌌 RHT ENGINE v2.0 - THERMODYNAMIC RESONANCE CORE
+ * Implementa a Teoria de Calor Relativo e Entropia Holográfica para alinhamento de Timeframes.
+ */
 class RHTEngine {
 private:
     int num_timeframes;
     int time_steps;
     std::vector<std::vector<double>> tensor_matrix;
+    double heat_accumulator = 0.0; // Inércia Térmica da Ressonância
 
 public:
     RHTEngine(int num_tf, int t_steps) : num_timeframes(num_tf), time_steps(t_steps) {
-        if (num_timeframes <= 0 || time_steps <= 0) throw std::invalid_argument("Dimensões devem ser positivas.");
-        tensor_matrix.resize(num_timeframes, std::vector<double>(time_steps, 0.0));
+        if (num_timeframes <= 0 || time_steps <= 0) {
+            tensor_matrix.resize(1, std::vector<double>(1, 0.0));
+        } else {
+            tensor_matrix.resize(num_timeframes, std::vector<double>(time_steps, 0.0));
+        }
     }
 
-    // Carrega dados. Formato: Matriz 2D onde cada linha é um timeframe normalizado (mesmo tamanho T)
-    // Exemplo: Linha 0 = M5 (interp), Linha 1 = M15 (interp), etc.
     void load_tensor_data(py::array_t<double> input_data) {
         py::buffer_info buf = input_data.request();
         if (buf.ndim != 2 || buf.shape[0] != num_timeframes || buf.shape[1] != time_steps) {
-            throw std::runtime_error("Formato de array numpy incompatível para o Tensor 3D.");
+            throw std::runtime_error("RHT: Dimensões da matriz tensorial incompatíveis.");
         }
 
         double *ptr = static_cast<double *>(buf.ptr);
         for (int i = 0; i < num_timeframes; ++i) {
             for (int t = 0; t < time_steps; ++t) {
-                // A normalização para o espectro de onda já deve vir pré-calculada do Python (Ex: Z-score do momentum)
                 tensor_matrix[i][t] = ptr[i * time_steps + t];
             }
         }
     }
 
-    // Calcula a Interferência Construtiva Holográfica
-    // Retorna a Ressonância de Liquidez Absoluta para o tempo t
-    std::vector<double> compute_resonance() {
-        std::vector<double> resonance_signal(time_steps, 0.0);
-        
+    /**
+     * Calcula o histórico de Ressonância Termodinâmica.
+     * Retorna um sinal que combina Coerência de Fase com Intensidade Absoluta.
+     */
+    std::vector<double> compute_resonance_history(double gamma = 0.1) {
+        std::vector<double> history(time_steps, 0.0);
+        double local_heat = 0.0;
+
         for (int t = 0; t < time_steps; ++t) {
-            double sum_amplitudes = 0.0;
-            double sum_absolute_amplitudes = 0.0;
-            
+            double sum_val = 0.0;
+            double sum_abs = 0.0;
+
             for (int i = 0; i < num_timeframes; ++i) {
-                double wave_val = tensor_matrix[i][t];
-                sum_amplitudes += wave_val;
-                sum_absolute_amplitudes += std::abs(wave_val);
+                double v = tensor_matrix[i][t];
+                sum_val += v;
+                sum_abs += std::abs(v);
             }
-            
-            // Interferência construtiva ocorre quando todos os vetores estão na mesma direção (sinal).
-            // A ressonância é o quadrado da soma preservando o sinal, escalonada pela entropia.
-            // Se sum_amplitudes == sum_absolute_amplitudes, alinhamento total de ALTA (Bull Resonance)
-            // Se sum_amplitudes == -sum_absolute_amplitudes, alinhamento total de BAIXA (Bear Resonance)
-            
-            if (sum_absolute_amplitudes > 1e-9) {
-                // Fator de coerência de fase: Varia de -1 (Bear total) a +1 (Bull total)
-                double phase_coherence = std::abs(sum_amplitudes) / sum_absolute_amplitudes;
+
+            if (sum_abs > 1e-7) {
+                double coherence = std::abs(sum_val) / sum_abs;
+                double direction = (sum_val >= 0) ? 1.0 : -1.0;
                 
-                // Multiplicador de gravidade quântica (Quanto maior a soma absoluta, maior a energia no mercado)
-                double quantum_gravity = sum_absolute_amplitudes / num_timeframes;
+                // Calor Instantâneo: Escalonado pela coerência (Interferência Construtiva)
+                double instant_heat = direction * std::pow(coherence, 2.5) * (sum_abs / num_timeframes);
                 
-                // O sinal (direção)
-                double direction = (sum_amplitudes > 0) ? 1.0 : -1.0;
-                
-                // Ressonância final (Pulso do Tensor)
-                resonance_signal[t] = direction * std::pow(phase_coherence, 3) * quantum_gravity;
+                // Integração de Inércia (Dissipação de Calor)
+                local_heat = (local_heat * (1.0 - gamma)) + (instant_heat * gamma);
+                history[t] = local_heat;
             } else {
-                resonance_signal[t] = 0.0;
+                local_heat *= (1.0 - gamma);
+                history[t] = local_heat;
             }
         }
-        
-        return resonance_signal;
+        return history;
     }
-    
-    // Retorna o valor de ressonância no instante atual (último tick) e uma flag de colapso
-    // threshold: O valor mínimo de quantum_gravity necessário para validar um colapso
-    std::vector<double> get_instant_collapse(double threshold = 0.8) {
-        if (time_steps == 0) return {0.0, 0.0, 0.0};
+
+    /**
+     * Analisa o Estado Termodinâmico Atual.
+     * Retorna: {Heat, Entropy, Direction, Flash_Flag}
+     * Flash_Flag: 1 (Bull Ignition), -1 (Bear Ignition), 0 (Neutral)
+     */
+    std::vector<double> analyze_current_state(double threshold = 0.7, double decay = 0.92) {
+        if (time_steps == 0) return {0.0, 1.0, 0.0, 0.0};
+
+        int t = time_steps - 1;
+        double sum_val = 0.0;
+        double sum_abs = 0.0;
         
-        int t = time_steps - 1; // Instante atual (último elemento)
-        double sum_amplitudes = 0.0;
-        double sum_absolute_amplitudes = 0.0;
-        
+        // Contadores para Entropia de Shannon (simplificada para 2 estados: Buy/Sell)
+        double p_buy = 0.0;
+        double p_sell = 0.0;
+
         for (int i = 0; i < num_timeframes; ++i) {
-            double wave_val = tensor_matrix[i][t];
-            sum_amplitudes += wave_val;
-            sum_absolute_amplitudes += std::abs(wave_val);
+            double v = tensor_matrix[i][t];
+            sum_val += v;
+            sum_abs += std::abs(v);
+            if (v > 0) p_buy += 1.0; else if (v < 0) p_sell += 1.0;
         }
-        
-        double resonance = 0.0;
+
+        double heat = 0.0;
+        double entropy = 1.0;
         double direction = 0.0;
-        double collapse_flag = 0.0; // 0 = Neutro, 1 = Buy (Bull), -1 = Sell (Bear)
-        
-        if (sum_absolute_amplitudes > 1e-9) {
-            double phase_coherence = std::abs(sum_amplitudes) / sum_absolute_amplitudes;
-            double quantum_gravity = sum_absolute_amplitudes / num_timeframes;
-            direction = (sum_amplitudes > 0) ? 1.0 : -1.0;
+        double flash_flag = 0.0;
+
+        if (sum_abs > 1e-7) {
+            double coherence = std::abs(sum_val) / sum_abs;
+            direction = (sum_val >= 0) ? 1.0 : -1.0;
             
-            resonance = direction * std::pow(phase_coherence, 3) * quantum_gravity;
-            
-            // Condição de colapso: Alta coerência de fase (> 0.9) e gravidade acima do limiar institucional
-            if (phase_coherence > 0.9 && quantum_gravity > threshold) {
-                collapse_flag = direction;
+            // Entropia (S): Mede a desordem do alinhamento. S=0 é alinhamento total.
+            double n = (double)num_timeframes;
+            if (p_buy > 0 && p_sell > 0) {
+                double pb = p_buy / n;
+                double ps = p_sell / n;
+                entropy = -(pb * std::log2(pb) + ps * std::log2(ps));
+            } else {
+                entropy = 0.0;
             }
+
+            double sum_abs = 0.0;
+            double agree_count = 0;
+            
+            for (int i = 0; i < n; ++i) {
+                double val = tensor_matrix[i][t];
+                sum_abs += std::abs(val);
+                // Valida consenso direcional (Sign agreement)
+                if ((direction > 0 && val > 0) || (direction < 0 && val < 0)) {
+                    agree_count++;
+                }
+            }
+            
+            double consensus_ratio = agree_count / n;
+            double energy_factor = (sum_abs / n);
+
+            // Gravidade Macro (H1, H2, D1)
+            double inst_macro_gravity = (tensor_matrix[2][t] + tensor_matrix[3][t] + tensor_matrix[4][t]) / 3.0;
+            
+            // Acumulador de Inércia Macro (Para evitar normalização precoce)
+            static double macro_memory = 0.0;
+            macro_memory = (macro_memory * 0.95) + (inst_macro_gravity * 0.05);
+            
+            double effective_gravity = (inst_macro_gravity + macro_memory) / 2.0;
+            
+            // PROTOCOLO ZERO-TOLERANCE (Anti-Hallucination)
+            bool gravity_block = false;
+            if (direction > 0 && effective_gravity < -0.05) gravity_block = true; // Bloqueio TOTAL de Bull em queda
+            if (direction < 0 && effective_gravity > 0.05) gravity_block = true;  // Bloqueio TOTAL de Bear em alta
+            
+            // Calor Impecável
+            double signal_purity = (consensus_ratio >= 0.8 && !gravity_block) ? 1.0 : 0.0;
+            double instant_heat = direction * std::pow(coherence, 3.0) * energy_factor * (1.0 - entropy) * signal_purity;
+            
+            heat_accumulator = (heat_accumulator * decay) + (instant_heat * (1.0 - decay));
+            heat = heat_accumulator;
+
+            // Flash Point (Ignição com Alinhamento Binário de Gravidade):
+            if (!gravity_block && coherence > 0.96 && std::abs(heat) > threshold && entropy < 0.22 && consensus_ratio >= 0.8) {
+                flash_flag = direction;
+            }
+        } else {
+            heat_accumulator *= decay;
         }
-        
-        return {resonance, direction, collapse_flag}; // Retorna Ressonância, Vetor Direcional e Sinal de Ação
+
+        return {heat, entropy, direction, flash_flag};
     }
 };
 
 PYBIND11_MODULE(rht_engine, m) {
-    m.doc() = "Ressonancia Holografica de Tensores (RHT) Engine";
-    
+    m.doc() = "RHT Engine v2.0 - Thermodynamic Tensor Resonance";
+
     py::class_<RHTEngine>(m, "RHTEngine")
         .def(py::init<int, int>())
-        .def("load_tensor_data", &RHTEngine::load_tensor_data, "Carrega matriz de tensores fractais (Timeframes x Ticks)")
-        .def("compute_resonance", &RHTEngine::compute_resonance, "Calcula a linha do tempo da ressonancia holografica")
-        .def("get_instant_collapse", &RHTEngine::get_instant_collapse, 
-             py::arg("threshold") = 0.8, 
-             "Avalia se ocorreu interferencia construtiva no tempo t (Gatilho Operacional)");
+        .def("load_tensor_data", &RHTEngine::load_tensor_data)
+        .def("compute_resonance_history", &RHTEngine::compute_resonance_history, py::arg("gamma") = 0.1)
+        .def("analyze_current_state", &RHTEngine::analyze_current_state, py::arg("threshold") = 0.7, py::arg("decay") = 0.92);
 }

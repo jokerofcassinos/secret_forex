@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.o
+*.obj
+*.dll
+*.exe
+build/
+bin/
+artifacts/
+scratch/
+Data/Historical/
+*.png
+*.jpg
+*.log

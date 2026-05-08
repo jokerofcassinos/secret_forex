@@ -51,17 +51,16 @@ public:
         }
     }
 
-    // Calcula a Matriz de Covariância C = (1/T) * X * X^T
+    // Calcula a Matriz de Covariância C = (1/T) * X * X^T (Acelerado com OpenMP)
     void compute_covariance() {
+        #pragma omp parallel for collapse(2)
         for (int i = 0; i < N; ++i) {
-            for (int j = i; j < N; ++j) { // Simétrica
+            for (int j = 0; j < N; ++j) {
                 double cov = 0.0;
                 for (int t = 0; t < T; ++t) {
                     cov += data_matrix[i][t] * data_matrix[j][t];
                 }
-                cov /= T;
-                covariance_matrix[i][j] = cov;
-                covariance_matrix[j][i] = cov;
+                covariance_matrix[i][j] = cov / T;
             }
         }
     }

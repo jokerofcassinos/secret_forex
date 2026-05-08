@@ -68,31 +68,40 @@ class QuantumCloudTracker:
         lows = df_slice['low'].values
         n_candles = len(df_slice)
         
-        # SOVEREIGN decay: Prioritize recent activity
-        decay_factor = np.exp(np.linspace(-2.0, 0, n_candles))
+        # SOVEREIGN Hawking Decay: Exponential decay of old volume wells
+        # M(t) = M0 * exp(-lambda * delta_t)
+        decay_lambda = 0.02 # Reduzido de 0.05 para maior persistência temporal
+        decay_factor = np.exp(-decay_lambda * np.arange(n_candles)[::-1])
         
         strength_map = np.zeros(self.bins, dtype=np.float64)
         
         for i in range(n_candles):
             mid_p = (highs[i] + lows[i]) / 2.0
-            range_p = max(self.dx * 5.0, highs[i] - lows[i]) 
+            range_p = max(self.dx * 3.0, highs[i] - lows[i]) 
             idx_mid = self.price_to_index(mid_p)
             
-            width_bins = int(range_p / self.dx * 1.5) + 1
+            # Adaptive width based on candle range
+            width_bins = int(range_p / self.dx * 2.0) + 1
             i_start = max(0, idx_mid - width_bins)
             i_end = min(self.bins, idx_mid + width_bins)
             
             x = np.arange(i_start, i_end)
             dist = (x - idx_mid) * self.dx
             
+            # Strength influenced by Hawking Decay
             strength = (vol_array[i] * vol_scale) * decay_factor[i]
-            well_shape = strength * np.exp(-1.5 * (dist / (range_p + 1e-9))**2)
+            well_shape = strength * np.exp(-2.0 * (dist / (range_p + 1e-9))**2)
             strength_map[i_start:i_end] += well_shape
             
-        # Deeper potential for localization
-        V = np.maximum(2.0, V_base - strength_map)
+        # 4. POTENTIAL CONSTRUCTION (AdS/CFT Boundary)
+        V = np.maximum(5.0, V_base - strength_map)
         
-        V_smoothed = np.convolve(V, np.ones(5)/5, mode='same')
+        # QUANTUM DITHERING: Inject stochastic noise to prevent thermal death plateaus
+        # Helps the solver explore local minima and avoid "stuck" states
+        noise = np.random.normal(0, 1.5, self.bins)
+        V = np.array(V) + noise
+        
+        V_smoothed = np.convolve(V, np.ones(3)/3, mode='same')
         return list(V_smoothed)
 
     def step(self, df_slice, dt=0.2, steps=1):
@@ -127,16 +136,60 @@ class QuantumCloudTracker:
             
         mass = max(1.0, min(5000.0, mass))
 
+        # 1. GENERATE POTENTIAL (Gravity Wells)
         V = self.generate_potential_from_volume_profile(df_slice)
-        self.solver.update_potential(V)
         
+        # 2. GENERATE SPATIAL MASS (Superfluidity Shift)
+        vol_col = 'tick_volume' if 'tick_volume' in df_slice.columns else 'volume'
+        vol_profile = df_slice[vol_col].values if vol_col in df_slice.columns else np.ones(len(df_slice))
+        
+        # SUPERFLUIDITY: If ATR is high, we lower the mass to allow the wave to follow the trend
+        # If consolidation, we increase mass to "freeze" the levels.
+        # Fluidity factor = ATR / AvgVolume
+        atr_rel = tr / (df_slice['high'].max() - df_slice['low'].min() + 1e-9)
+        mass_scale_factor = 1.0 / (1.0 + atr_rel * 50.0) 
+        
+        global_mass = mass * mass_scale_factor
+        
+        spatial_mass = np.ones(self.bins, dtype=np.float64)
+        for i in range(len(df_slice)):
+            mid_p = (df_slice['high'].iloc[i] + df_slice['low'].iloc[i]) / 2.0
+            idx = self.price_to_index(mid_p)
+            local_viscosity = (df_slice[vol_col].iloc[i] / (np.mean(vol_profile) + 1e-9)) * 1.5
+            x = np.arange(self.bins)
+            dist = (x - idx) * self.dx
+            spatial_mass += local_viscosity * np.exp(-3.0 * (dist / (tr + 1e-9))**2)
+            
+        spatial_mass = np.clip(spatial_mass, 0.2, 10.0) # Lower clip for super-fluid zones
+        
+        # 3. ANTIMATTER REPULSION (Dirac Vacuum Annihilation)
+        if len(df_slice) > 5:
+            last_tr = df_slice['high'].iloc[-1] - df_slice['low'].iloc[-1]
+            prev_tr = df_slice['high'].iloc[-2] - df_slice['low'].iloc[-2]
+            if last_tr > prev_tr * 2.5: 
+                repulsion_idx = self.price_to_index(df_slice['close'].iloc[-2])
+                x = np.arange(self.bins)
+                dist = (x - repulsion_idx) * self.dx
+                V_repel = 1000.0 * np.exp(-10.0 * (dist / (self.dx * 5))**2)
+                V = list(np.array(V) + V_repel)
+
+        self.solver.update_potential(V)
+        self.solver.update_spatial_mass(list(spatial_mass))
+        
+        # 4. DRIFT MOMENTUM (Advection)
+        # Calculate price velocity to push the wave packet (preserving phase info)
+        price_velocity = (df_slice['close'].iloc[-1] - df_slice['close'].iloc[-2]) if len(df_slice) > 1 else 0.0
+        # Normalize drift_k to avoid instability
+        drift_k = np.clip(price_velocity / (self.dx * 10.0), -0.5, 0.5)
+        
+        # 5. EVOLUTION STEP (Schrodinger Omega)
         for _ in range(steps):
-            self.solver.step_forward(dt, mass)
+            self.solver.step_forward(dt, global_mass, drift_k)
         
         x0 = curr_price - self.price_min
-        # Stable wave width
-        sigma = self.dx * 15
-        self.solver.recenter_wave(x0, sigma * 1.5)
+        # Dynamic sigma for wave width
+        sigma = self.dx * 12
+        self.solver.recenter_wave(x0, sigma)
         
         density = self.solver.get_probability_density()
         return density, needs_reset

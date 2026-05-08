@@ -10,22 +10,15 @@ PY_INC = sysconfig.get_path('include')
 PY_LIBS = r"D:\Python313"
 EXT_SUFFIX = sysconfig.get_config_var('EXT_SUFFIX') or '.cp313-win_amd64.pyd'
 
-ENGINES = [
-    ("schrodinger_engine", "src/schrodinger/schrodinger_engine.cpp"),
-    ("lbm_engine",        "src/lbm/lbm_engine.cpp"),
-    ("cyt_engine",        "src/cyt/cyt_engine.cpp"),
-    ("rht_engine",        "src/rht/rht_engine.cpp"),
-]
-
 def build_engine(name, src):
     output = f"{name}{EXT_SUFFIX}"
     cmd = [
-        GCC, "-shared", "-O3", "-ffast-math", "-std=c++17",
-        "-D_USE_MATH_DEFINES", "-DNDEBUG",
+        GCC, "-shared", "-O3", "-ffast-math", "-std=c++17", "-fopenmp",
+        "-D_USE_MATH_DEFINES", "-DNDEBUG", "-DMS_WIN64",
         f"-I{PYBIND_INC}", f"-I{PY_INC}", f"-L{PY_LIBS}",
         "-lpython313", "-o", output, src,
     ]
-    print(f"Building {name}...")
+    print(f"Executing: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
         print(f"[OK] {name}")
@@ -36,5 +29,4 @@ def build_engine(name, src):
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    for name, src in ENGINES:
-        build_engine(name, src)
+    build_engine("schrodinger_engine", "src/schrodinger/schrodinger_engine.cpp")

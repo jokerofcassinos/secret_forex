@@ -4,6 +4,7 @@
 #include <vector>
 #include <complex>
 #include <cmath>
+#include <algorithm>
 
 namespace py = pybind11;
 
@@ -12,137 +13,171 @@ using Complex = std::complex<double>;
 class QRWEngine {
 private:
     int num_positions;
-    std::vector<std::vector<Complex>> state;
-    std::vector<std::vector<Complex>> new_state;
-    
-    // FIX P0-03: Epsilon para comparação numérica
-    static constexpr double EPSILON = 1e-30;
+    std::vector<Complex> state_up;
+    std::vector<Complex> state_down;
+    double decoherence_factor = 0.9992;
+    static constexpr double EPSILON = 1e-18;
 
 public:
-    QRWEngine(int positions = 201) : num_positions(positions) {
+    QRWEngine(int positions = 4001) : num_positions(positions) {
         if(num_positions % 2 == 0) num_positions += 1;
-        state.resize(num_positions, std::vector<Complex>(2, 0.0));
-        new_state.resize(num_positions, std::vector<Complex>(2, 0.0));
+        state_up.assign(num_positions, 0.0);
+        state_down.assign(num_positions, 0.0);
+        reset();
     }
 
-    void reset(int start_pos = -1) {
-        for(int i=0; i<num_positions; ++i) {
-            state[i][0] = 0.0;
-            state[i][1] = 0.0;
-        }
-        if(start_pos == -1) start_pos = num_positions / 2;
-        
-        // Inicialização balanceada para simetria perfeita
+    void reset() {
+        std::fill(state_up.begin(), state_up.end(), 0.0);
+        std::fill(state_down.begin(), state_down.end(), 0.0);
+        int center = num_positions / 2;
         double inv_sqrt2 = 1.0 / std::sqrt(2.0);
-        state[start_pos][0] = Complex(inv_sqrt2, 0.0);
-        state[start_pos][1] = Complex(inv_sqrt2, 0.0);  // Ambas reais para simetria com operador i*sin
+        state_up[center] = Complex(inv_sqrt2, 0.0);
+        state_down[center] = Complex(inv_sqrt2, 0.0);
     }
 
-    void step(double bias) {
-        // Operador Unitário Simétrico Biased (SU(2))
-        double theta = M_PI / 4.0;
+    void step(double bias, double dyn_deco) {
+        std::vector<Complex> next_up(num_positions, 0.0);
+        std::vector<Complex> next_down(num_positions, 0.0);
+        
+        double theta = M_PI / 4.0; 
         Complex I(0.0, 1.0);
+        
+        // Bias rotativo suave
         Complex C00(std::cos(theta), 0.0);
         Complex C01 = I * std::sin(theta) * std::exp(I * bias);
         Complex C10 = I * std::sin(theta) * std::exp(-I * bias);
         Complex C11(std::cos(theta), 0.0);
 
-        for(int i=0; i<num_positions; ++i) {
-            new_state[i][0] = 0.0;
-            new_state[i][1] = 0.0;
-        }
-
-        for(int i=0; i<num_positions; ++i) {
-            // FIX P0-03: Comparação com epsilon ao invés de ==0
-            if(std::norm(state[i][0]) < EPSILON && std::norm(state[i][1]) < EPSILON) continue;
-
-            Complex val0 = C00 * state[i][0] + C01 * state[i][1];
-            Complex val1 = C10 * state[i][0] + C11 * state[i][1];
-
-            if(i - 1 >= 0) new_state[i - 1][0] += val0;
-            if(i + 1 < num_positions) new_state[i + 1][1] += val1;
-        }
-
-        state = new_state;
-    }
-
-    double get_expected_value() {
-        double expected_val = 0.0;
         int center = num_positions / 2;
-        for(int i=0; i<num_positions; ++i) {
-            double prob = std::norm(state[i][0]) + std::norm(state[i][1]);
-            int x = i - center;
-            expected_val += x * prob;
+
+        for (int i = 0; i < num_positions; ++i) {
+            // Força de Centralização (Potencial Harmônico Fraco)
+            // Quanto mais longe do centro, mais a decoerência aumenta
+            double dist_from_center = (double)(i - center) / (double)center;
+            // Força de Centralização Suavizada (1e-5) para permitir drift institucional
+            double local_deco = dyn_deco * (1.0 - 0.0001 * std::pow(dist_from_center * center, 2) / (double)center);
+            
+            Complex s_up = state_up[i] * local_deco;
+            Complex s_down = state_down[i] * local_deco;
+            if (std::norm(s_up) < EPSILON && std::norm(s_down) < EPSILON) continue;
+
+            Complex v_up = C00 * s_up + C01 * s_down;
+            Complex v_down = C10 * s_up + C11 * s_down;
+
+            // Fronteiras Refletivas com Absorção
+            if (i > 0) next_up[i - 1] += v_up;
+            else next_down[i + 1] += v_up * 0.5; // Reflexão parcial
+
+            if (i < num_positions - 1) next_down[i + 1] += v_down;
+            else next_up[i - 1] += v_down * 0.5; // Reflexão parcial
         }
-        return expected_val;
-    }
-    
-    // FIX P1-04: Calcula a norma total para normalização
-    double get_total_probability() {
-        double total = 0.0;
-        for(int i=0; i<num_positions; ++i) {
-            total += std::norm(state[i][0]) + std::norm(state[i][1]);
+        
+        // Normalização para evitar drift de energia quântica
+        double norm_sum = 0.0;
+        for(int i=0; i<num_positions; ++i) norm_sum += std::norm(next_up[i]) + std::norm(next_down[i]);
+        if(norm_sum > 0) {
+            double factor = 1.0 / std::sqrt(norm_sum);
+            for(int i=0; i<num_positions; ++i) {
+                next_up[i] *= factor;
+                next_down[i] *= factor;
+            }
         }
-        return total;
-    }
-    
-    // Calcula a variância da distribuição para normalização do skew
-    double get_variance() {
-        double mean = get_expected_value();
-        double var = 0.0;
-        int center = num_positions / 2;
-        for(int i=0; i<num_positions; ++i) {
-            double prob = std::norm(state[i][0]) + std::norm(state[i][1]);
-            double x = (double)(i - center);
-            var += (x - mean) * (x - mean) * prob;
-        }
-        return var;
+
+        state_up = std::move(next_up);
+        state_down = std::move(next_down);
     }
 
-    // FIX P1-03: Aceita atr_scale para calibrar o bias dinamicamente
-    // FIX P1-04: Retorna skewness normalizada pela variância
-    double compute_interference_skew(const std::vector<double>& price_deltas, 
-                                     const std::vector<double>& volumes,
-                                     double atr_scale) {
-        int steps = price_deltas.size();
-        if(steps == 0) return 0.0;
-        
-        // Calcular escala de normalização do bias
-        // FIX P1-03: atr_scale é passado pelo Python (1/ATR) para calibrar
-        double bias_factor = (atr_scale > 1e-12) ? atr_scale : 0.001;
-        
-        // 1. Simulação Não-Viesada (Baseline)
-        reset();
-        for(int t=0; t<steps; ++t) {
-            step(0.0); // Bias puro zero
+    double get_skewness() {
+        double exp_v = 0.0, total_p = 0.0;
+        int center = num_positions / 2;
+        for (int i = 0; i < num_positions; ++i) {
+            double p = std::norm(state_up[i]) + std::norm(state_down[i]);
+            total_p += p;
+            exp_v += (double)(i - center) * p;
         }
-        double baseline_expected = get_expected_value();
-        double baseline_var = get_variance();
-        
-        // 2. Simulação Viesada (Com Intenção Institucional)
-        reset();
-        for(int t=0; t<steps; ++t) {
-            double delta = price_deltas[t];
-            double vol = volumes[t];
-            double bias = std::tanh(delta * vol * bias_factor); 
-            step(bias);
+        if (total_p < 1e-9) return 0.0;
+        // Retorna o Drift Normalizado entre -1.0 e 1.0
+        return (exp_v / total_p) / (double)center;
+    }
+
+    double get_entropy() {
+        double entropy = 0.0, total_p = 0.0;
+        for (int i = 0; i < num_positions; ++i) {
+            double p = std::norm(state_up[i]) + std::norm(state_down[i]);
+            total_p += p;
+            if (p > 1e-12) entropy -= p * std::log(p);
         }
-        double biased_expected = get_expected_value();
-        
-        // FIX P1-04: Normalizar o drift pela variância do baseline
-        double drift_diff = biased_expected - baseline_expected;
-        double std_dev = std::sqrt(baseline_var + 1e-12);
-        double normalized_skew = drift_diff / std_dev;
-        
-        return normalized_skew;
+        if (total_p < 1e-9) return 0.0;
+        return entropy / total_p;
+    }
+
+    double get_wave_variance() {
+        double exp_v = 0.0, var = 0.0, total_p = 0.0;
+        int center = num_positions / 2;
+        for (int i = 0; i < num_positions; ++i) {
+            double p = std::norm(state_up[i]) + std::norm(state_down[i]);
+            total_p += p;
+            exp_v += (double)(i - center) * p;
+        }
+        if (total_p < 1e-9) return 0.0;
+        exp_v /= total_p;
+        for (int i = 0; i < num_positions; ++i) {
+            double p = std::norm(state_up[i]) + std::norm(state_down[i]);
+            var += p * std::pow((double)(i - center) - exp_v, 2);
+        }
+        return var / total_p;
+    }
+
+    double get_coherence() {
+        double max_p = 0.0;
+        double total_p = 0.0;
+        for (int i = 0; i < num_positions; ++i) {
+            double p = std::norm(state_up[i]) + std::norm(state_down[i]);
+            if (p > max_p) max_p = p;
+            total_p += p;
+        }
+        if (total_p < 1e-9) return 0.0;
+        return max_p / (total_p + 1e-12);
+    }
+
+    double update_and_get_skew(py::array_t<double> deltas, py::array_t<double> volumes, double scale) {
+        auto r_d = deltas.unchecked<1>();
+        auto r_v = volumes.unchecked<1>();
+        int size = r_d.shape(0);
+        for (int i = 0; i < size; ++i) {
+            double d = r_d(i), v = r_v(i);
+            // Moeda Quântica de Nova Geração (v3.6) - Range de Bias Expandido para PI/4
+            // Permite interferência construtiva total para capturar explosões de preço
+            double bias_angle = (M_PI / 4.0) - (std::tanh(d * scale * 2.0) * (M_PI / 4.0));
+            
+            double dyn_deco = decoherence_factor * (1.0 - std::abs(std::tanh(d * scale * 0.01)));
+
+            step(bias_angle, std::clamp(dyn_deco, 0.99, 1.0));
+        }
+        return get_skewness();
+    }
+
+    void set_decoherence(double factor) {
+        decoherence_factor = std::clamp(factor, 0.0, 1.0);
+    }
+
+    py::array_t<double> get_probability_distribution() {
+        py::array_t<double> res(num_positions);
+        auto r = res.mutable_unchecked<1>();
+        for (int i = 0; i < num_positions; ++i) r(i) = std::norm(state_up[i]) + std::norm(state_down[i]);
+        return res;
     }
 };
 
 PYBIND11_MODULE(qrw_engine, m) {
-    m.doc() = "Quantum Random Walk (QRW) Engine v2.0 - Unitary Coin Operator";
     py::class_<QRWEngine>(m, "QRWEngine")
-        .def(py::init<int>(), py::arg("positions") = 201)
-        .def("compute_interference_skew", &QRWEngine::compute_interference_skew, 
-             "Compute normalized Probability Drift based on Quantum Interference",
-             py::arg("price_deltas"), py::arg("volumes"), py::arg("atr_scale"));
+        .def(py::init<int>(), py::arg("positions") = 401)
+        .def("reset", &QRWEngine::reset)
+        .def("set_decoherence", &QRWEngine::set_decoherence)
+        .def("get_skewness", &QRWEngine::get_skewness)
+        .def("get_entropy", &QRWEngine::get_entropy)
+        .def("get_wave_variance", &QRWEngine::get_wave_variance)
+        .def("get_coherence", &QRWEngine::get_coherence)
+        .def("get_probability_distribution", &QRWEngine::get_probability_distribution)
+        .def("update_and_get_skew", &QRWEngine::update_and_get_skew, py::arg("deltas"), py::arg("volumes"), py::arg("scale"));
 }

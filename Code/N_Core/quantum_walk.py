@@ -18,63 +18,57 @@ except ImportError as e:
 
 class QRWTracker:
     """
-    N-Core Agent: Quantum Random Walk (QRW) v2.0
-    Decodes hidden accumulation/distribution using quantum coin interference.
-    FIX P1-03: Dynamic bias calibration via ATR.
+    N-Core Agent: Quantum Random Walk (QRW) v3.0 [PERSISTENT]
+    Decodes hidden accumulation/distribution using quantum phase persistence.
     """
-    def __init__(self, positions=201):
+    def __init__(self, positions=401, decoherence=0.995):
         try:
             self.engine = qrw_engine.QRWEngine(positions)
+            self.engine.set_decoherence(decoherence)
             self.is_active = True
+            self.last_processed_time = 0
         except NameError:
             self.is_active = False
 
-    def is_in_range(self, df_slice, lookback=20, atr_threshold=5.0):
-        recent = df_slice.tail(lookback)
-        high_max = recent['high'].max()
-        low_min = recent['low'].min()
-        box_height = high_max - low_min
-        tr1 = df_slice['high'] - df_slice['low']
-        tr2 = np.abs(df_slice['high'] - df_slice['close'].shift())
-        tr3 = np.abs(df_slice['low'] - df_slice['close'].shift())
-        true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = true_range.rolling(14).mean().iloc[-1]
-        return box_height < (atr * atr_threshold)
-
-    def process_qrw_skewness(self, df_slice, lookback=20):
+    def process_qrw_skewness(self, df_slice, lookback=1):
         """
-        FIX P1-03: Passes ATR-calibrated scale factor to C++ engine.
-        Calibração Absoluta: Thresholds ajustados e Fator de Escala Logarítmico.
+        Processa novos dados e mantém a função de onda viva.
+        lookback=1 processa apenas o tick/barra mais recente para manter a coerência.
         """
-        if not self.is_active or len(df_slice) < lookback:
+        if not self.is_active or len(df_slice) < 5:
             return 0.0, "NONE"
             
+        # Pega apenas as barras que ainda não foram processadas
         recent = df_slice.tail(lookback).copy()
-        price_deltas = (recent['close'] - recent['open']).values
-        volumes = recent.get('tick_volume', pd.Series(np.ones(lookback))).values
         
-        # Calibração Absoluta: Fator de Escala Logarítmico
-        # Evita que volumes monstruosos esmaguem o passeios aleatório quântico
-        tr1 = recent['high'] - recent['low']
-        atr = tr1.mean()
-        vol_mean = np.mean(volumes) if np.mean(volumes) > 0 else 1.0
+        # Filtro de tempo para evitar re-processar a mesma barra
+        current_time = recent.index[-1] if hasattr(recent.index, 'max') else 0
+        if current_time <= self.last_processed_time and lookback == 1:
+            return self.engine.get_skewness(), "STABLE"
+
+        price_deltas = (recent['close'] - recent['open']).values.astype(np.float64)
+        volumes = recent.get('tick_volume', pd.Series(np.ones(len(recent)))).values.astype(np.float64)
         
-        # Scale factor amortecido
-        atr_scale = 1.0 / (atr * np.log1p(vol_mean) + 1e-9)
+        # Calibração Absoluta: Fator de Escala Logarítmico amortecido pelo ATR
+        tr = (df_slice['high'] - df_slice['low']).tail(14).mean()
+        vol_mean = volumes.mean() if volumes.mean() > 0 else 1.0
+        atr_scale = 1.0 / (tr * np.log1p(vol_mean) + 1e-9)
         
-        # Compute skewness using C++ engine
-        skewness = self.engine.compute_interference_skew(
-            list(price_deltas), list(volumes), float(atr_scale)
+        # Injeção direta de RAM (Zero-Copy) no C++
+        skewness = self.engine.update_and_get_skew(
+            price_deltas, volumes, float(atr_scale)
         )
         
-        # Redução do threshold de 1.2 para 0.65 para capturar distribuições/acumulações mais sutis no US100
+        self.last_processed_time = current_time
+        
+        # Thresholds calibrados para Skewness Normalizada (Z-Score Like)
         signal = "NEUTRAL"
-        if skewness > 0.65:
-            signal = "HIDDEN_ACCUMULATION_BULL"
-        elif skewness < -0.65:
-            signal = "HIDDEN_DISTRIBUTION_BEAR"
+        if skewness > 1.2:
+            signal = "QUANTUM_ACCUMULATION_BULL"
+        elif skewness < -1.2:
+            signal = "QUANTUM_DISTRIBUTION_BEAR"
             
         return skewness, signal
 
 if __name__ == "__main__":
-    print("QRW Decrypter v2.0 module loaded.")
+    print("QRW Persistent Engine v3.0 module loaded.")

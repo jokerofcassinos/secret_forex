@@ -22,9 +22,10 @@ class RandomMatrixTracker:
     Filters out retail noise using Eigenvalue Decomposition and Marchenko-Pastur distribution.
     """
     def __init__(self, time_steps=100):
-        # Features: [Close Returns, High-Low Spread, Tick Volume, Body Size, Upper Wick, Lower Wick]
-        self.N_FEATURES = 6 
+        # Features: [Returns, Spread, Vol, Body, UpWick, LowWick, Entropy, LBM]
+        self.N_FEATURES = 8
         self.T = time_steps
+        self.engine = None
         
         try:
             self.engine = rmt_engine.RMTEngine(self.N_FEATURES, self.T)
@@ -32,10 +33,9 @@ class RandomMatrixTracker:
         except NameError:
             self.is_active = False
 
-    def build_feature_matrix(self, df_slice):
+    def build_feature_matrix(self, df_slice, lbm_velocity=None):
         """
-        Converts the raw dataframe into a multi-dimensional feature matrix.
-        Shape: (N_FEATURES, T)
+        Converts the raw dataframe into an expanded multi-dimensional feature matrix.
         """
         if len(df_slice) != self.T:
             return None
@@ -47,30 +47,44 @@ class RandomMatrixTracker:
         upper_wicks = (df_slice['high'] - np.maximum(df_slice['open'], df_slice['close'])).values
         lower_wicks = (np.minimum(df_slice['open'], df_slice['close']) - df_slice['low']).values
         
-        matrix = np.vstack([returns, spreads, volumes, bodies, upper_wicks, lower_wicks])
+        # New Quantum Features:
+        # 1. Volatility Entropy (ATR Normalized)
+        vol_entropy = (spreads / (df_slice['close'].rolling(20).std().bfill() + 1e-9)).values
+        
+        # 2. LBM Fluid Interaction
+        if lbm_velocity is None:
+            lbm_v_arr = np.zeros(self.T)
+        else:
+            lbm_v_arr = np.array(lbm_velocity) if len(lbm_velocity) == self.T else np.zeros(self.T)
+            
+        matrix = np.vstack([
+            returns, spreads, volumes, bodies, 
+            upper_wicks, lower_wicks, vol_entropy, lbm_v_arr
+        ])
         return matrix
 
-    def process_spectral_filter(self, df_slice):
+    def process_spectral_filter(self, df_slice, lbm_velocity=None):
         """
-        Calculates the Dominant Eigenvalue to determine Institutional Presence.
-        Returns: (eigenvalue, signal_power_ratio, is_pure_signal)
+        Calculates the Spectral Signature of institutional mass.
         """
         if not self.is_active or len(df_slice) < self.T:
             return 0.0, 0.0, False
             
-        matrix = self.build_feature_matrix(df_slice.tail(self.T))
+        matrix = self.build_feature_matrix(df_slice.tail(self.T), lbm_velocity)
         if matrix is None: return 0.0, 0.0, False
         
-        # Load data into C++ Engine
+        # Re-instantiate engine if dimensions don't match (Safety Lock)
+        if self.engine is None or matrix.shape[0] != self.N_FEATURES:
+            self.N_FEATURES = matrix.shape[0]
+            self.engine = rmt_engine.RMTEngine(self.N_FEATURES, self.T)
+            
         self.engine.load_data(matrix)
         
-        # Extract Eigenvalue via Power Iteration in C++
+        # Spectral Extraction
         lambda_dom, power_ratio, lambda_max_mp = self.engine.extract_dominant_eigenvalue()
         
-        # Calibração Absoluta: 
-        # O Limite de Marchenko-Pastur (lambda_max_mp) define o teto do ruído aleatório.
-        # Um sinal só é "Puro" se o Autovalor Dominante esmagar o limite do ruído.
-        # Aumentamos o rigor estatístico para 2.5x a variância do ruído para evitar falsos positivos.
+        # RMT v2.0 Decision Threshold:
+        # Calibrado para 2.5x o limite de Marchenko-Pastur (Noise Floor)
         is_pure_signal = power_ratio > 2.5
         
         return lambda_dom, power_ratio, is_pure_signal

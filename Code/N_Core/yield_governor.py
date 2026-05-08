@@ -3,9 +3,20 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Resolve problema de DLL do MinGW no Windows para Python 3.8+
-if hasattr(os, 'add_dll_directory'):
-    os.add_dll_directory(r"D:\msys64\mingw64\bin")
+# [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++
+if os.name == 'nt':
+    # 1. Mingw64 Binaries
+    if os.path.exists(r"D:\msys64\mingw64\bin"):
+        os.add_dll_directory(r"D:\msys64\mingw64\bin")
+    
+    # 2. NEXUS CPP Engines (bin)
+    # yield_governor.py is in Code/N_Core, so we go up twice then Code/CPP_Engine/bin
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    bin_path = os.path.join(root, "Code", "CPP_Engine", "bin")
+    if os.path.exists(bin_path):
+        os.add_dll_directory(bin_path)
+        if bin_path not in sys.path:
+            sys.path.insert(0, bin_path)
 
 # Importa o módulo C++ compilado
 try:

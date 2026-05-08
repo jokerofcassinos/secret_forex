@@ -5,12 +5,6 @@ Orquestrador Central baseado em Actor Model (ZeroMQ).
 Escuta o mercado (SUB) e consulta a Física (REQ). 
 Totalmente focado em Decisão (N-Core) e Execução (R-Exec).
 """
-from Code.N_Core.quantum_indicators import QuantumIndicators
-from Code.N_Core.msnr_alchemist import MSNRAlchemist
-from Code.N_Core.quantum_oracle import QuantumOracle
-from Code.N_Core.yield_governor import YieldGovernor
-from Code.N_Core.live_rht import LiveRHTTracker
-from Code.N_Core.market_qcd import MarketQCDTracker
 import time
 import numpy as np
 import pandas as pd
@@ -22,9 +16,30 @@ import sys
 import os
 import argparse
 
-# [BOOTLOADER] Força reconhecimento dos binários Mingw64
-if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
-    os.add_dll_directory(r"D:\msys64\mingw64\bin")
+# [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++
+if os.name == 'nt':
+    # 1. Mingw64 Binaries
+    if os.path.exists(r"D:\msys64\mingw64\bin"):
+        os.add_dll_directory(r"D:\msys64\mingw64\bin")
+    
+    # 2. NEXUS CPP Engines (Root & Bin)
+    root_path = os.path.dirname(os.path.abspath(__file__))
+    bin_path = os.path.join(root_path, "Code", "CPP_Engine", "bin")
+    
+    for p in [root_path, bin_path]:
+        if os.path.exists(p):
+            try:
+                os.add_dll_directory(p)
+            except Exception: pass
+            if p not in sys.path:
+                sys.path.insert(0, p)
+
+from Code.N_Core.quantum_indicators import QuantumIndicators
+from Code.N_Core.msnr_alchemist import MSNRAlchemist
+from Code.N_Core.quantum_oracle import QuantumOracle
+from Code.N_Core.yield_governor import YieldGovernor
+from Code.N_Core.live_rht import LiveRHTTracker
+from Code.N_Core.market_qcd import MarketQCDTracker
 
 
 
@@ -159,15 +174,27 @@ class AethelgardSwarm:
         from Code.N_Core.market_qcd import MarketQCDTracker
         qcd_hist_tracker = MarketQCDTracker()
         
+        self.regimes_cache = []
+        self.signals_cache = []
+        self.lbm_cache = []
+        self.z_pinch_cache = []
+        self.qrw_cache = []
+        self.qcd_cache = []
+        self.cyt_danger_cache = []
+        self.sec_cache = []
+        
         scores_hist = []
         self.prev_s, self.prev_c = 0, 0
         
         for i in range(len(df)):
             if i < window_calc:
-                for cache in [self.regimes_cache, self.signals_cache, self.lbm_cache, self.z_pinch_cache, 
-                             self.qrw_cache, self.qcd_cache, self.cyt_danger_cache]:
-                    cache.append("0")
-                self.regimes_cache[-1] = "0|0"
+                self.regimes_cache.append("0|0")
+                self.signals_cache.append("0")
+                self.lbm_cache.append("0")
+                self.z_pinch_cache.append("0")
+                self.qrw_cache.append("0")
+                self.qcd_cache.append("0")
+                self.cyt_danger_cache.append("0")
                 scores_hist.append(0)
                 continue
             
@@ -189,10 +216,9 @@ class AethelgardSwarm:
                     data_10d[2,:] = d_slice['low'].values; data_10d[3,:] = d_slice['close'].values
                     data_10d[4,:] = d_slice['tick_volume'].values
                     flow = cyt_hist.analyze_manifold_flow(data_10d)
-                    defs = flow.get("deformation", [])
-                    if len(defs) > 10:
-                        z_def = (defs[-1] - np.mean(defs)) / (np.std(defs) + 1e-9)
-                        if z_def > 2.0: cyt_danger_hist = str(int(50 + (z_def * 8)))
+                    def_arr = flow.get("deformation", np.zeros(1))
+                    ricci_h = float(def_arr[-1]) if len(def_arr) > 0 else 0.0
+                    if ricci_h >= 1.5: cyt_danger_hist = str(int(ricci_h * 100))
                     
                     l_den, l_vel = lbm_boot.process_tick_stream(slice_df.tail(5), steps=2)
                     if l_den is not None:
@@ -296,7 +322,12 @@ class AethelgardSwarm:
                     if "FISSION_EXPANSION_UP" in qcd_s: self.qcd_cache[-1] = "1"
                     elif "FISSION_EXPANSION_DOWN" in qcd_s: self.qcd_cache[-1] = "2"
                     
-                    self.cyt_danger_cache[-1] = str(int(q_state.get("cyt_danger", 0)))
+                    ricci_c = q_state.get("ricci_curvature", 0.0)
+                    h_ent = q_state.get("h_entropy", 0.0)
+                    coll_s = "1" if q_state.get("is_collapsed", False) else "0"
+                    qrw_h = q_state.get("qrw_history", "")
+                    
+                    self.cyt_danger_cache[-1] = str(int(ricci_c * 100))
                     
                     sec_m = q_state.get("sec_metrics")
                     sec_str = "0|0|0"
@@ -304,11 +335,15 @@ class AethelgardSwarm:
                         sec_str = f"1|{sec_m.get('peak_price'):.2f}|{sec_m.get('schwarzschild_radius'):.2f}"
                         self.sec_cache[-1] = sec_str
 
-                    # 7. MÉTRICAS DE WYCKOFF-QUANTUM
-                    w_metrics = self.q_logic.get_market_state(df, q_state.get("lbm_density", np.zeros(100)), q_state.get("lbm_velocity", np.zeros(100)), r_score)
-                    w_str = f"{w_metrics['score']}|{w_metrics['wyckoff_phase']}|{w_metrics['divergence']}|{w_metrics['strength']}"
+                    # 7. MÉTRICAS DE WYCKOFF-QUANTUM (DISABLED)
+                    # w_metrics = self.q_logic.get_market_state(df, q_state.get("lbm_density", np.zeros(100)), q_state.get("lbm_velocity", np.zeros(100)), r_score)
+                    # w_str = f"{w_metrics['score']}|{w_metrics['wyckoff_phase']}|{w_metrics['divergence']}|{w_metrics['strength']}"
+                    w_str = "0|0|0|0"
 
-                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{q_state.get('z_pinch_signal')};{q_state.get('rmt_signal')};{q_state.get('qrw_signal')};{','.join(self.lbm_cache)};0;0;{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};PURIFYING;0;{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str}"
+                    rht_s = q_state.get("rht_status", "PURIFYING")
+                    rht_h = q_state.get("rht_history", "")
+
+                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{q_state.get('z_pinch_signal')};{q_state.get('rmt_signal')};{q_state.get('qrw_signal')};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h}"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()
 

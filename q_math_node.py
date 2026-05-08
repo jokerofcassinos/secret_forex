@@ -13,10 +13,22 @@ import sys
 import os
 import zmq
 import concurrent.futures
+import numpy as np
+import pandas as pd
 
-# [BOOTLOADER] Força reconhecimento dos binários Mingw64
-if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
-    os.add_dll_directory(r"D:\msys64\mingw64\bin")
+# [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++
+if os.name == 'nt':
+    # 1. Mingw64 Binaries
+    if os.path.exists(r"D:\msys64\mingw64\bin"):
+        os.add_dll_directory(r"D:\msys64\mingw64\bin")
+    
+    # 2. NEXUS CPP Engines (bin)
+    # Note: q_math_node.py is in the root, so Code/CPP_Engine/bin
+    bin_path = os.path.join(os.path.dirname(__file__), "Code", "CPP_Engine", "bin")
+    if os.path.exists(bin_path):
+        os.add_dll_directory(bin_path)
+        if bin_path not in sys.path:
+            sys.path.insert(0, bin_path)
 
 
 
@@ -29,6 +41,7 @@ from Code.N_Core.plasma_market import PlasmaMarketTracker
 from Code.N_Core.random_matrix import RandomMatrixTracker
 from Code.N_Core.quantum_walk import QRWTracker
 from Code.N_Core.market_qcd import MarketQCDTracker
+from Code.N_Core.live_rht import LiveRHTTracker
 
 import cyt_engine
 
@@ -50,6 +63,7 @@ class QMathNode:
         self.rmt_tracker = None
         self.qrw_tracker = None
         self.qcd_tracker = None
+        self.rht_tracker = None
         self.cyt = cyt_engine.CYTEngine()
         
         # Estado atual cacheado para responder rapidamente
@@ -60,6 +74,8 @@ class QMathNode:
             "rmt_signal": 0.0,
             "qrw_density": [],
             "qcd_signal": "CONFINED",
+            "rht_status": "PURIFYING",
+            "rht_history": [],
             "ricci_curvature": 0.0
         }
         
@@ -78,6 +94,7 @@ class QMathNode:
                 self.plasma_tracker = None
                 self.rmt_tracker = None
                 self.qrw_tracker = None
+                self.rht_tracker = None
 
             # Inicializações Lazy (só ocorrem quando chegam os primeiros dados)
             if self.cloud_tracker is None:
@@ -98,31 +115,39 @@ class QMathNode:
                 self.rmt_tracker = RandomMatrixTracker(time_steps=100)
                 
             if self.qrw_tracker is None:
-                self.qrw_tracker = QRWTracker(positions=201)
+                self.qrw_tracker = QRWTracker(positions=4001, decoherence=0.9992)
+                self.qrw_tracker.last_history = []
                 
             if self.qcd_tracker is None:
                 self.qcd_tracker = MarketQCDTracker(lookback_window=20)
+                
+            if self.rht_tracker is None:
+                symbol = df.attrs.get("symbol", "GER40.cash") # Tenta pegar metadados do df
+                self.rht_tracker = LiveRHTTracker(symbol=symbol, lookback=300)
 
             current_close = df['close'].iloc[-1]
             
             # Funções helper para execução paralela (GIL Released in C++)
             def run_lbm(regime=0):
                 lbm_signal = "LAMINAR_FLOW"
+                lbm_v_current = None
                 try:
                     # Passamos o slice_df completo para o novo motor v3.2
                     lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(df.tail(150), steps=5)
                     if lbm_density is not None and lbm_velocity is not None:
                         lbm_signal = self.lbm_tracker.detect_squeeze_rupture(df.tail(150), lbm_density, lbm_velocity, current_regime=regime)
+                        lbm_v_current = lbm_velocity
                 except Exception as e:
                     print(f"[Q-Math] Erro LBM: {e}")
-                return {"lbm_signal": lbm_signal}
+                return {"lbm_signal": lbm_signal, "lbm_v_current": lbm_v_current}
 
             def run_schrodinger():
                 cloud_str = "0.0001:"
                 prob_density = None
                 sec_metrics = None
                 try:
-                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=0.2, steps=5)
+                    # V3.5: Evolução Temporal Acelerada (dt=0.4, steps=10)
+                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=0.4, steps=10)
                     prob_density = density_schrod
                     sec_metrics = self.cloud_tracker.get_singularity_metrics()
                     if density_schrod is not None:
@@ -151,24 +176,87 @@ class QMathNode:
                     pass
                 return {"z_pinch_signal": z_pinch_signal}
 
-            def run_rmt():
+            def run_rmt(lbm_v=None):
                 rmt_signal = "NOISE"
                 is_pure = False
                 try:
-                    _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df.tail(200))
-                    if is_pure: rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}"
+                    # RMT v2.0: Agora recebe a velocidade do fluido para filtrar ruído cinético
+                    _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df.tail(200), lbm_v)
+                    rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}" if is_pure else f"NOISE_x{power_ratio:.1f}"
                 except Exception as e:
                     pass
                 return {"rmt_signal": rmt_signal, "is_pure": is_pure}
 
             def run_qrw():
                 qrw_signal = "NEUTRAL"
+                qrw_history_str = ""
                 try:
-                    if self.qrw_tracker.is_in_range(df, lookback=20):
-                        _, qrw_signal = self.qrw_tracker.process_qrw_skewness(df, lookback=20)
+                    # 1. NORMALIZAÇÃO DE COLUNAS (Resiliência)
+                    df.columns = [c.lower() for c in df.columns]
+                    
+                    # 2. ESCALA DINÂMICA COMPENSADA (v7.0)
+                    recent_atr = (df['high'] - df['low']).tail(20).mean()
+                    dynamic_scale = 1.0 / (recent_atr * 0.4 + 1e-9) if recent_atr > 0 else 0.01
+                    
+                    # 3. RECONSTRUÇÃO INCREMENTAL (State Persistence)
+                    h_df = df.tail(800)
+                    
+                    if len(self.qrw_tracker.last_history) == 0 or len(df) < len(self.qrw_tracker.last_history):
+                        self.qrw_tracker.engine.reset()
+                        self.qrw_tracker.last_history = []
+                        bars_to_process = h_df
+                    else:
+                        bars_to_process = df.tail(1) 
+                    
+                    # Prepara deltas e volumes
+                    deltas = bars_to_process['close'].diff().fillna(0).values if len(bars_to_process) > 1 else (bars_to_process['close'] - bars_to_process['open']).values
+                    volumes = bars_to_process['tick_volume'].values
+                    
+                    recent_atr = (df['high'] - df['low']).tail(14).mean()
+                    scale = 1.2 / (recent_atr + 1e-9)
+
+                    for i in range(len(bars_to_process)):
+                        d = deltas[i]
+                        v = volumes[i]
+                        
+                        # Evolução Quântica Única
+                        self.qrw_tracker.engine.update_and_get_skew(
+                            np.array([d], dtype=float),
+                            np.array([v], dtype=float),
+                            scale
+                        )
+                        
+                        curr_drift = self.qrw_tracker.engine.get_skewness() 
+                        curr_entropy = self.qrw_tracker.engine.get_entropy()
+                        
+                        # Lógica de Sinal Impecável (v3.5)
+                        # 1: BUY_SINGULARITY, 2: SELL_SINGULARITY, 3: BUY_FLOW, 4: SELL_FLOW
+                        q_signal = 0
+                        if abs(curr_drift) > 0.08 and curr_entropy > 2.8:
+                            q_signal = 1 if curr_drift < 0 else 2 
+                        elif abs(curr_drift) > 0.02:
+                            q_signal = 3 if curr_drift > 0 else 4
+                        
+                        # Armazena para persistência no HUD
+                        self.qrw_tracker.last_history.append(q_signal)
+                        if len(self.qrw_tracker.last_history) > 800:
+                            self.qrw_tracker.last_history.pop(0)
+                        
+                    qrw_history_str = ",".join(map(str, self.qrw_tracker.last_history))
+                    
+                    # Sinal Atual com Telemetria Consolidada
+                    curr_sig_code = self.qrw_tracker.last_history[-1] if self.qrw_tracker.last_history else 0
+                    diag_info = f"D:{curr_drift:+.3f} H:{curr_entropy:.2f}"
+                    
+                    if curr_sig_code == 2: qrw_signal = f"SINGULARITY_SHORT ({diag_info})"
+                    elif curr_sig_code == 1: qrw_signal = f"SINGULARITY_LONG ({diag_info})"
+                    elif curr_sig_code == 3: qrw_signal = f"ACCUMULATION ({diag_info})"
+                    elif curr_sig_code == 4: qrw_signal = f"DISTRIBUTION ({diag_info})"
+                    else: qrw_signal = f"NEUTRAL ({diag_info})"
+                        
                 except Exception as e:
-                    pass
-                return {"qrw_signal": qrw_signal}
+                    qrw_signal = f"ERROR: {str(e)[:15]}"
+                return {"qrw_signal": qrw_signal, "qrw_history": qrw_history_str}
 
             def run_qcd():
                 qcd_signal = "CONFINED"
@@ -177,6 +265,17 @@ class QMathNode:
                 except Exception as e:
                     print(f"[Q-Math] Erro Market QCD: {e}")
                 return {"qcd_signal": qcd_signal}
+
+            def run_rht():
+                rht_status = "PURIFYING"
+                rht_history = ""
+                try:
+                    # O RHT v2.0 processa tensores multi-TF em escala termodinâmica
+                    rht_status, history_arr = self.rht_tracker.process_live_rht()
+                    rht_history = ",".join(history_arr)
+                except Exception as e:
+                    print(f"[Q-Math] Erro RHT: {e}")
+                return {"rht_status": rht_status, "rht_history": rht_history}
 
             def run_cyt():
                 ricci_curvature = 0.0
@@ -199,27 +298,44 @@ class QMathNode:
                     
                     flow = self.cyt.analyze_manifold_flow(data_10d)
                     def_array = flow["deformation"]
-                    danger_array = self.cyt.calculate_danger_zones(data_10d, 20, 0.5)
+                    det_array = flow["determinant"]
+                    danger_array = self.cyt.calculate_danger_zones(data_10d, 50, 2.5)
+                    
                     if len(def_array) > 0:
                         ricci_curvature = def_array[-1]
                         cyt_danger = danger_array[-1]
+                        
+                        # Calculo de Entropia Holográfica (AdS/CFT)
+                        # Usamos o determinante métrico e o volume de tick local
+                        local_vol = np.sum(data_10d[4, -10:])
+                        local_spread = np.mean(data_10d[6, -10:])
+                        h_entropy = self.cyt.calculate_holographic_entropy(local_vol, 10.0, local_spread)
+                        
+                        # Detecção de Colapso de Variedade
+                        collapse_info = self.cyt.calculate_topological_collapse(data_10d)
+                        is_collapsed = collapse_info["is_collapsed"]
                 except Exception as e:
                     print(f"[Q-Math] Erro CYT Ricci Flow: {e}")
-                return {"ricci_curvature": ricci_curvature, "cyt_danger": cyt_danger}
+                    h_entropy = 0.0
+                    is_collapsed = False
+                return {"ricci_curvature": ricci_curvature, "cyt_danger": cyt_danger, "h_entropy": h_entropy, "is_collapsed": is_collapsed}
 
-            # Orquestração Paralela de Física
-            with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+            # Orquestração Paralela de Física (LBM primeiro para prover velocidade ao RMT)
+            lbm_res = run_lbm(regime=getattr(self, "current_regime_context", 0))
+            lbm_v = lbm_res.get("lbm_v_current")
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                 futures = [
-                    executor.submit(run_lbm, regime=getattr(self, "current_regime_context", 0)),
                     executor.submit(run_schrodinger),
                     executor.submit(run_plasma),
-                    executor.submit(run_rmt),
+                    executor.submit(run_rmt, lbm_v),
                     executor.submit(run_qrw),
                     executor.submit(run_qcd),
+                    executor.submit(run_rht),
                     executor.submit(run_cyt)
                 ]
                 
-                results = {}
+                results = {"lbm_signal": lbm_res["lbm_signal"]}
                 for future in concurrent.futures.as_completed(futures):
                     results.update(future.result())
 
@@ -234,10 +350,15 @@ class QMathNode:
                 self.current_state["z_pinch_signal"] = results.get("z_pinch_signal", "NEUTRAL")
                 self.current_state["rmt_signal"] = results.get("rmt_signal", "NOISE")
                 self.current_state["qrw_signal"] = results.get("qrw_signal", "NEUTRAL")
+                self.current_state["qrw_history"] = results.get("qrw_history", "")
                 self.current_state["is_pure"] = results.get("is_pure", False)
                 self.current_state["qcd_signal"] = results.get("qcd_signal", "CONFINED")
+                self.current_state["rht_status"] = results.get("rht_status", "PURIFYING")
+                self.current_state["rht_history"] = results.get("rht_history", "")
                 self.current_state["ricci_curvature"] = results.get("ricci_curvature", 0.0)
                 self.current_state["cyt_danger"] = results.get("cyt_danger", 0.0)
+                self.current_state["h_entropy"] = results.get("h_entropy", 0.0)
+                self.current_state["is_collapsed"] = results.get("is_collapsed", False)
 
         except Exception as e:
             print(f"❌ Q-MATH :: Erro no processamento interno: {e}")

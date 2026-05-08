@@ -7,6 +7,7 @@ import subprocess
 import sys
 import sysconfig
 import pybind11
+import shutil
 
 # Paths
 GCC = r"D:\msys64\mingw64\bin\g++.exe"
@@ -28,25 +29,16 @@ ENGINES = [
     ("qho_engine",        "src/qho/qho_engine.cpp"),
     ("cyt_engine",        "src/cyt/cyt_engine.cpp"),
     ("qgc_engine",        "src/qgc/qgc_engine.cpp"),
+    ("rht_engine",        "src/rht/rht_engine.cpp"),
 ]
 
 def build_engine(name, src):
     output = f"{name}{EXT_SUFFIX}"
     cmd = [
-        GCC,
-        "-shared",
-        "-O3",
-        "-ffast-math",
-        "-std=c++17",
-        "-D_USE_MATH_DEFINES",
-        "-DNDEBUG",
-        "-fopenmp",
-        f"-I{PYBIND_INC}",
-        f"-I{PY_INC}",
-        f"-L{PY_LIBS}",
-        "-lpython313",
-        "-o", output,
-        src,
+        GCC, "-shared", "-O3", "-ffast-math", "-std=c++17", "-D_USE_MATH_DEFINES",
+        "-DNDEBUG", "-DMS_WIN64", "-fopenmp",
+        f"-I{PYBIND_INC}", f"-I{PY_INC}", f"-L{PY_LIBS}",
+        "-lpython313", "-o", output, src,
     ]
     
     print(f"\n{'='*60}")
@@ -61,6 +53,19 @@ def build_engine(name, src):
     if result.returncode == 0:
         size = os.path.getsize(output) if os.path.exists(output) else 0
         print(f"  [OK] SUCCESS ({size:,} bytes)")
+        
+        try:
+            # Auto-deploy to bin and root
+            bin_path = os.path.join("bin", output)
+            root_deploy_path = os.path.join("..", "..", output)
+            
+            if not os.path.exists("bin"): os.makedirs("bin")
+            shutil.copy2(output, bin_path)
+            shutil.copy2(output, root_deploy_path)
+            print(f"  [DEPLOY] Copied to {bin_path} and {root_deploy_path}")
+        except Exception as e:
+            print(f"  [WARN] Failed to deploy: {e}")
+            
         return True
     else:
         print(f"  [FAIL] FAILED")

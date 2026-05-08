@@ -19,6 +19,7 @@ private:
     std::vector<Complex> psi;
     std::vector<double> V;
     std::vector<double> prob_density;
+    std::vector<double> spatial_mass;
     std::vector<Complex> alpha;
     std::vector<Complex> beta;
     std::vector<Complex> gamma_arr;
@@ -27,9 +28,12 @@ private:
 
     void build_absorbing_profile() {
         absorb_profile.resize(Nx, 0.0);
+        // PML (Perfectly Matched Layers) Logic
+        // We use a complex coordinate stretching or a deep imaginary potential
         for(int i = 0; i < absorb_width; ++i) {
             double frac = (double)(absorb_width - i) / (double)absorb_width;
-            double strength = 50.0 * frac * frac;
+            // Cubic profile for smoother PML absorption
+            double strength = 100.0 * std::pow(frac, 3); 
             absorb_profile[i] = strength;
             absorb_profile[Nx - 1 - i] = strength;
         }
@@ -38,6 +42,7 @@ private:
 public:
     QuantumCloudSolver(int N, double dx_val) : Nx(N), dx(dx_val) {
         psi.resize(Nx, 0.0); V.resize(Nx, 0.0); prob_density.resize(Nx, 0.0);
+        spatial_mass.resize(Nx, 1.0); // Default mass = 1.0
         alpha.resize(Nx, 0.0); beta.resize(Nx, 0.0); gamma_arr.resize(Nx, 0.0);
         absorb_width = std::max(5, Nx / 10);
         build_absorbing_profile();
@@ -70,26 +75,42 @@ public:
         V = new_V;
     }
 
-    void step_forward(double dt, double mass) {
+    void update_spatial_mass(const std::vector<double>& new_mass) {
+        if ((int)new_mass.size() != Nx) throw std::runtime_error("Mass array size must match Nx");
+        spatial_mass = new_mass;
+    }
+
+    void step_forward(double dt, double global_mass_scale, double drift_k) {
         py::gil_scoped_release release;
         Complex I(0.0, 1.0);
         double hbar = 1.0;
-        double r_mag = dt / (4.0 * mass * dx * dx);
+        
+        double avg_mass = global_mass_scale;
+        double r_mag = dt / (4.0 * avg_mass * dx * dx);
         double effective_dt = dt;
-        if(r_mag > 1.0) effective_dt = 0.25 * 4.0 * mass * dx * dx;
+        if(r_mag > 1.0) effective_dt = 0.25 * 4.0 * avg_mass * dx * dx;
         int substeps = std::max(1, (int)std::ceil(dt / effective_dt));
         effective_dt = dt / (double)substeps;
 
         for(int sub = 0; sub < substeps; ++sub) {
-            Complex r = (I * hbar * effective_dt) / (4.0 * mass * dx * dx);
             std::vector<Complex> d(Nx, 0.0);
-            
             #pragma omp parallel for
             for (int i = 1; i < Nx - 1; ++i) {
+                double m_i = spatial_mass[i] * global_mass_scale;
+                Complex r = (I * hbar * effective_dt) / (4.0 * m_i * dx * dx);
+                
+                // DRIFT MOMENTUM TERM: Adds a first-order derivative approx (Advection)
+                // H = -hbar^2/2m * d2/dx2 + V + i*hbar * v_drift * d/dx
+                Complex drift_term = (drift_k * effective_dt) / (2.0 * dx);
+                
                 Complex v_complex(V[i], -absorb_profile[i]);
                 Complex v_term = (I * effective_dt * v_complex) / (2.0 * hbar);
-                alpha[i] = -r; beta[i] = 1.0 + 2.0 * r + v_term; gamma_arr[i] = -r;
-                d[i] = r * psi[i-1] + (1.0 - 2.0 * r - v_term) * psi[i] + r * psi[i+1];
+                
+                alpha[i] = -r - drift_term; 
+                beta[i] = 1.0 + 2.0 * r + v_term; 
+                gamma_arr[i] = -r + drift_term;
+                
+                d[i] = (r + drift_term) * psi[i-1] + (1.0 - 2.0 * r - v_term) * psi[i] + (r - drift_term) * psi[i+1];
             }
             beta[0] = 1.0; d[0] = 0.0; gamma_arr[0] = 0.0;
             beta[Nx-1] = 1.0; d[Nx-1] = 0.0; alpha[Nx-1] = 0.0;
@@ -255,7 +276,8 @@ PYBIND11_MODULE(schrodinger_engine, m) {
         .def(py::init<int, double>())
         .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian, py::arg("x0"), py::arg("sigma"), py::arg("k0"))
         .def("update_potential", &QuantumCloudSolver::update_potential, py::arg("new_V"))
-        .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("mass"))
+        .def("update_spatial_mass", &QuantumCloudSolver::update_spatial_mass, py::arg("new_mass"))
+        .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("global_mass_scale"), py::arg("drift_k")=0.0)
         .def("recenter_wave", &QuantumCloudSolver::recenter_wave_safe, py::arg("new_x0"), py::arg("sigma"))
         .def("get_probability_density", &QuantumCloudSolver::get_probability_density, py::return_value_policy::reference_internal)
         .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass)
