@@ -106,26 +106,8 @@ void ParseAndDraw(string data)
       }
    }
 
-   // --- 1.9 RHT HEATMAP HISTÓRICO ---
-   if(StringLen(rhtHistory) > 0) {
-      string rSteps[]; StringSplit(rhtHistory, ',', rSteps);
-      int totalSteps = ArraySize(rSteps);
-      for(int s=0; s < totalSteps && s < 100; s++) {
-         int hVal = (int)StringToInteger(rSteps[totalSteps - 1 - s]);
-         string hName = "NEXUS_HEAT_" + IntegerToString(s);
-         if(hVal != 0) {
-            color hClr = (hVal == 1) ? RGB(0, 40, 40) : RGB(40, 10, 10);
-            if(ObjectFind(0, hName) < 0) ObjectCreate(0, hName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-            ObjectSetInteger(0, hName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, s));
-            ObjectSetInteger(0, hName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, s+1));
-            ObjectSetDouble(0, hName, OBJPROP_PRICE, 0, 2000000);
-            ObjectSetDouble(0, hName, OBJPROP_PRICE, 1, 0);
-            ObjectSetInteger(0, hName, OBJPROP_COLOR, hClr);
-            ObjectSetInteger(0, hName, OBJPROP_FILL, true);
-            ObjectSetInteger(0, hName, OBJPROP_BACK, true);
-         } else ObjectDelete(0, hName);
-      }
-   }
+   // 1.9 [HEATMAP DELETED FOR CLARITY]
+   ObjectsDeleteAll(0, "NEXUS_HEAT_");
 
    // --- [QRW & WYCKOFF DISABLED] ---
    ObjectsDeleteAll(0, "NEXUS_SINGULARITY_");
@@ -783,6 +765,7 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     else if(StringFind(rht, "LAMINAR") >= 0) rhtClr = RGB(0, 255, 180); // Cyan
     
     DrawHUDRow("NEXUS_HUD_L_3", "RHT Heat", rht, rhtClr, baseX, rowY, panelW, corner); rowY += rowH;
+    DrawHUDRow("NEXUS_HUD_L_RHTF", "RHT Flash", (StringToDouble(rhtFlash) != 0 ? (rhtFlash=="1"?"BULL":"BEAR") : "LAMINAR"), (StringToDouble(rhtFlash)!=0?(rhtFlash=="1"?RGB(0,255,255):RGB(255,50,50)):RGB(140,140,145)), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_4", "LBM Fluid", GetLBMShort(lbm), GetLBMColor(lbm), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_5", "AdS/CFT Bulk", GetZPShort(zp), GetZPColor(zp), baseX, rowY, panelW, corner); rowY += rowH;
     DrawHUDRow("NEXUS_HUD_L_6", "QRW Flux", GetQRWShort(qrw), GetQRWColor(qrw), baseX, rowY, panelW, corner); rowY += rowH;

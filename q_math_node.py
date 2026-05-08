@@ -269,6 +269,8 @@ class QMathNode:
             def run_rht():
                 rht_status = "PURIFYING"
                 rht_history = ""
+                rht_flash = 0.0
+                rht_flash_history = ""
                 try:
                     # O RHT v2.0 processa tensores multi-TF em escala termodinâmica
                     rht_status, history_arr, rht_flash, rht_flash_history = self.rht_tracker.process_live_rht()

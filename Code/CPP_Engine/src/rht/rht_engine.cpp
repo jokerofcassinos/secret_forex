@@ -157,7 +157,7 @@ public:
             heat = heat_accumulator;
 
             // Flash Point (Ignição com Alinhamento Binário de Gravidade):
-            if (!gravity_block && coherence > 0.96 && std::abs(heat) > threshold && entropy < 0.22 && consensus_ratio >= 0.8) {
+            if (!gravity_block && coherence > 0.85 && std::abs(heat) > threshold && entropy < 0.22 && consensus_ratio >= 0.8) {
                 flash_flag = direction;
             }
         } else {
