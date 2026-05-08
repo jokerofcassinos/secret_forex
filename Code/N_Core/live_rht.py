@@ -91,7 +91,14 @@ class LiveRHTTracker:
         self.rht_engine_instance.load_tensor_data(tensor_matrix)
         
         # Retorna Histórico de Calor para o HUD
-        heat_history = self.rht_engine_instance.compute_resonance_history(gamma=0.15)
+        # Sincronização de Memória Termodinâmica
+        self.rht_engine_instance.compute_resonance_history() # Reconstroi o histórico na C++
+        
+        # Coleta de Dados Táticos
+        hist = self.rht_engine_instance.get_histories()
+        heat_history = hist.get("heat", [])
+        entropy_history = hist.get("entropy", [])
+        direction_history = hist.get("direction", [])
         
         # Analisa Estado Instantâneo (Flash Point)
         heat, entropy, direction, flash = self.rht_engine_instance.analyze_current_state(threshold=threshold)

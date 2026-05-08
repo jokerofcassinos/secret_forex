@@ -776,16 +776,8 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     
     DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
     
-    if(isCollapsed) {
-        string auraName = "NEXUS_CYT_AURA";
-        if(ObjectFind(0, auraName) < 0) ObjectCreate(0, auraName, OBJ_VLINE, 0, iTime(_Symbol, _Period, 0), 0);
-        ObjectSetInteger(0, auraName, OBJPROP_TIME, iTime(_Symbol, _Period, 0));
-        ObjectSetInteger(0, auraName, OBJPROP_COLOR, RGB(255, 0, 0)); 
-        ObjectSetInteger(0, auraName, OBJPROP_WIDTH, 5);
-        ObjectSetInteger(0, auraName, OBJPROP_BACK, true);
-    } else {
-        ObjectDelete(0, "NEXUS_CYT_AURA");
-    }
+    // [CYT AURA DELETED PERMANENTLY]
+    ObjectDelete(0, "NEXUS_CYT_AURA");
     ObjectDelete(0, "NEXUS_CYT_WARNING");
 
     ObjectDelete(0, "NEXUS_SEC_ICON");
