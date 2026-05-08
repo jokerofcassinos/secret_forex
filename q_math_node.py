@@ -357,6 +357,8 @@ class QMathNode:
                 self.current_state["qcd_signal"] = results.get("qcd_signal", "CONFINED")
                 self.current_state["rht_status"] = results.get("rht_status", "PURIFYING")
                 self.current_state["rht_history"] = results.get("rht_history", "")
+                self.current_state["rht_flash"] = results.get("rht_flash", 0.0)
+                self.current_state["rht_flash_history"] = results.get("rht_flash_history", "")
                 self.current_state["ricci_curvature"] = results.get("ricci_curvature", 0.0)
                 self.current_state["cyt_danger"] = results.get("cyt_danger", 0.0)
                 self.current_state["h_entropy"] = results.get("h_entropy", 0.0)

@@ -40,14 +40,15 @@ void UpdateDashboard()
 
 void ParseAndDraw(string data)
 {
-   // PROTOCOLO DE PURIFICAÇÃO SELETIVA (Apenas o que realmente muda muito)
+   // PROTOCOLO DE PURIFICAÇÃO AGRESSIVA (Incinerar resíduos históricos)
+   ObjectsDeleteAll(0, "NEXUS_CYT_HIST_");
+   ObjectsDeleteAll(0, "NEXUS_HEAT_");
    ObjectsDeleteAll(0, "NEXUS_DOT_");
    ObjectsDeleteAll(0, "NEXUS_QCD_");
-   // NEXUS_LBM e NEXUS_CLOUD agora são persistentes para evitar flickering
    
    string parts[];
    StringSplit(data, ';', parts);
-   if(ArraySize(parts) < 29) return;
+   if(ArraySize(parts) < 10) return;
 
 
    string statusTxt = parts[2];
