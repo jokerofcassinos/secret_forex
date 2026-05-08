@@ -81,7 +81,7 @@ void ParseAndDraw(string data)
    ObjectDelete(0, "NEXUS_HEADER");
    // ... (rest of deletions)
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"));
+   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash);
 
    // --- 1.8 RHT THERMODYNAMIC VISUALS (IGNIÇÕES HISTÓRICAS) ---
    if(StringLen(rhtFlashHistory) > 0) {
@@ -709,7 +709,7 @@ void DrawHUDRow(string id, string label, string val, color valClr, int baseX, in
     DrawHUDText(id + "_L", label, baseX + 15, y, RGB(140, 140, 145), 9, false, corner); 
     DrawHUDText(id + "_V", val, baseX + panelW - 15, y, valClr, 9, true, corner);
 }
-void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed)
+void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash)
 {
     int panelW = 280; int panelH = 360; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
     string bgName = "NEXUS_HUD_BASE"; if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
