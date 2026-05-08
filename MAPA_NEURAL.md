@@ -35,6 +35,7 @@ Este documento atua como o diretório mestre de conexões neurais. No Obsidian, 
 - [[Docs/02_Logica_e_Estrategia/TEORIA_VACUO_DIRAC_FVG|Vácuos de Dirac (Transições de Fase)]]
 - [[Docs/02_Logica_e_Estrategia/PRINCIPIO_HOLOGRAFICO_ADS_CFT|Princípio Holográfico e Matriz-S (Pós-Singularidade)]]
 - [[Docs/02_Logica_e_Estrategia/EMARANHAMENTO_QUANTICO_N_DIMENSIONAL|Emaranhamento N-Dimensional e Redes Tensoriais]]
+- [[Docs/02_Logica_e_Estrategia/TEORIA_VIDRO_QUANTICO_QLG|Condensado de Vidro Quântico e Radiação Hawking (QLG)]]
 
 ### 🔴 R-EXEC (Execução e Telemetria)
 - [[Docs/05_Estrutura_Corporativa/Setores/R_EXEC/ESTRUTURA_DETALHADA|Departamento R-EXEC]]

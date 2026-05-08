@@ -43,8 +43,31 @@ public:
         auto det_ptr = static_cast<double *>(determinant.request().ptr);
 
         {
-            // OTIMIZAÇÃO: Liberação do GIL e Paralelização OpenMP
             py::gil_scoped_release release;
+
+            // 1. Normalização L2 Independente por Dimensão (Prevenção de Colapso Dimensional)
+            std::vector<std::vector<double>> norm_data(n_dims, std::vector<double>(n_points, 0.0));
+            
+            #pragma omp parallel for
+            for (size_t d = 0; d < n_dims; d++) {
+                double mean = 0.0;
+                for (size_t i = 0; i < n_points; i++) {
+                    mean += ptr[d * n_points + i];
+                }
+                mean /= (double)n_points;
+                
+                double variance = 0.0;
+                for (size_t i = 0; i < n_points; i++) {
+                    double diff = ptr[d * n_points + i] - mean;
+                    variance += diff * diff;
+                }
+                double std_dev = std::sqrt(variance / (double)n_points);
+                if (std_dev < 1e-9) std_dev = 1.0; // Evita divisão por zero
+                
+                for (size_t i = 0; i < n_points; i++) {
+                    norm_data[d][i] = (ptr[d * n_points + i] - mean) / std_dev; // Z-Score Normalized
+                }
+            }
 
             #pragma omp parallel for
             for (size_t i = 0; i < n_points; i++) {
@@ -52,20 +75,21 @@ public:
                 det_ptr[i] = 1.0;
             }
 
+            // 2. Cálculo do Ricci Flow sobre os dados normalizados
             #pragma omp parallel for
             for (size_t i = 1; i < n_points; i++) {
                 double metric_det = 1.0;
                 double curvature = 0.0;
 
                 for (size_t d = 0; d < n_dims; d++) {
-                    double val = ptr[d * n_points + i];
-                    double prev_val = ptr[d * n_points + (i-1)];
+                    double val = norm_data[d][i];
+                    double prev_val = norm_data[d][i-1];
                     double delta = val - prev_val;
 
-                    // Curvatura de Ricci Proxy
+                    // Curvatura de Ricci Local
                     curvature += delta * delta;
                     
-                    // Determinante da Métrica
+                    // Determinante
                     metric_det *= (1.0 + std::abs(delta));
                 }
 

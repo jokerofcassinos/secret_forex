@@ -429,6 +429,41 @@ void ParseAndDraw(string data)
       ObjectSetInteger(0, lName, OBJPROP_BACK, false);
    }
 
+   // 7. DECAIMENTO HAWKING (QGC)
+   string qgcData = (ArraySize(parts) > 25) ? parts[25] : "";
+   int qgcBoxIdx = 0;
+   if(StringLen(qgcData) > 0) {
+      string qgcLines[]; StringSplit(qgcData, ',', qgcLines);
+      for(int q=0; q < ArraySize(qgcLines); q++) {
+         string qParts[]; StringSplit(qgcLines[q], '|', qParts);
+         if(ArraySize(qParts) == 3) {
+            int age = (int)StringToInteger(qParts[0]);
+            double centerPrice = StringToDouble(qParts[1]);
+            double massNorm = StringToDouble(qParts[2]);
+            
+            // Desenhar fita Ciano espelhando o decaimento
+            string qLineName = "NEXUS_QGC_" + IntegerToString(qgcBoxIdx);
+            if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_TREND, 0, 0, 0, 0, 0);
+            
+            // A linha estica da origem (age) ate a vela atual (0)
+            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, age));
+            ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, centerPrice);
+            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, 0));
+            ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 1, centerPrice);
+            
+            ObjectSetInteger(0, qLineName, OBJPROP_COLOR, RGB(0, 255, 255)); // Neon Cyan
+            ObjectSetInteger(0, qLineName, OBJPROP_STYLE, STYLE_SOLID);
+            // Espessura decai com o tempo (massNorm vai de 0.5 a 10.0)
+            ObjectSetInteger(0, qLineName, OBJPROP_WIDTH, (int)MathMax(1, MathMin(5, massNorm)));
+            ObjectSetInteger(0, qLineName, OBJPROP_RAY_RIGHT, false);
+            ObjectSetInteger(0, qLineName, OBJPROP_BACK, true);
+            qgcBoxIdx++;
+         }
+      }
+   }
+   // Cleanup de linhas de decaimento evaporadas
+   for(int k=qgcBoxIdx; k<1000; k++) ObjectDelete(0, "NEXUS_QGC_"+IntegerToString(k));
+
    ChartRedraw(0);
 }
 

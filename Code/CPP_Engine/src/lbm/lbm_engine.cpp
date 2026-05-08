@@ -65,6 +65,19 @@ public:
             f2[i] *= mass_decay;
         }
 
+        // --- CALIBRAÇÃO ABSOLUTA: Viscoelasticidade Dinâmica (Reynolds Number) ---
+        // Calcula a turbulência média (Energia Cinética) do passo anterior
+        double avg_kinetic_energy = 0.0;
+        for (int i = 0; i < Nx; ++i) {
+            avg_kinetic_energy += 0.5 * rho[i] * u[i] * u[i];
+        }
+        avg_kinetic_energy /= Nx;
+        
+        // Ajuste dinâmico da viscosidade (tau). Se a turbulência sobe, o fluido ferve (tau diminui).
+        // Se a turbulência cai, o fluido se torna viscoso (tau aumenta).
+        double dynamic_tau = tau * (1.0 + std::exp(-avg_kinetic_energy)); 
+        if (dynamic_tau < 0.501) dynamic_tau = 0.501; // Limite de estabilidade LBM
+        
         #pragma omp parallel for
         for (int i = 0; i < Nx; ++i) {
             rho[i] = f0[i] + f1[i] + f2[i];
@@ -77,9 +90,12 @@ public:
             double feq0 = rho[i] * w0 * (1.0 - u2 / (2.0 * cs2));
             double feq1 = rho[i] * w1 * (1.0 + u[i] / cs2 + u2 / (2.0 * cs2 * cs2) - u2 / (2.0 * cs2));
             double feq2 = rho[i] * w2 * (1.0 - u[i] / cs2 + u2 / (2.0 * cs2 * cs2) - u2 / (2.0 * cs2));
-            f0[i] = f0[i] - (1.0 / tau) * (f0[i] - feq0);
-            f1[i] = f1[i] - (1.0 / tau) * (f1[i] - feq1);
-            f2[i] = f2[i] - (1.0 / tau) * (f2[i] - feq2);
+            
+            // Usando dynamic_tau em vez de tau fixo
+            f0[i] = f0[i] - (1.0 / dynamic_tau) * (f0[i] - feq0);
+            f1[i] = f1[i] - (1.0 / dynamic_tau) * (f1[i] - feq1);
+            f2[i] = f2[i] - (1.0 / dynamic_tau) * (f2[i] - feq2);
+            
             if(f0[i] < 0) f0[i] = 0;
             if(f1[i] < 0) f1[i] = 0;
             if(f2[i] < 0) f2[i] = 0;

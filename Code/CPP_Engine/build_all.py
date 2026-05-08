@@ -27,6 +27,7 @@ ENGINES = [
     ("qdd_engine",        "src/qdd/qdd_engine.cpp"),
     ("qho_engine",        "src/qho/qho_engine.cpp"),
     ("cyt_engine",        "src/cyt/cyt_engine.cpp"),
+    ("qgc_engine",        "src/qgc/qgc_engine.cpp"),
 ]
 
 def build_engine(name, src):

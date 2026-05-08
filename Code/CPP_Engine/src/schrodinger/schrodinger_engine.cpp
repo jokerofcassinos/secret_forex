@@ -206,9 +206,23 @@ public:
 
     double calculate_tunneling_probability(double barrier_energy, double particle_energy, double volume_mass) {
         if (particle_energy > barrier_energy) return 1.0; 
+        
+        // --- CALIBRAÇÃO ABSOLUTA: Constante de Planck Dinâmica ---
+        // A constante de Planck não pode ser fixa (1.0) em mercados onde a energia escala em milhares.
+        // Transformamos a massa bruta e as energias em razões escalares para evitar underflow extremo.
+        double delta_E = std::max(0.1, barrier_energy - particle_energy);
+        double effective_mass = std::max(0.01, std::log1p(volume_mass)); // Massa logarítmica
+        
+        // Fator de escala dinâmico (Planck Financeiro). 
+        // Impede que o expoente ultrapasse limites de ponto flutuante (exp(-700) = 0)
+        double hbar_dynamic = std::max(1.0, std::sqrt(delta_E * effective_mass) / 5.0); 
+        
         double L = 1.0; 
-        double hbar = 1.0;
-        double exponent = -2.0 * L * std::sqrt(2.0 * std::max(0.01, volume_mass) * (barrier_energy - particle_energy)) / hbar;
+        double exponent = -2.0 * L * std::sqrt(2.0 * effective_mass * delta_E) / hbar_dynamic;
+        
+        // Limita o expoente para evitar underflow absoluto na CPU
+        if (exponent < -50.0) exponent = -50.0;
+        
         return std::exp(exponent);
     }
 

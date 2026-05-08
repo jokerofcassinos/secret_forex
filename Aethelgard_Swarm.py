@@ -152,23 +152,31 @@ class AethelgardSwarm:
 
         qcd_hist_tracker = MarketQCDTracker(lookback_window=20)
         
-        # Tentativa de instanciar C++ para Retrospectiva Histórica (Se houver falha, mocka para 0)
+        # Retrospectiva Histórica de Alta Frequência (Física)
         try:
             import sys
             import os
-            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'Code/CPP_Engine/src/cyt')))
-            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'Code/CPP_Engine/src/lbm')))
+            cpp_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'Code/CPP_Engine'))
+            if cpp_path not in sys.path:
+                sys.path.append(cpp_path)
+                
             if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
                 os.add_dll_directory(r"D:\msys64\mingw64\bin")
+            
             import cyt_engine
             import lbm_engine
+            import qgc_engine
             cyt_hist = cyt_engine.CYTEngine()
-            lbm_hist = lbm_engine.LBMEngine(200, 1.0)
+            lbm_hist = lbm_engine.LBMEngine(200, 1.2)
+            qgc_hist = qgc_engine.QGCEngine()
             has_cpp_hist = True
-        except:
+        except Exception as e:
+            print(f"⚠️ N-Core :: Falha ao carregar motores historicos ({e})")
             has_cpp_hist = False
         
         scores_hist = []
+        qgc_str = ""
+        
         for i in range(len(df)):
             if i < window_calc:
                 self.regimes_cache.append("0|0")
@@ -195,66 +203,62 @@ class AethelgardSwarm:
             self.regimes_cache.append(f"{r_score}|{conf}")
             self.signals_cache.append(str(sig))
             
-            # --- Retrospectiva Histórica de Alta Frequência (Física) ---
+            # --- Injeção de Inteligência Histórica ---
             lbm_sig_hist = "0"
             cyt_danger_hist = "0"
-            if has_cpp_hist and (i % 3 == 0): # Aumentado a frequência de amostragem histórica para M5/H1 (i % 3 em vez de 5)
+            
+            if has_cpp_hist:
                 try:
-                    # LBM Mocking Histórico
-                    data_10d = np.zeros((10, len(slice_df)))
-                    data_10d[0, :] = slice_df['open'].values
-                    data_10d[1, :] = slice_df['high'].values
-                    data_10d[2, :] = slice_df['low'].values
-                    data_10d[3, :] = slice_df['close'].values
-                    data_10d[4, :] = slice_df['tick_volume'].values
-                    data_10d[5, :] = slice_df['close'].pct_change().bfill().values
-                    data_10d[6, :] = (slice_df['high'] - slice_df['low']).values
-                    data_10d[7, :] = slice_df['close'].rolling(5).mean().bfill().values
-                    data_10d[8, :] = slice_df['tick_volume'].rolling(5).mean().bfill().values
-                    data_10d[9, :] = (slice_df['close'] - slice_df['open']).values
-                    
-                    danger_array = cyt_hist.calculate_danger_zones(data_10d, 20, 0.5)
-                    # Aumentado o rigor da Entropia de Ricci (CYT)
-                    if len(danger_array) > 0 and danger_array[-1] > 85: 
-                        cyt_danger_hist = str(int(danger_array[-1]))
+                    # Motor AdS/CFT
+                    if (i % 2 == 0):
+                        data_10d = np.zeros((10, len(slice_df)))
+                        data_10d[0, :] = slice_df['open'].values
+                        data_10d[1, :] = slice_df['high'].values
+                        data_10d[2, :] = slice_df['low'].values
+                        data_10d[3, :] = slice_df['close'].values
+                        data_10d[4, :] = slice_df['tick_volume'].values
+                        data_10d[5, :] = slice_df['close'].pct_change().bfill().values
+                        data_10d[6, :] = (slice_df['high'] - slice_df['low']).values
+                        data_10d[7, :] = slice_df['close'].rolling(5).mean().bfill().values
+                        data_10d[8, :] = slice_df['tick_volume'].rolling(5).mean().bfill().values
+                        data_10d[9, :] = (slice_df['close'] - slice_df['open']).values
                         
-                    # Simulação LBM para passado com Rigor Termodinâmico
-                    lbm_density, lbm_velocity = lbm_hist.get_density(), lbm_hist.get_velocity()
-                    avg_vol = slice_df['tick_volume'].mean()
-                    current_vol = slice_df['tick_volume'].iloc[-1]
-                    
-                    if avg_vol > 0:
-                        vol_spike_ratio = current_vol / avg_vol
-                        lbm_hist.inject_liquidity(100, vol_spike_ratio, 0.0) 
+                        flow = cyt_hist.analyze_manifold_flow(data_10d)
+                        defs = flow["deformation"]
+                        if len(defs) > 50:
+                            m_def, s_def = np.mean(defs), np.std(defs)
+                            if s_def > 1e-9:
+                                z_def = (defs[-1] - m_def) / s_def
+                                if z_def > 5.5:
+                                    cyt_danger_hist = str(min(100, int(50 + (z_def * 8))))
+                        
+                    # Motor LBM (Hidrodinâmica)
+                    vols = slice_df['tick_volume'].values
+                    m_vol = np.mean(vols)
+                    if m_vol > 0:
+                        v_ratio = vols[-1] / m_vol
+                        lbm_hist.inject_liquidity(100, min(2.0, v_ratio), 0.0) 
                         lbm_hist.step()
                         
-                        # Checagem de Squeeze Rupture: Volume deve ser 2.5x maior que a média (Choque real)
-                        if vol_spike_ratio > 2.5:
-                            momentum = slice_df['close'].iloc[-1] - slice_df['open'].iloc[-1]
-                            body_size = abs(momentum)
-                            atr_val = df['atr_static'].iloc[i]
-                            # E o corpo da vela deve ser maior que o ATR (Deslocamento fluido confirmado)
-                            if not np.isnan(atr_val) and body_size > atr_val:
-                                if momentum > 0: lbm_sig_hist = "1" # Bull Squeeze Histórico
-                                elif momentum < 0: lbm_sig_hist = "2" # Bear Squeeze Histórico
-
-                except Exception as e:
+                        atr_val = df['atr_static'].iloc[i]
+                        body = abs(curr_h['close'] - curr_h['open'])
+                        if v_ratio > 3.0:
+                            if body < (atr_val * 0.2): 
+                                lbm_sig_hist = "1" if curr_h['close'] < curr_h['open'] else "2"
+                            elif body > (atr_val * 2.5): 
+                                lbm_sig_hist = "1" if curr_h['close'] > curr_h['open'] else "2"
+                except:
                     pass
             
             self.lbm_cache.append(lbm_sig_hist)
             self.z_pinch_cache.append("0")
             self.qrw_cache.append("0")
             
-            # QCD Fission Retrospective
             qcd_sig = qcd_hist_tracker.detect_fission(slice_df)
-            if "FISSION_EXPANSION_UP" in qcd_sig: 
-                self.qcd_cache.append("1")
-            elif "FISSION_EXPANSION_DOWN" in qcd_sig: 
-                self.qcd_cache.append("2")
-            elif "FISSION" in qcd_sig:
-                self.qcd_cache.append("1" if curr_h['close'] > curr_h['open'] else "2")
-            else:
-                self.qcd_cache.append("0")
+            if "FISSION_EXPANSION_UP" in qcd_sig: self.qcd_cache.append("1")
+            elif "FISSION_EXPANSION_DOWN" in qcd_sig: self.qcd_cache.append("2")
+            elif "FISSION" in qcd_sig: self.qcd_cache.append("1" if curr_h['close'] > curr_h['open'] else "2")
+            else: self.qcd_cache.append("0")
                 
             self.cyt_danger_cache.append(cyt_danger_hist)
             self.sec_cache.append("0|0|0")
@@ -262,7 +266,39 @@ class AethelgardSwarm:
 
             scores_hist.append(r_score)
             self.prev_s, self.prev_c = r_score, conf
+            
+            # --- QGC Engine (Hawking Decay) apenas no final do boot ---
+            if i == len(df) - 1 and has_cpp_hist:
+                try:
+                    hist_window = 1000
+                    if len(df) >= hist_window:
+                        qgc_slice = df.tail(hist_window)
+                        v_mean = qgc_slice['tick_volume'].mean()
+                        # Threshold de Genesis do Vidro Quantico: Volume > 5.5x a media
+                        m_threshold = v_mean * 5.5 
+                        
+                        res = qgc_hist.compute_hawking_decay(
+                            qgc_slice['close'].values, 
+                            qgc_slice['tick_volume'].values, 
+                            qgc_slice['atr_static'].fillna(0).values, 
+                            m_threshold
+                        )
+                        r_masses = res.get("residual_masses", [])
+                        c_masses = res.get("centers_of_mass", [])
+                        ages = res.get("ages", [])
+                        
+                        # Monta a string QGC (Idade|Preco|MassaNormalizada_0_a_10)
+                        qgc_parts = []
+                        for m, p, a in zip(r_masses, c_masses, ages):
+                            if m > 0:
+                                norm_mass = min(10.0, (m / m_threshold) * 2.0)
+                                if norm_mass > 0.5: # Só envia o que ainda tem alguma relevância visual
+                                    qgc_parts.append(f"{int(a)}|{p:.2f}|{norm_mass:.1f}")
+                        qgc_str = ",".join(qgc_parts)
+                except Exception as e:
+                    print(f"⚠️ Erro no QGC Boot: {e}")
         
+        self.qgc_data_str = qgc_str
         self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df, scores_hist)]
         self.last_time = df.iloc[-1]['time']
         self.rht_cache = ["0"] * 300
@@ -274,23 +310,18 @@ class AethelgardSwarm:
         
         try:
             while self.is_running:
-                # Checa se o MT5 pediu uma mudança de Timeframe
                 if current_mt5_tf is not None and self.active_tf != current_mt5_tf:
                     self.active_tf = current_mt5_tf
                     print(f"\n🌀 SWARM CORE :: Detectada Mudança Dimensional (TF: {self.active_tf}). Realinhando Redes...")
-                    
-                    # 1. Limpa os caches neurais para forçar recalculo no Python
                     self.regimes_cache.clear()
                     self.sec_cache.clear()
                     self.dots_cache.clear()
                     self.qcd_cache.clear()
                     self.cyt_danger_cache.clear()
                     self.last_time = 0
-                    
-                    # 2. Informa o Router e o Q-Math para mudarem a janela
                     ctrl_payload = pickle.dumps({"action": "CHANGE_TF", "timeframe": self.active_tf})
                     self.ctrl_socket.send_multipart([TOPIC_CONTROL.encode('utf-8'), ctrl_payload])
-                    time.sleep(0.5) # Dá um respiro para os nodos reiniciarem
+                    time.sleep(0.5)
 
                 latest_df = None
                 while True:
@@ -309,31 +340,23 @@ class AethelgardSwarm:
                 if latest_df is not None:
                     df = latest_df
                     current_close = df['close'].iloc[-1]
-                    
                     if not self.regimes_cache:
                         self.initialize_caches(df)
-                        
                     q_state = self.fetch_quantum_state()
                     
                     if q_state and q_state.get("status") == "ACTIVE":
                         df['ema_macro'] = df['close'].ewm(span=89, adjust=False).mean()
                         window_calc = 200
                         slice_df = df.iloc[-window_calc:]
-                        
                         r_score, conf = self.q_logic.advanced_regime_score(slice_df, self.prev_s, self.prev_c)
 
-                        if r_score == 1:
-                            status_txt = "BULL_PREVISAO" if not self.is_sovereign else "TSUNAMI_BULL_ATIVO"
-                        elif r_score == 2:
-                            status_txt = "BEAR_PREVISAO" if not self.is_sovereign else "TSUNAMI_BEAR_ATIVO"
-                        else:
-                            status_txt = "AGUARDANDO_IGNICAO"
+                        if r_score == 1: status_txt = "BULL_PREVISAO" if not self.is_sovereign else "TSUNAMI_BULL_ATIVO"
+                        elif r_score == 2: status_txt = "BEAR_PREVISAO" if not self.is_sovereign else "TSUNAMI_BEAR_ATIVO"
+                        else: status_txt = "AGUARDANDO_IGNICAO"
 
                         is_genesis = (self.prev_s != r_score)
                         if is_genesis: self.genesis_count = 0
                         self.is_sovereign = True 
-
-                        sec_state = 1 if len(q_state.get("cloud_prob", [])) > 0 else 0
                         inst_avg = df['ema_macro'].iloc[-1]
                         health = self.q_logic.calculate_regime_health(df)
                         status_final = f"{status_txt} | SAÚDE: {health}%"
@@ -349,17 +372,45 @@ class AethelgardSwarm:
                             self.cyt_danger_cache.pop(0); self.cyt_danger_cache.append("0")
                             self.sec_cache.append("0|0|0")
                             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
-
                             scores_list = [int(r.split('|')[0]) for r in self.regimes_cache]
                             self.dots_cache = [str(d) for d in self.q_logic.calculate_tactical_dots(df.tail(len(self.regimes_cache)), scores_list)]
-                            
                             self.prev_s, self.prev_c = r_score, conf
                             self.last_time = df.iloc[-1]['time']
+                            
+                            # Atualiza Hawking Decay para o novo candle
+                            try:
+                                import sys
+                                if 'qgc_hist' in locals() or 'qgc_hist' in globals() or hasattr(self, 'qgc_data_str'):
+                                    import qgc_engine
+                                    hist_window = 1000
+                                    if len(df) >= hist_window:
+                                        qgc_slice = df.tail(hist_window)
+                                        v_mean = qgc_slice['tick_volume'].mean()
+                                        m_threshold = v_mean * 3.5 # Reduzido de 5.5 para capturar mais Condensados
+                                        
+                                        qgc_engine_live = qgc_engine.QGCEngine()
+                                        res = qgc_engine_live.compute_hawking_decay(
+                                            qgc_slice['close'].values, 
+                                            qgc_slice['tick_volume'].values, 
+                                            qgc_slice['atr_static'].fillna(0).values, 
+                                            m_threshold
+                                        )
+                                        r_masses = res.get("residual_masses", [])
+                                        c_masses = res.get("centers_of_mass", [])
+                                        ages = res.get("ages", [])
+                                        
+                                        qgc_parts = []
+                                        for m, p, a in zip(r_masses, c_masses, ages):
+                                            if m > 0:
+                                                norm_mass = min(10.0, (m / m_threshold) * 2.0)
+                                                if norm_mass > 0.5:
+                                                    qgc_parts.append(f"{int(a)}|{p:.2f}|{norm_mass:.1f}")
+                                        self.qgc_data_str = ",".join(qgc_parts)
+                            except Exception as e:
+                                pass
 
                         rt_regime = f"{r_score if self.is_sovereign else 0}|{conf}"
                         display_regimes = self.regimes_cache[1:] + [rt_regime]
-                        
-                        # Extrai a telemetria quântica do nó Q-MATH
                         cloud_str = q_state.get("cloud_str", "0.0001:")
                         lbm_signal = q_state.get("lbm_signal", "LAMINAR_FLOW")
                         z_pinch_signal = q_state.get("z_pinch_signal", "NEUTRAL")
@@ -369,61 +420,45 @@ class AethelgardSwarm:
                         
                         if lbm_signal == "FLUID_RUPTURE_BULL": self.lbm_cache[-1] = "1"
                         elif lbm_signal == "FLUID_RUPTURE_BEAR": self.lbm_cache[-1] = "2"
-                        
                         if "BOTTOM_SWEEP" in z_pinch_signal: self.z_pinch_cache[-1] = "1"
                         elif "TOP_SWEEP" in z_pinch_signal: self.z_pinch_cache[-1] = "2"
-                        
                         if qrw_signal == "HIDDEN_ACCUMULATION_BULL": self.qrw_cache[-1] = "1"
                         elif qrw_signal == "HIDDEN_DISTRIBUTION_BEAR": self.qrw_cache[-1] = "2"
                         
                         qcd_signal = q_state.get("qcd_signal", "CONFINED")
                         cyt_danger = q_state.get("cyt_danger", 0.0)
-                        
-                        if "FISSION_EXPANSION_UP" in qcd_signal: 
-                            self.qcd_cache[-1] = "1"
-                        elif "FISSION_EXPANSION_DOWN" in qcd_signal: 
-                            self.qcd_cache[-1] = "2"
+                        if "FISSION_EXPANSION_UP" in qcd_signal: self.qcd_cache[-1] = "1"
+                        elif "FISSION_EXPANSION_DOWN" in qcd_signal: self.qcd_cache[-1] = "2"
                         elif "FISSION" in qcd_signal and self.qcd_cache[-1] == "0":
                             self.qcd_cache[-1] = "1" if current_close > df['open'].iloc[-1] else "2"
                         
                         self.cyt_danger_cache[-1] = str(int(cyt_danger))
-                        
-                        # --- GESTÃO DE SL/TP SWARM v2.0 (Global Defense) ---
                         high_low = df['high'] - df['low']
                         high_close = np.abs(df['high'] - df['close'].shift(1))
                         low_close = np.abs(df['low'] - df['close'].shift(1))
                         true_range_atr = np.max(pd.concat([high_low, high_close, low_close], axis=1), axis=1)
                         atr = true_range_atr.rolling(14).mean().iloc[-1]
                         
-                        # Extrai densidade schrodinger do estado q_state se disponível
-                        density_schrod = q_state.get("density_schrod") # O nó Q-MATH precisa enviar isso para SL/TP dinâmico avançado
-                        
                         self.bridge.thermodynamic_sl_tp(
                             r_score=r_score, 
                             current_price=current_close, 
                             atr=atr, 
                             plasma_zones=q_state.get("plasma_zones"), 
-                            schrodinger_density=density_schrod,
-                            cloud_tracker=None # O swarm gerencia isso via Q-MATH, passamos None para fallback seguro
+                            schrodinger_density=q_state.get("density_schrod"),
+                            cloud_tracker=None
                         )
 
                         sec_str = "0|0|0"
                         if sec_m:
                             is_coll = (sec_m.get('singularity_strength', 0) > 0.04)
-                            sec_state = 1 if is_coll else 0
                             rounded_peak = round(sec_m.get('peak_price', current_close) * 2) / 2
-                            sec_str = f"{sec_state}|{rounded_peak:.2f}|{(sec_m.get('schwarzschild_radius', 0)):.2f}"
-                            if is_coll and len(self.sec_cache) > 0:
-                                self.sec_cache[-1] = sec_str
+                            sec_str = f"{1 if is_coll else 0}|{rounded_peak:.2f}|{(sec_m.get('schwarzschild_radius', 0)):.2f}"
+                            if is_coll and len(self.sec_cache) > 0: self.sec_cache[-1] = sec_str
                         else:
-                            sec_str = f"{sec_state}|{current_close:.2f}|0.00"
+                            sec_str = f"0|{current_close:.2f}|0.00"
 
                         rht_status_local = "PURIFYING"
-                        
-                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local};{','.join(self.rht_cache)};{qcd_signal};{','.join(self.qcd_cache)}"
-                        
-                        # sys.stdout.write(f"\r🧠 SWARM CORE :: Processado {current_close:.2f} | R: {r_score} | SEC: {sec_state}      ")
-                        # sys.stdout.flush()
+                        nexus_data_str = f"0;0;{status_final};{self.signals_cache[-1]};{','.join(display_regimes)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{cloud_str};{lbm_signal};{z_pinch_signal};{rmt_signal};{qrw_signal};{','.join(self.lbm_cache)};{','.join(self.z_pinch_cache)};{','.join(self.qrw_cache)};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_status_local};{','.join(self.rht_cache)};{qcd_signal};{','.join(self.qcd_cache)};{self.qgc_data_str}"
                 else:
                     time.sleep(0.01)
                     
@@ -439,12 +474,10 @@ class AethelgardSwarm:
         print("\n🧠 SWARM CORE :: Desligado.")
 
 import argparse
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aethelgard Swarm AGI Core")
     parser.add_argument('--symbol', type=str, default="GER40.cash", help='Symbol to trade')
     args = parser.parse_args()
-    
     agi = AethelgardSwarm(symbol=args.symbol)
     if agi.startup():
         agi.live_evolution_loop()
