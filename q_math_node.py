@@ -122,7 +122,7 @@ class QMathNode:
                 self.rmt_tracker = RandomMatrixTracker(time_steps=100)
                 
             if self.qrw_tracker is None:
-                self.qrw_tracker = QRWTracker(positions=4001, decoherence=0.9992)
+                self.qrw_tracker = QRWTracker(positions=401)
                 self.qrw_tracker.last_history = []
                 
             if self.qcd_tracker is None:
@@ -426,20 +426,31 @@ class QMathNode:
 
     def startup(self):
         self.is_running = True
+        
+        # [PROTOCOL NEXUS] Inicialização mandatória para trackers que consultam o terminal diretamente (RHT)
+        if not mt5.initialize():
+            print("❌ Q-MATH :: Falha ao inicializar API MT5. RHT operará em modo degradado.")
+        else:
+            print("⚛️ Q-MATH :: API MT5 Sincronizada para trackers multi-fractais.")
+
         # Inicia a Thread SUB (Ouvinte)
         threading.Thread(target=self.run_subscriber_loop, daemon=True).start()
         
         # O REP server roda na thread principal
         self.run_reply_server()
 
+    def shutdown(self):
+        self.is_running = False
+        self.sub_socket.close()
+        self.rep_socket.close()
+        self.sub_context.term()
+        self.rep_context.term()
+        mt5.shutdown()
+        print("⚛️ Q-MATH :: Desligado.")
+
 if __name__ == "__main__":
     node = QMathNode()
     try:
         node.startup()
     except KeyboardInterrupt:
-        node.is_running = False
-        node.sub_socket.close()
-        node.rep_socket.close()
-        node.sub_context.term()
-        node.rep_context.term()
-        print("⚛️ Q-MATH :: Desligado.")
+        node.shutdown()

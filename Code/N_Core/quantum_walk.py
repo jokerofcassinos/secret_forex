@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import sys
 import os
 
@@ -18,57 +17,85 @@ except ImportError as e:
 
 class QRWTracker:
     """
-    N-Core Agent: Quantum Random Walk (QRW) v3.0 [PERSISTENT]
-    Decodes hidden accumulation/distribution using quantum phase persistence.
+    N-Core Agent: Quantum Random Walk (QRW) v3.2 - Predictive Engine
+    Mapeia a densidade de probabilidade futura e detecta a exaustão quântica (Singularidade).
+    Transforma o QRW de um gerador de sinais em um motor de mapeamento de realidade.
     """
-    def __init__(self, positions=401, decoherence=0.995):
+    def __init__(self, positions=401):
         try:
             self.engine = qrw_engine.QRWEngine(positions)
-            self.engine.set_decoherence(decoherence)
             self.is_active = True
-            self.last_processed_time = 0
         except NameError:
             self.is_active = False
-
-    def process_qrw_skewness(self, df_slice, lookback=1):
-        """
-        Processa novos dados e mantém a função de onda viva.
-        lookback=1 processa apenas o tick/barra mais recente para manter a coerência.
-        """
-        if not self.is_active or len(df_slice) < 5:
-            return 0.0, "NONE"
             
-        # Pega apenas as barras que ainda não foram processadas
-        recent = df_slice.tail(lookback).copy()
-        
-        # Filtro de tempo para evitar re-processar a mesma barra
-        current_time = recent.index[-1] if hasattr(recent.index, 'max') else 0
-        if current_time <= self.last_processed_time and lookback == 1:
-            return self.engine.get_skewness(), "STABLE"
+        self.num_positions = positions
+        self.last_skew = 0.0
+        self.last_entropy = 0.0
+        self.last_variance = 0.0
+        self.scale_factor = 0.005 # Calibração para GER40
 
-        price_deltas = (recent['close'] - recent['open']).values.astype(np.float64)
-        volumes = recent.get('tick_volume', pd.Series(np.ones(len(recent)))).values.astype(np.float64)
+    def process_market_slice(self, df_slice):
+        """
+        Evolui a função de onda com base no fluxo de preços real.
+        Extrai as métricas de assimetria e coerência.
+        """
+        if not self.is_active or len(df_slice) < 50:
+            return 0.0, "OFFLINE"
+
+        deltas = df_slice['close'].diff().fillna(0).values[-50:]
+        volumes = df_slice['tick_volume'].values[-50:]
         
-        # Calibração Absoluta: Fator de Escala Logarítmico amortecido pelo ATR
-        tr = (df_slice['high'] - df_slice['low']).tail(14).mean()
-        vol_mean = volumes.mean() if volumes.mean() > 0 else 1.0
-        atr_scale = 1.0 / (tr * np.log1p(vol_mean) + 1e-9)
+        # Evolução quântica no Metal (C++)
+        self.last_skew = self.engine.update_and_get_skew(deltas, volumes, self.scale_factor)
         
-        # Injeção direta de RAM (Zero-Copy) no C++
-        skewness = self.engine.update_and_get_skew(
-            price_deltas, volumes, float(atr_scale)
+        # Mapeamento de Regimes Quânticos
+        # Skewness > 0.08 indica acúmulo Bull
+        # Skewness < -0.08 indica distribuição Bear
+        signal = "QUANTUM_STABILITY"
+        if self.last_skew > 0.08: signal = "QUANTUM_ACCUMULATION_BULL"
+        elif self.last_skew < -0.08: signal = "QUANTUM_DISTRIBUTION_BEAR"
+        
+        return self.last_skew, signal
+
+    def project_future_horizon(self, current_price, atr, plasma_zones, simulations=500):
+        """
+        Utiliza o motor C++ para 'ver o futuro' e detectar colapsos eminentes.
+        """
+        if not self.is_active:
+            return []
+
+        # Chama a simulação de massa no C++
+        breaches = self.engine.simulate_future_collapse(
+            current_price, 
+            atr, 
+            steps=40, 
+            simulations=simulations,
+            top_zone=plasma_zones['top_level'],
+            bottom_zone=plasma_zones['bottom_level'],
+            threshold_mult=1.5
         )
         
-        self.last_processed_time = current_time
+        return breaches
+
+    def get_probability_cloud(self):
+        """
+        Retorna a nuvem de probabilidade atualizada para renderização no HUD.
+        """
+        if not self.is_active: return []
+        return self.engine.get_probability_distribution()
+
+    def detect_singularity_exhaustion(self, current_price):
+        """
+        Identifica se a função de onda atingiu um ponto de singularidade 
+        onde o preço deve colapsar de volta à média.
+        """
+        if not self.is_active: return "NEUTRAL"
         
-        # Thresholds calibrados para Skewness Normalizada (Z-Score Like)
-        signal = "NEUTRAL"
-        if skewness > 1.2:
-            signal = "QUANTUM_ACCUMULATION_BULL"
-        elif skewness < -1.2:
-            signal = "QUANTUM_DISTRIBUTION_BEAR"
-            
-        return skewness, signal
+        # Se a assimetria for extrema e a coerência cair, temos uma Singularidade
+        if self.last_skew > 0.15: return "QUANTUM_EXHAUSTION_SHORT"
+        if self.last_skew < -0.15: return "QUANTUM_EXHAUSTION_LONG"
+        
+        return "NEUTRAL"
 
 if __name__ == "__main__":
-    print("QRW Persistent Engine v3.0 module loaded.")
+    print("QRW Predictive Engine v3.2 - Carregado com Sucesso.")

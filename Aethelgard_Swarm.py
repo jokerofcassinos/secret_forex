@@ -40,6 +40,7 @@ from Code.N_Core.quantum_oracle import QuantumOracle
 from Code.N_Core.yield_governor import YieldGovernor
 from Code.N_Core.live_rht import LiveRHTTracker
 from Code.N_Core.market_qcd import MarketQCDTracker
+from Code.N_Core.quantum_projection import QuantumPreCognitionNode
 
 
 
@@ -109,6 +110,7 @@ class AethelgardSwarm:
         self.alchemist = MSNRAlchemist()
         self.oracle = QuantumOracle(simulations=5000)
         self.yield_governor = YieldGovernor(danger_window=30, danger_threshold=25.0)
+        self.pre_cognition = QuantumPreCognitionNode(symbol=self.symbol)
         
         self.is_running = False
         self.active_tf = None
@@ -296,6 +298,7 @@ class AethelgardSwarm:
                     self.bridge.symbol = self.symbol
                     self.bridge.initialize()
                     self.rht_tracker.symbol = self.symbol
+                    self.pre_cognition.symbol = self.symbol
                     
                     self.regimes_cache.clear(); self.sec_cache.clear(); self.dots_cache.clear()
                     self.qcd_cache.clear(); self.cyt_danger_cache.clear(); self.last_time = 0
@@ -377,6 +380,25 @@ class AethelgardSwarm:
 
                     rht_f = q_state.get("rht_flash", 0.0)
                     rht_fh = q_state.get("rht_flash_history", "")
+                    # 8. GESTÃO DE SINGULARIDADE (R-EXEC)
+                    # Calcula o Horizonte de Singularidade e atualiza os SLs no MT5
+                    tr_recent = (df['high'] - df['low']).tail(14).mean()
+                    precog_res = self.pre_cognition.project_containment_horizon(df, df['close'].iloc[-1], tr_recent)
+                    
+                    self.bridge.thermodynamic_sl_tp(
+                        r_score, 
+                        df['close'].iloc[-1], 
+                        tr_recent, 
+                        q_state.get("plasma_zones", None), 
+                        q_state.get("schrodinger_density", None), 
+                        None, # Cloud Tracker Passivo
+                        precog_res
+                    )
+                    
+                    # 9. MONITORAMENTO DE FRONTEIRA
+                    # Verifica colapso topológico ou quebra física do SL Virtual
+                    self.bridge.enforce_quantum_boundary(df, None, None, q_state.get("is_collapsed", False))
+
                     nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{q_state.get('z_pinch_signal')};{q_state.get('rmt_signal')};{q_state.get('qrw_signal')};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh}"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()

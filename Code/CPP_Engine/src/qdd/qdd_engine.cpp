@@ -153,6 +153,65 @@ public:
         return signed_fidelity;
     }
 
+    /**
+     * @brief N-Dimensional Tensor Contraction
+     * Calcula a fidelidade global de emaranhamento entre múltiplos timeframes simultaneamente.
+     * Recebe uma matriz [num_timeframes][num_bars].
+     */
+    double calculate_global_fidelity(py::array_t<double> multi_tf_data, int cutoff_level) {
+        py::gil_scoped_release release;
+        
+        py::buffer_info buf = multi_tf_data.request();
+        if (buf.ndim != 2) throw std::runtime_error("Entrada deve ser 2D [timeframes][bars]");
+
+        int num_tfs = buf.shape[0];
+        int num_bars = buf.shape[1];
+        double *ptr = static_cast<double *>(buf.ptr);
+
+        if (num_tfs < 2) return 1.0;
+
+        std::vector<std::vector<double>> normalized_momentums(num_tfs);
+
+        #pragma omp parallel for
+        for (int i = 0; i < num_tfs; ++i) {
+            std::vector<double> raw_series(num_bars);
+            for (int j = 0; j < num_bars; ++j) {
+                raw_series[j] = ptr[i * num_bars + j];
+            }
+
+            std::vector<double> psi = renormalization_flow(raw_series, cutoff_level);
+            if (psi.size() < 2) continue;
+
+            std::vector<double> p_vec(psi.size() - 1);
+            for (size_t k = 1; k < psi.size(); ++k) {
+                p_vec[k-1] = psi[k] - psi[k-1];
+            }
+            normalize_state(p_vec);
+            normalized_momentums[i] = p_vec;
+        }
+
+        // Contração do Tensor de Coerência: Média dos produtos internos ij
+        double total_fidelity = 0.0;
+        int pairs = 0;
+
+        for (int i = 0; i < num_tfs; ++i) {
+            for (int j = i + 1; j < num_tfs; ++j) {
+                if (normalized_momentums[i].empty() || normalized_momentums[j].empty()) continue;
+
+                size_t min_size = std::min(normalized_momentums[i].size(), normalized_momentums[j].size());
+                double inner_prod = 0.0;
+                for (size_t k = 0; k < min_size; ++k) {
+                    inner_prod += normalized_momentums[i][k] * normalized_momentums[j][k];
+                }
+                total_fidelity += inner_prod;
+                pairs++;
+            }
+        }
+
+        if (pairs == 0) return 0.0;
+        return total_fidelity / pairs;
+    }
+
     void set_gamma(double new_gamma) {
         gamma_dissipation = new_gamma;
     }
@@ -175,6 +234,9 @@ PYBIND11_MODULE(qdd_engine, m) {
         .def("calculate_entanglement_fidelity", &QDDEngine::calculate_entanglement_fidelity,
              "Calcula a coerencia quantica (0.0 a 1.0) entre duas funcoes de onda fractais",
              py::arg("macro_data"), py::arg("micro_data"), py::arg("macro_cutoff"), py::arg("micro_cutoff"))
+        .def("calculate_global_fidelity", &QDDEngine::calculate_global_fidelity,
+             "Contracao tensorial N-dimensional entre multiplos timeframes",
+             py::arg("multi_tf_data"), py::arg("cutoff_level"))
         .def("set_gamma", &QDDEngine::set_gamma)
         .def("get_gamma", &QDDEngine::get_gamma);
 }
