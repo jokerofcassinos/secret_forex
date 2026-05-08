@@ -160,43 +160,9 @@ void ParseAndDraw(string data)
    }
    for(int k=boxIdx; k<100; k++) ObjectDelete(0, "NEXUS_ZONE_"+IntegerToString(k));
 
-   // 1.5 ATUALIZAÇÃO ZONAS DE PERIGO CALABI-YAU (ZONAS HOLOGRÁFICAS)
-   if (StringLen(cytDanger) > 0) {
-      string hCyt[]; StringSplit(cytDanger, ',', hCyt);
-      int totalCyt = ArraySize(hCyt);
-      int boxIdxCyt = 0;
-      
-      for(int c=0; c < totalCyt && c < iBars(_Symbol, _Period); c++) {
-         int cytVal = (int)StringToInteger(hCyt[totalCyt - 1 - c]);
-         string cName = "NEXUS_CYT_HIST_" + IntegerToString(c);
-         
-         // Threshold Alpha: 1.5 sigma (enviado como 150 pelo Python para Histórico)
-         if(cytVal >= 150) { 
-             datetime tStart = iTime(_Symbol, _Period, c);
-             datetime tEnd = tStart + PeriodSeconds(_Period);
-             
-             if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_RECTANGLE, 0, tStart, 2000000.0, tEnd, 0.0);
-             else {
-                ObjectSetInteger(0, cName, OBJPROP_TIME, 0, tStart);
-                ObjectSetDouble(0, cName, OBJPROP_PRICE, 0, 2000000.0);
-                ObjectSetInteger(0, cName, OBJPROP_TIME, 1, tEnd);
-                ObjectSetDouble(0, cName, OBJPROP_PRICE, 1, 0.0);
-             }
-             
-             // Estética: Dark Red Translucent (Ebony Stealth Harmonic)
-             ObjectSetInteger(0, cName, OBJPROP_COLOR, (cytVal >= 250) ? RGB(255, 30, 30) : RGB(80, 20, 30)); 
-             ObjectSetInteger(0, cName, OBJPROP_FILL, false); 
-             ObjectSetInteger(0, cName, OBJPROP_BACK, true); 
-             ObjectSetInteger(0, cName, OBJPROP_STYLE, STYLE_DOT);
-             ObjectSetInteger(0, cName, OBJPROP_WIDTH, 1);
-             boxIdxCyt++;
-          } else {
-              ObjectDelete(0, cName);
-          }
-       }
-        for(int k=totalCyt; k<1000; k++) ObjectDelete(0, "NEXUS_CYT_HIST_"+IntegerToString(k));
-      for(int k=0; k<100; k++) ObjectDelete(0, "NEXUS_CYT_ZONE_"+IntegerToString(k));
-   }
+   // 1.5 [CYT HIST DELETED PERMANENTLY]
+   ObjectsDeleteAll(0, "NEXUS_CYT_HIST_");
+   ObjectsDeleteAll(0, "NEXUS_CYT_ZONE_");
 
    // 1.7 ATUALIZAÇÃO HISTÓRICA SEC (DESATIVADO)
    ObjectsDeleteAll(0, "NEXUS_SEC_H_");
@@ -669,6 +635,25 @@ color GetRMTColor(string rmt) {
     }
     return RGB(80, 85, 100); 
 }
+void DrawNeuralHealthBar(string id, double health, int x, int y, int w, int h, int corner)
+{
+    string bgName = id + "_BG"; string fillName = id + "_FILL";
+    if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, bgName, OBJPROP_CORNER, corner); ObjectSetInteger(0, bgName, OBJPROP_XDISTANCE, x); ObjectSetInteger(0, bgName, OBJPROP_YDISTANCE, y);
+    ObjectSetInteger(0, bgName, OBJPROP_XSIZE, w); ObjectSetInteger(0, bgName, OBJPROP_YSIZE, h);
+    ObjectSetInteger(0, bgName, OBJPROP_BGCOLOR, RGB(12, 15, 20)); 
+    ObjectSetInteger(0, bgName, OBJPROP_COLOR, RGB(35, 40, 50)); 
+    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 1000);
+
+    int fillW = (int)(health * w); if(fillW > w) fillW = w; if(fillW < 2) fillW = 2;
+    color hClr = (health < 0.3) ? RGB(239, 83, 80) : (health < 0.6 ? RGB(255, 167, 38) : RGB(38, 166, 154));
+    
+    if(ObjectFind(0, fillName) < 0) ObjectCreate(0, fillName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, fillName, OBJPROP_CORNER, corner); ObjectSetInteger(0, fillName, OBJPROP_XDISTANCE, x); ObjectSetInteger(0, fillName, OBJPROP_YDISTANCE, y);
+    ObjectSetInteger(0, fillName, OBJPROP_XSIZE, fillW); ObjectSetInteger(0, fillName, OBJPROP_YSIZE, h);
+    ObjectSetInteger(0, fillName, OBJPROP_BGCOLOR, hClr); ObjectSetInteger(0, fillName, OBJPROP_COLOR, hClr);
+    ObjectSetInteger(0, fillName, OBJPROP_ZORDER, 1010);
+}
 void DrawEnergyBar(string id, double val, double maxVal, int x, int y, int w, int h, color clr, int corner)
 {
     string bgName = id + "_BG"; string fillName = id + "_FILL";
@@ -740,6 +725,9 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     ObjectSetInteger(0, hBgName, OBJPROP_COLOR, clrNONE); 
     ObjectSetInteger(0, hBgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
     ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 1010);
+
+    // Neural Health Gauge (v3.0)
+    DrawNeuralHealthBar("NEXUS_HEALTH_GAUGE", health, baseX, baseY + 35, panelW, 3, corner);
 
     int rowY = baseY + 45; int rowH = 20;
     for(int k=0; k<15; k++) {
