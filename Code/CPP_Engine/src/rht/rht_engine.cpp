@@ -166,9 +166,10 @@ public:
             if (direction > 0 && effective_gravity < -0.05) gravity_block = true; // Bloqueio TOTAL de Bull em queda
             if (direction < 0 && effective_gravity > 0.05) gravity_block = true;  // Bloqueio TOTAL de Bear em alta
             
-            // Calor Impecável
-            double signal_purity = (consensus_ratio >= 0.8 && !gravity_block) ? 1.0 : 0.0;
-            double instant_heat = direction * std::pow(coherence, 3.0) * energy_factor * (1.0 - entropy) * signal_purity;
+            // Relaxed Protocol (Adaptive Purity):
+            //consensus_ratio >= 0.6 para começar a aquecer, 0.8 para pureza total
+            double signal_purity = (consensus_ratio >= 0.6 && !gravity_block) ? consensus_ratio : 0.0;
+            double instant_heat = direction * std::pow(coherence, 2.5) * energy_factor * (1.0 - entropy) * signal_purity;
             
             heat_accumulator = (heat_accumulator * decay) + (instant_heat * (1.0 - decay));
             heat = heat_accumulator;

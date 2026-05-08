@@ -24,7 +24,7 @@ from Code.R_Exec.mt5_bridge import MT5NeuralBridge
 from Code.N_Core.swarm_bus import create_publisher, create_subscriber, PORT_TICK_FEED, PORT_CONTROL, TOPIC_MARKET_BAR, TOPIC_CONTROL
 
 class NexusRouter:
-    def __init__(self, symbol="GER40.cash", timeframe=mt5.TIMEFRAME_H2):
+    def __init__(self, symbol=None, timeframe=None):
         self.symbol = symbol
         self.timeframe = timeframe
         self.bridge = MT5NeuralBridge(self.symbol)
@@ -35,7 +35,18 @@ class NexusRouter:
         self.is_running = False
 
     def startup(self):
-        print(f"📡 NEXUS ROUTER :: Iniciando Roteamento PUB/SUB para {self.symbol}...")
+        print(f"📡 NEXUS ROUTER :: Iniciando Roteamento PUB/SUB...")
+        
+        # Se não há símbolo (Modo Agnóstico), inicializamos apenas o básico
+        if self.symbol is None:
+            print("📡 NEXUS ROUTER :: Modo Agnóstico. Aguardando sinal do MT5 para sintonizar...")
+            # Precisamos inicializar o MT5 mesmo sem símbolo para poder receber mensagens depois
+            if not mt5.initialize():
+                print("❌ NEXUS ROUTER :: Falha ao inicializar MT5.")
+                return False
+            self.is_running = True
+            return True
+
         if not self.bridge.initialize():
             print("❌ NEXUS ROUTER :: Falha ao conectar ao MT5.")
             return False
@@ -56,12 +67,26 @@ class NexusRouter:
                     payload = pickle.loads(msg[1])
                     if payload.get("action") == "CHANGE_TF":
                         new_tf = payload.get("timeframe")
+                        new_sym = payload.get("symbol")
+                        
+                        # Sincronização de Símbolo (Singularidade)
+                        if new_sym and new_sym != self.symbol:
+                            self.symbol = new_sym
+                            self.bridge.symbol = new_sym
+                            print(f"\n📡 NEXUS ROUTER :: Ativo sintonizado: {self.symbol}")
+                            
+                        # Sincronização de Timeframe
                         if new_tf != self.timeframe:
                             self.timeframe = new_tf
-                            print(f"\n📡 NEXUS ROUTER :: Timeframe alterado para: {self.timeframe}. Limpando feed...")
+                            print(f"📡 NEXUS ROUTER :: Timeframe alterado para: {self.timeframe}. Limpando feed...")
                             time.sleep(0.5)
                 except zmq.Again:
                     pass
+
+                # Se a realidade ainda não colapsou (sem símbolo/tf), aguarda
+                if self.symbol is None or self.timeframe is None:
+                    time.sleep(1)
+                    continue
 
                 # Extrai barras
                 rates = mt5.copy_rates_from_pos(self.symbol, self.timeframe, 0, 1000)
@@ -95,7 +120,7 @@ class NexusRouter:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--asset', type=str, default="GER40.cash", help='Symbol to trade')
+    parser.add_argument('--asset', type=str, default=None, help='Symbol to trade (None = wait for control)')
     args = parser.parse_args()
     
     router = NexusRouter(symbol=args.asset)

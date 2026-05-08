@@ -76,8 +76,14 @@ def run_tcp_server():
             try:
                 req_str = request.decode('utf-8')
                 if "GET /nexus?tf=" in req_str:
-                    tf_str = req_str.split("GET /nexus?tf=")[1].split(" ")[0]
-                    current_mt5_tf = int(tf_str)
+                    params = req_str.split("GET /nexus?")[1].split(" ")[0]
+                    if "tf=" in params:
+                        current_mt5_tf = int(params.split("tf=")[1].split("&")[0])
+                    if "symbol=" in params:
+                        new_symbol = params.split("symbol=")[1].split("&")[0]
+                        if new_symbol != getattr(run_tcp_server, "current_mt5_symbol", None):
+                            run_tcp_server.current_mt5_symbol = new_symbol
+                            print(f"📡 SWARM :: Símbolo alterado para: {new_symbol}")
             except Exception:
                 pass
             
@@ -95,7 +101,7 @@ def run_tcp_server():
             pass 
 
 class AethelgardSwarm:
-    def __init__(self, symbol="GER40.cash"):
+    def __init__(self, symbol=None):
         self.symbol = symbol
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
@@ -129,9 +135,16 @@ class AethelgardSwarm:
         self.ctrl_context, self.ctrl_socket = create_publisher(PORT_CONTROL)
 
     def startup(self):
-        print(f"--- INICIANDO MOTOR SWARM v3.3 [AGI CORE] :: {self.symbol} ---")
-        if not self.bridge.initialize(): return False
+        print(f"--- INICIANDO MOTOR SWARM v4.0 [SINGULARITY BOOT] ---")
+        # Inicia o servidor TCP independente do símbolo (Ouvido do Observador)
         threading.Thread(target=run_tcp_server, daemon=True).start()
+        
+        if self.symbol:
+            print(f"📡 SWARM :: Realidade definida para: {self.symbol}")
+            if not self.bridge.initialize(): return False
+        else:
+            print("📡 SWARM :: Estado de Superposição Ativo. Aguardando observação do gráfico...")
+            
         self.is_running = True
         return True
 
@@ -264,11 +277,30 @@ class AethelgardSwarm:
         print("🧠 SWARM CORE :: Loop Evolutivo Iniciado.")
         try:
             while self.is_running:
-                if current_mt5_tf is not None and self.active_tf != current_mt5_tf:
-                    self.active_tf = current_mt5_tf
+                # 1. SINCRONIZAÇÃO DE SÍMBOLO E TIMEFRAME (SINGULARIDADE)
+                mt5_sym = getattr(run_tcp_server, "current_mt5_symbol", self.symbol)
+                
+                # Se não há símbolo definido nem no MT5 nem no Swarm, aguarda colapso da função de onda
+                if mt5_sym is None:
+                    time.sleep(1)
+                    continue
+
+                # Sintonização Inicial ou Mudança Detectada
+                if self.symbol is None or mt5_sym != self.symbol or (current_mt5_tf is not None and self.active_tf != current_mt5_tf):
+                    print(f"📡 SWARM :: {'Sintonização Inicial' if self.symbol is None else 'Salto Dimensional'} detectado! Símbolo: {mt5_sym} | TF: {current_mt5_tf}")
+                    
+                    self.symbol = mt5_sym
+                    self.active_tf = current_mt5_tf if current_mt5_tf is not None else self.active_tf
+                    
+                    # Atualiza pontes e trackers
+                    self.bridge.symbol = self.symbol
+                    self.bridge.initialize()
+                    self.rht_tracker.symbol = self.symbol
+                    
                     self.regimes_cache.clear(); self.sec_cache.clear(); self.dots_cache.clear()
                     self.qcd_cache.clear(); self.cyt_danger_cache.clear(); self.last_time = 0
-                    ctrl_payload = pickle.dumps({"action": "CHANGE_TF", "timeframe": self.active_tf})
+                    
+                    ctrl_payload = pickle.dumps({"action": "CHANGE_TF", "timeframe": self.active_tf, "symbol": self.symbol})
                     self.ctrl_socket.send_multipart([TOPIC_CONTROL.encode('utf-8'), ctrl_payload])
                     time.sleep(0.5)
 
@@ -358,8 +390,9 @@ class AethelgardSwarm:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Aethelgard Swarm - AGI Core")
-    parser.add_argument('--asset', type=str, default="BTCUSD", help='Ativo para operação')
+    parser.add_argument('--asset', type=str, default=None, help='Ativo para operação (Se None, aguarda sinal do MT5)')
     args = parser.parse_args()
     
+    # Se não for passado --asset, a máquina inicia em modo agnóstico (Aguardando Observador)
     agi = AethelgardSwarm(symbol=args.asset)
     if agi.startup(): agi.live_evolution_loop()

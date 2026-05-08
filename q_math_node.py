@@ -82,13 +82,20 @@ class QMathNode:
         # Trava para evitar conflito de leitura/escrita no estado interno
         self.state_lock = threading.Lock()
 
-    def process_market_data(self, df, tf=None):
-        """Processa a barra recebida e atualiza os motores C++ EM PARALELO"""
+    def process_market_data(self, payload):
+        """Processa o pacote recebido e atualiza os motores C++ EM PARALELO"""
         try:
-            # Se mudou o timeframe, destroi a física antiga para resetar
-            if tf is not None and getattr(self, "active_tf", None) != tf:
-                print(f"\n⚛️ Q-MATH :: Salto Dimensional Detectado. Recriando física para TF: {tf}")
+            df = payload.get("data")
+            tf = payload.get("timeframe")
+            payload_sym = payload.get("symbol", getattr(self, "current_symbol", None))
+
+            # Se mudou o timeframe ou símbolo, destroi a física antiga para resetar
+            if (tf is not None and getattr(self, "active_tf", None) != tf) or (getattr(self, "last_processed_symbol", None) != payload_sym):
+                print(f"\n⚛️ Q-MATH :: Salto Dimensional Detectado. Recriando física para {payload_sym} TF: {tf}")
                 self.active_tf = tf
+                self.last_processed_symbol = payload_sym
+                self.current_symbol = payload_sym # Sincroniza o símbolo
+                
                 self.cloud_tracker = None
                 self.lbm_tracker = None
                 self.plasma_tracker = None
@@ -122,8 +129,8 @@ class QMathNode:
                 self.qcd_tracker = MarketQCDTracker(lookback_window=20)
                 
             if self.rht_tracker is None:
-                symbol = df.attrs.get("symbol", "GER40.cash") # Tenta pegar metadados do df
-                self.rht_tracker = LiveRHTTracker(symbol=symbol, lookback=300)
+                # O símbolo agora vem do payload do roteador, não dos attrs do df
+                self.rht_tracker = LiveRHTTracker(symbol=getattr(self, "current_symbol", "GER40.cash"), lookback=300)
 
             current_close = df['close'].iloc[-1]
             
@@ -371,24 +378,21 @@ class QMathNode:
         """Thread que escuta o mercado em loop"""
         print("⚛️ Q-MATH :: Assinante de Mercado (SUB) Iniciado.")
         while self.is_running:
-            latest_df = None
-            latest_tf = None
+            latest_payload = None
             while True:
                 try:
                     msg = self.sub_socket.recv_multipart(flags=zmq.NOBLOCK)
                     topic = msg[0].decode('utf-8')
                     if topic == TOPIC_MARKET_BAR:
-                        payload = pickle.loads(msg[1])
-                        latest_df = payload.get("data")
-                        latest_tf = payload.get("timeframe")
+                        latest_payload = pickle.loads(msg[1])
                 except zmq.Again:
                     break
                 except Exception as e:
                     print(f"❌ Q-MATH :: Erro de rede SUB: {e}")
                     break
 
-            if latest_df is not None:
-                self.process_market_data(latest_df, latest_tf)
+            if latest_payload is not None:
+                self.process_market_data(latest_payload)
             else:
                 time.sleep(0.01) # Sleep minúsculo para não queimar CPU enquanto espera
 

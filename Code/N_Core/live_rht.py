@@ -42,7 +42,7 @@ class LiveRHTTracker:
         for name, tf in self.timeframes.items():
             rates = mt5.copy_rates_from_pos(self.symbol, tf, 0, self.lookback)
             if rates is None or len(rates) == 0:
-                return "OFFLINE", []
+                return f"OFFLINE_{name}", [], 0.0, ""
             
             df = pd.DataFrame(rates)
             df['time'] = pd.to_datetime(df['time'], unit='s')

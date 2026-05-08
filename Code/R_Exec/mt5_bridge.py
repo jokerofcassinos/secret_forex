@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 class MT5NeuralBridge:
-    def __init__(self, symbol="GER40.cash"):
+    def __init__(self, symbol=None):
         self.symbol = symbol
         self.last_sec_alert = False # State tracker para logs
         self.virtual_sls = {} # Armazena os Stop Loss Lógicos/Dimensionais
@@ -29,6 +29,10 @@ class MT5NeuralBridge:
             print(f"Falha ao inicializar MT5: {mt5.last_error()}")
             return False
         
+        # Modo Agnóstico: Se não há símbolo, apenas confirmamos a saúde da API
+        if self.symbol is None:
+            return True
+            
         # Garantir que o símbolo está visível
         if not mt5.symbol_select(self.symbol, True):
             print(f"Símbolo {self.symbol} não encontrado.")
@@ -313,7 +317,7 @@ class MT5NeuralBridge:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Teste da MT5 Bridge")
-    parser.add_argument("--symbol", type=str, default="GER40.cash", help="Symbol to test")
+    parser.add_argument("--symbol", type=str, default=None, help="Symbol to test (None = wait)")
     args = parser.parse_args()
 
     bridge = MT5NeuralBridge(args.symbol)

@@ -22,7 +22,7 @@ void OnTimer() { UpdateDashboard(); DrawModernTradeHistory(); }
 
 void UpdateDashboard()
 {
-   string url = "http://127.0.0.1:5000/nexus?tf=" + IntegerToString(_Period);
+   string url = "http://127.0.0.1:5000/nexus?tf=" + IntegerToString(_Period) + "&symbol=" + _Symbol;
    string cookie=NULL,headers;
    char post[],result[];
    int res;
@@ -64,7 +64,7 @@ void ParseAndDraw(string data)
    string lbm_signal = (ArraySize(parts) > 11) ? parts[11] : "LAMINAR_FLOW";
    string z_signal = (ArraySize(parts) > 12) ? parts[12] : "NEUTRAL";
    string rmt_signal = (ArraySize(parts) > 13) ? parts[13] : "NOISE";
-   string qrw_signal = "OFFLINE";
+   string qrw_signal = (ArraySize(parts) > 14) ? parts[14] : "OFFLINE";
    string ricci_c = (ArraySize(parts) > 16) ? parts[16] : "0.00";
    string h_entropy = (ArraySize(parts) > 17) ? parts[17] : "0.00";
    string cytDanger = (ArraySize(parts) > 18) ? parts[18] : "";
@@ -726,8 +726,8 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     ObjectSetInteger(0, hBgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
     ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 1010);
 
-    // Neural Health Gauge (v3.0)
-    DrawNeuralHealthBar("NEXUS_HEALTH_GAUGE", health, baseX, baseY + 35, panelW, 3, corner);
+    // Neural Health Gauge (v3.0) - REMOVED PER USER REQUEST
+    // DrawNeuralHealthBar("NEXUS_HEALTH_GAUGE", health, baseX, baseY + 35, panelW, 3, corner);
 
     int rowY = baseY + 45; int rowH = 20;
     for(int k=0; k<15; k++) {
