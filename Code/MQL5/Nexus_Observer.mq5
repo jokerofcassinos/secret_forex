@@ -73,13 +73,59 @@ void ParseAndDraw(string data)
    string is_collapsed = (ArraySize(parts) > 22) ? parts[22] : "0";
    string qcdSignal = (ArraySize(parts) > 23) ? parts[23] : "CONFINED";
    string qcdHistory = (ArraySize(parts) > 24) ? parts[24] : "";
-    string rhtHistory = (ArraySize(parts) > 28) ? parts[28] : "";
+   string rhtHistory = (ArraySize(parts) > 28) ? parts[28] : "";
+   string rhtFlash = (ArraySize(parts) > 29) ? parts[29] : "0";
+   string rhtFlashHistory = (ArraySize(parts) > 30) ? parts[30] : "";
 
    // Limpa as antigas poluições textuais
    ObjectDelete(0, "NEXUS_HEADER");
    // ... (rest of deletions)
 
    DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"));
+
+   // --- 1.8 RHT THERMODYNAMIC VISUALS (IGNIÇÕES HISTÓRICAS) ---
+   if(StringLen(rhtFlashHistory) > 0) {
+      string fSteps[]; StringSplit(rhtFlashHistory, ',', fSteps);
+      int totalF = ArraySize(fSteps);
+      for(int s=0; s < totalF && s < 100; s++) {
+         int fVal = (int)StringToInteger(fSteps[totalF - 1 - s]);
+         if(fVal != 0) {
+            string fName = "NEXUS_SPARK_HIST_" + IntegerToString(s);
+            color fClr = (fVal == 1) ? RGB(0, 255, 255) : RGB(255, 50, 50);
+            int arrowCode = (fVal == 1) ? 233 : 234;
+            
+            double pricePos = (fVal == 1) ? iLow(_Symbol, _Period, s) - 200 * _Point : iHigh(_Symbol, _Period, s) + 200 * _Point;
+            if(ObjectFind(0, fName) < 0) ObjectCreate(0, fName, OBJ_ARROW, 0, iTime(_Symbol, _Period, s), pricePos);
+            ObjectSetInteger(0, fName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, s));
+            ObjectSetDouble(0, fName, OBJPROP_PRICE, 0, pricePos);
+            ObjectSetInteger(0, fName, OBJPROP_ARROWCODE, arrowCode);
+            ObjectSetInteger(0, fName, OBJPROP_COLOR, fClr);
+            ObjectSetInteger(0, fName, OBJPROP_WIDTH, 2);
+            ObjectSetInteger(0, fName, OBJPROP_ANCHOR, (fVal == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
+         } else ObjectDelete(0, "NEXUS_SPARK_HIST_" + IntegerToString(s));
+      }
+   }
+
+   // --- 1.9 RHT HEATMAP HISTÓRICO ---
+   if(StringLen(rhtHistory) > 0) {
+      string rSteps[]; StringSplit(rhtHistory, ',', rSteps);
+      int totalSteps = ArraySize(rSteps);
+      for(int s=0; s < totalSteps && s < 100; s++) {
+         int hVal = (int)StringToInteger(rSteps[totalSteps - 1 - s]);
+         string hName = "NEXUS_HEAT_" + IntegerToString(s);
+         if(hVal != 0) {
+            color hClr = (hVal == 1) ? RGB(0, 40, 40) : RGB(40, 10, 10);
+            if(ObjectFind(0, hName) < 0) ObjectCreate(0, hName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
+            ObjectSetInteger(0, hName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, s));
+            ObjectSetInteger(0, hName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, s+1));
+            ObjectSetDouble(0, hName, OBJPROP_PRICE, 0, 2000000);
+            ObjectSetDouble(0, hName, OBJPROP_PRICE, 1, 0);
+            ObjectSetInteger(0, hName, OBJPROP_COLOR, hClr);
+            ObjectSetInteger(0, hName, OBJPROP_FILL, true);
+            ObjectSetInteger(0, hName, OBJPROP_BACK, true);
+         } else ObjectDelete(0, hName);
+      }
+   }
 
    // --- [QRW & WYCKOFF DISABLED] ---
    ObjectsDeleteAll(0, "NEXUS_SINGULARITY_");

@@ -110,7 +110,15 @@ class LiveRHTTracker:
         elif flash == -1.0: status = "RHT_BEAR_IGNITION"
         elif abs(heat) > threshold * 0.5: status = "RHT_HEATING"
         
-        return status, rht_cache
+        # Mantém buffer circular de flashes para o histórico do MT5
+        if not hasattr(self, 'flash_buffer'): self.flash_buffer = ["0"] * 100
+        f_code = "0"
+        if flash == 1.0: f_code = "1"
+        elif flash == -1.0: f_code = "2"
+        self.flash_buffer.append(f_code)
+        if len(self.flash_buffer) > 100: self.flash_buffer.pop(0)
+        
+        return status, rht_cache, flash, ",".join(self.flash_buffer)
 
 if __name__ == "__main__":
     # Teste rápido de ignição

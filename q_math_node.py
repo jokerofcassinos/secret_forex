@@ -271,11 +271,11 @@ class QMathNode:
                 rht_history = ""
                 try:
                     # O RHT v2.0 processa tensores multi-TF em escala termodinâmica
-                    rht_status, history_arr = self.rht_tracker.process_live_rht()
+                    rht_status, history_arr, rht_flash, rht_flash_history = self.rht_tracker.process_live_rht()
                     rht_history = ",".join(history_arr)
                 except Exception as e:
                     print(f"[Q-Math] Erro RHT: {e}")
-                return {"rht_status": rht_status, "rht_history": rht_history}
+                return {"rht_status": rht_status, "rht_history": rht_history, "rht_flash": rht_flash, "rht_flash_history": rht_flash_history}
 
             def run_cyt():
                 ricci_curvature = 0.0

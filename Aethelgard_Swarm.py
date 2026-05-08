@@ -343,7 +343,9 @@ class AethelgardSwarm:
                     rht_s = q_state.get("rht_status", "PURIFYING")
                     rht_h = q_state.get("rht_history", "")
 
-                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{q_state.get('z_pinch_signal')};{q_state.get('rmt_signal')};{q_state.get('qrw_signal')};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h}"
+                    rht_f = q_state.get("rht_flash", 0.0)
+                    rht_fh = q_state.get("rht_flash_history", "")
+                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{q_state.get('z_pinch_signal')};{q_state.get('rmt_signal')};{q_state.get('qrw_signal')};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh}"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()
 
