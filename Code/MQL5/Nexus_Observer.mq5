@@ -108,6 +108,7 @@ void ParseAndDraw(string data)
 
    // 1.9 [HEATMAP DELETED FOR CLARITY]
    ObjectsDeleteAll(0, "NEXUS_HEAT_");
+   ObjectsDeleteAll(0, "NEXUS_CYT_HIST_");
 
    // --- [QRW & WYCKOFF DISABLED] ---
    ObjectsDeleteAll(0, "NEXUS_SINGULARITY_");
