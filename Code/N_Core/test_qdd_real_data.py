@@ -92,8 +92,15 @@ def run_real_data_audit():
     # Plotting
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10), sharex=True)
     
-    ax1.plot(raw_data['M1'].index, raw_data['M1']['close'], color='cyan', label='M1 (Real Price)', linewidth=1)
-    ax1.set_title(f"NEXUS-QUANT :: {symbol} Real-Time Manifold", color='white', fontsize=14)
+    # Prepara M5 e M15 para o plot (Reindex para alinhar com M1)
+    m5_aligned = raw_data['M5'].reindex(base_df.index, method='ffill')
+    m15_aligned = raw_data['M15'].reindex(base_df.index, method='ffill')
+
+    ax1.plot(base_df.index, base_df['close'], color='cyan', label='M1 (Real Price)', linewidth=1, alpha=0.8)
+    ax1.plot(base_df.index, m5_aligned['close'], color='magenta', label='M5 (Mid Wave)', linewidth=1.5, alpha=0.6)
+    ax1.plot(base_df.index, m15_aligned['close'], color='yellow', label='M15 (Macro Wave)', linewidth=2, alpha=0.4)
+    
+    ax1.set_title(f"NEXUS-QUANT :: {symbol} Multi-Timeframe Manifold", color='white', fontsize=14)
     ax1.legend()
     ax1.grid(alpha=0.1)
     
