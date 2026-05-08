@@ -29,4 +29,14 @@ def build_engine(name, src):
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    build_engine("schrodinger_engine", "src/schrodinger/schrodinger_engine.cpp")
+    target_name = "rht_engine"
+    target_src = "src/rht/rht_engine.cpp"
+    
+    if build_engine(target_name, target_src):
+        import shutil
+        ext = EXT_SUFFIX
+        src_pyd = f"{target_name}{ext}"
+        dst_pyd = os.path.join("../../", src_pyd)
+        print(f"Deploying {src_pyd} to root...")
+        shutil.copy2(src_pyd, dst_pyd)
+        print(f"[DEPLOY OK] {dst_pyd}")
