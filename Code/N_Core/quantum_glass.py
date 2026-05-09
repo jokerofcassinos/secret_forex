@@ -27,15 +27,25 @@ class QuantumGlassNode:
     def scan_for_condensates(self, df):
         if len(df) < 50: return
         
-        # Filtra picos de volume via Z-Score (Muito mais robusto)
+        # Filtra picos de volume via Z-Score (Mais sensível: 1.5 sigma)
         vols = df['tick_volume'].values
         v_mean = np.mean(vols)
         v_std = np.std(vols) + 1e-9
         z_scores = (vols - v_mean) / v_std
         
-        # Só pega o último se for um pico massivo (> 3 sigmas)
+        # SCANNER HISTÓRICO: Na primeira execução ou em picos novos, popula o engine
+        # Verificamos se o engine está vazio para forçar o preenchimento histórico
+        active_count = len(self.engine.get_active_zones())
+        if active_count == 0:
+            print(f"[QGC-Node] Iniciando Scanner de Memória Histórica (Threshold: 1.5 sigma)...")
+            lookback = min(200, len(df))
+            for i in range(len(df) - lookback, len(df)):
+                if z_scores[i] > 1.5:
+                    self.engine.add_zone(df['close'].iloc[i], z_scores[i], float(i))
+        
+        # Detecção de novos picos em tempo real
         last_idx = len(df) - 1
-        if z_scores[-1] > 3.0:
+        if z_scores[-1] > 1.5:
             self.engine.add_zone(df['close'].iloc[-1], z_scores[-1], float(last_idx))
             
         self.engine.update_evaporation(float(last_idx), df['close'].iloc[-1])

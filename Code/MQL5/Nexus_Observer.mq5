@@ -9,6 +9,30 @@
 // Memória de Estado
 string last_payload = "";
 
+// --- PROTÓTIPOS DE INTERFACE ---
+void ParseAndDraw(string data);
+void DrawModernDashboard(string status, double instAvg, double health, string rhtStatus, string lbm, string z, string qrw, string sec, string rmt, string ricci, string h_ent, bool collapsed, string rhtF, double qddFid, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus, double mhdStrength, double msnrFidelity);
+void DrawMSNRZones(double eq, double prem, double disc);
+void DrawMSNRHistorySignals(string hist);
+void DrawLBMHistory(string hist);
+void DrawQGCHistory(string data);
+void DrawQHOShells(string shells);
+void DrawHUDText(string name, string text, int x, int y, color clr, int fs, bool alignRight=false, int corner=CORNER_LEFT_UPPER);
+void DrawHUDRow(string id, string label, string val, color clr, int bx, int y, int pw, int corner);
+void CreateTradingViewTag(string name, datetime t, double p, string txt, color bg, bool above, int tw, int sl);
+void DrawModernTradeHistory();
+string GetStatusShort(string status);
+color GetStatusColor(string status);
+color GetHealthColor(double h);
+string GetLBMShort(string lbm);
+color GetLBMColor(string lbm);
+string GetZPShort(string zp);
+color GetZPColor(string zp);
+string GetQRWShort(string qrw);
+color GetQRWColor(string qrw);
+string GetRMTShort(string rmt);
+color GetRMTColor(string rmt);
+
 //+------------------------------------------------------------------+
 int OnInit() { 
     EventSetTimer(1); 
@@ -89,7 +113,25 @@ void ParseAndDraw(string data)
    // Removida a purga global para evitar o efeito estroboscópico.
    // Objetos agora são atualizados in-place.
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus);
+   string mhd_s = (ArraySize(parts) > 38) ? parts[38] : "0.00";
+   double mhdStrength = StringToDouble(mhd_s);
+    
+    // --- MSNR PARSING (v6.0) ---
+    string msnrTel = (ArraySize(parts) > 39) ? parts[39] : "0|0|0|0|0";
+    string msnrHistory = (ArraySize(parts) > 40) ? parts[40] : "";
+    
+    string mTelParts[]; StringSplit(msnrTel, '|', mTelParts);
+    double msnrFidelity = (ArraySize(mTelParts) > 0) ? StringToDouble(mTelParts[0]) : 0.0;
+    int msnrSigNow = (ArraySize(mTelParts) > 1) ? (int)StringToInteger(mTelParts[1]) : 0;
+    double msnrEq = (ArraySize(mTelParts) > 2) ? StringToDouble(mTelParts[2]) : 0.0;
+    double msnrPrem = (ArraySize(mTelParts) > 3) ? StringToDouble(mTelParts[3]) : 0.0;
+    double msnrDisc = (ArraySize(mTelParts) > 4) ? StringToDouble(mTelParts[4]) : 0.0;
+
+   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, msnrFidelity);
+
+    // --- MSNR VISUALS ---
+    DrawMSNRZones(msnrEq, msnrPrem, msnrDisc);
+    DrawMSNRHistorySignals(msnrHistory);
 
    // --- 1.8 RHT THERMODYNAMIC VISUALS (IGNIÇÕES HISTÓRICAS) ---
    if(StringLen(rhtFlashHistory) > 0) {
@@ -99,7 +141,7 @@ void ParseAndDraw(string data)
          int fVal = (int)StringToInteger(fSteps[totalF - 1 - s]);
          if(fVal != 0) {
             string fName = "NEXUS_SPARK_HIST_" + IntegerToString(s);
-            color fClr = (fVal == 1) ? RGB(0, 255, 255) : RGB(255, 50, 50);
+            color fClr = (fVal == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80);
             int arrowCode = (fVal == 1) ? 233 : 234;
             
             double pricePos = (fVal == 1) ? iLow(_Symbol, _Period, s) - 200 * _Point : iHigh(_Symbol, _Period, s) + 200 * _Point;
@@ -144,7 +186,7 @@ void ParseAndDraw(string data)
          }
          
          string bName = "NEXUS_ZONE_" + IntegerToString(boxIdx);
-         color zClr = (r == 1) ? RGB(0, 180, 180) : RGB(200, 50, 50);
+         color zClr = (r == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); // TradingView Teal / Red
          
          if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
          ObjectSetInteger(0, bName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, start));
@@ -244,15 +286,15 @@ void ParseAndDraw(string data)
             uchar rVal, gVal, bVal;
             
             if(pLevel > currentPrice) { 
-                // RESISTANCE: Ebony Maroon -> Deep Crimson (Darker/Shadowy)
-                rVal = (uchar)(28 + (100 * satRatio)); 
-                gVal = (uchar)(10 + (25 * satRatio)); 
-                bVal = (uchar)(12 + (30 * satRatio)); 
+                // RESISTANCE: Ultra-subtle dark crimson (LuxAlgo style)
+                rVal = (uchar)(18 + (55 * satRatio)); 
+                gVal = (uchar)(5 + (10 * satRatio)); 
+                bVal = (uchar)(8 + (12 * satRatio)); 
             } else { 
-                // SUPPORT: Ebony Teal -> Midnight Cyan (Darker/Shadowy)
-                rVal = (uchar)(5 + (15 * satRatio)); 
-                gVal = (uchar)(28 + (100 * satRatio)); 
-                bVal = (uchar)(25 + (90 * satRatio)); 
+                // SUPPORT: Ultra-subtle dark teal (LuxAlgo style)
+                rVal = (uchar)(3 + (8 * satRatio)); 
+                gVal = (uchar)(18 + (55 * satRatio)); 
+                bVal = (uchar)(15 + (50 * satRatio)); 
             }
             
             if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
@@ -356,8 +398,8 @@ void ParseAndDraw(string data)
       
       if(lVal == 0) { if(ObjectFind(0, lName) >= 0) ObjectDelete(0, lName); continue; }
       
-      // Cores Metálicas (Cyberpunk Palette)
-      color lClr = (lVal == 1) ? RGB(0, 255, 255) : (lVal == 2 ? RGB(255, 64, 129) : clrGold); 
+      // TradingView Palette (Clean)
+      color lClr = (lVal == 1) ? RGB(38, 166, 154) : (lVal == 2 ? RGB(239, 83, 80) : RGB(255, 193, 7)); 
       int arrowCode = 159; // Mini-círculo (Wingdings)
       
       double pHigh = iHigh(_Symbol, _Period, k);
@@ -370,12 +412,13 @@ void ParseAndDraw(string data)
       ObjectSetDouble(0, lName, OBJPROP_PRICE, (lVal == 1) ? pLow - atr_offset : (lVal == 2 ? pHigh + atr_offset : pHigh + atr_offset * 1.2));
       ObjectSetInteger(0, lName, OBJPROP_ARROWCODE, arrowCode);
       ObjectSetInteger(0, lName, OBJPROP_COLOR, lClr);
-      ObjectSetInteger(0, lName, OBJPROP_WIDTH, 1); // Círculo minimalista
+      ObjectSetInteger(0, lName, OBJPROP_WIDTH, 1);
       ObjectSetInteger(0, lName, OBJPROP_ANCHOR, (lVal == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
-      ObjectSetInteger(0, lName, OBJPROP_BACK, false);
+      ObjectSetInteger(0, lName, OBJPROP_ZORDER, 10); // ABAIXO de tudo (atrás do HUD)
+      ObjectSetInteger(0, lName, OBJPROP_BACK, true);
    }
 
-   // 7. DECAIMENTO HAWKING (QGC) - ZONAS DE EVAPORAÇÃO
+   // 7. DECAIMENTO HAWKING (QGC) - FITAS DE GRAVIDADE
    string qgcData = (ArraySize(parts) > 25) ? parts[25] : "";
    int qgcBoxIdx = 0;
    if(StringLen(qgcData) > 0) {
@@ -388,26 +431,24 @@ void ParseAndDraw(string data)
             double massNorm = StringToDouble(qParts[2]);
             
             string qLineName = "NEXUS_QGC_" + IntegerToString(qgcBoxIdx);
+            double widthPrice = massNorm * 25.0; // Amplificação dinâmica para BTC/GER40 (escala de preço real)
             
-            ObjectDelete(0, qLineName); // Força limpeza 
-            if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_TREND, 0, 0, 0, 0, 0);
+            if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
+            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, MathMin(age, iBars(_Symbol, _Period)-1)));
+            ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, centerPrice + widthPrice);
+            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, TimeCurrent() + PeriodSeconds(_Period) * 30);
+            ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 1, centerPrice - widthPrice);
             
-            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, age));
-            ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, centerPrice);
-            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, 0));
-            ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 1, centerPrice);
-            
-            ObjectSetInteger(0, qLineName, OBJPROP_COLOR, RGB(0, 255, 255)); // Neon Cyan
-            ObjectSetInteger(0, qLineName, OBJPROP_STYLE, STYLE_SOLID);
-            ObjectSetInteger(0, qLineName, OBJPROP_WIDTH, (int)MathMax(1, MathMin(10, massNorm * 2.0))); 
-            ObjectSetInteger(0, qLineName, OBJPROP_RAY_RIGHT, true); 
+            ObjectSetInteger(0, qLineName, OBJPROP_COLOR, RGB(35, 5, 8)); // Ultra-subtle gravity (LuxAlgo)
+            ObjectSetInteger(0, qLineName, OBJPROP_FILL, true);
             ObjectSetInteger(0, qLineName, OBJPROP_BACK, true);
+            ObjectSetInteger(0, qLineName, OBJPROP_ZORDER, 10); // ABAIXO de tudo (atrás do HUD)
             
             qgcBoxIdx++;
          }
       }
-      for(int k=qgcBoxIdx; k<10; k++) ObjectDelete(0, "NEXUS_QGC_"+IntegerToString(k));
    }
+   for(int k=qgcBoxIdx; k<20; k++) ObjectDelete(0, "NEXUS_QGC_" + IntegerToString(k));
    
    // --- 7.1 HARMONIC ENERGY SHELLS (QHO) ---
    if(StringLen(qhoShells) > 0) {
@@ -424,49 +465,20 @@ void ParseAndDraw(string data)
       }
    } else ObjectsDeleteAll(0, "NEXUS_QHO_SHELL_");
 
-   // --- 7.2 TUNNELING EXIT TARGET (QTE) ---
-   if(qteProb > 0.7) {
-      string tName = "NEXUS_QTE_TARGET";
-      double tPrice = instAvgPrice + (qteAdvice == "TUNNEL_BULL" ? 500*_Point : -500*_Point); 
-      if(ObjectFind(0, tName) < 0) ObjectCreate(0, tName, OBJ_ARROW_RIGHT_PRICE, 0, 0, tPrice);
-      ObjectSetDouble(0, tName, OBJPROP_PRICE, tPrice);
+   // --- 7.2 TUNNELING EXIT PORTAL (QTE) ---
+   if(qteProb > 0.8) {
+      string tName = "NEXUS_QTE_PORTAL";
+      double tPrice = instAvgPrice + (qteAdvice == "TUNNEL_BULL" ? 200*_Point : -200*_Point); 
+      if(ObjectFind(0, tName) < 0) ObjectCreate(0, tName, OBJ_ARROW_BUY, 0, iTime(_Symbol, _Period, 0), tPrice);
+      ObjectSetInteger(0, tName, OBJPROP_ARROWCODE, 161); // Círculo concêntrico
       ObjectSetInteger(0, tName, OBJPROP_COLOR, clrGold);
-      ObjectSetString(0, tName, OBJPROP_TEXT, "TUNNEL EXIT: " + qteAdvice);
-      ObjectSetInteger(0, tName, OBJPROP_ZORDER, 0);
-   } else ObjectDelete(0, "NEXUS_QTE_TARGET");
+      ObjectSetInteger(0, tName, OBJPROP_WIDTH, 5);
+      ObjectSetInteger(0, tName, OBJPROP_BACK, false);
+      ObjectSetInteger(0, tName, OBJPROP_ZORDER, 100);
+   } else ObjectDelete(0, "NEXUS_QTE_PORTAL");
 
-   // 9. QUANTUM DENSITY CLOUDS (DESATIVADO PARA CLAREZA VISUAL)
-   // --- 9. SCHRÖDINGER HEATMAP CLOUDS ---
-   string cloudRaw = (ArraySize(parts) > 10) ? parts[10] : "";
-   if(StringLen(cloudRaw) > 0) {
-      string cloudParts[]; StringSplit(cloudRaw, ':', cloudParts);
-      if(ArraySize(cloudParts) >= 2) {
-         string data[]; StringSplit(cloudParts[1], ',', data);
-         int cloudMax = ArraySize(data);
-         for(int c=0; c < cloudMax && c < 50; c++) {
-            string pair[]; StringSplit(data[c], '|', pair);
-            if(ArraySize(pair) == 2) {
-               double cPrice = StringToDouble(pair[0]);
-               double cDens = StringToDouble(pair[1]);
-               
-               string cName = "NEXUS_CLOUD_" + IntegerToString(c);
-               if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_TREND, 0, iTime(_Symbol, _Period, 50), cPrice, TimeCurrent(), cPrice);
-               
-               ObjectSetDouble(0, cName, OBJPROP_PRICE, 0, cPrice);
-               ObjectSetDouble(0, cName, OBJPROP_PRICE, 1, cPrice);
-               ObjectSetInteger(0, cName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, 50));
-               ObjectSetInteger(0, cName, OBJPROP_TIME, 1, TimeCurrent());
-               
-               color cClr = (cDens > 0.7) ? RGB(0, 255, 255) : (cDens > 0.4 ? RGB(171, 71, 188) : RGB(49, 27, 146));
-               ObjectSetInteger(0, cName, OBJPROP_COLOR, cClr);
-               ObjectSetInteger(0, cName, OBJPROP_WIDTH, (int)MathMax(1, cDens * 8.0));
-               ObjectSetInteger(0, cName, OBJPROP_BACK, true);
-               ObjectSetInteger(0, cName, OBJPROP_ZORDER, 0);
-            }
-         }
-         for(int k=cloudMax; k<50; k++) ObjectDelete(0, "NEXUS_CLOUD_"+IntegerToString(k));
-      }
-   } else ObjectsDeleteAll(0, "NEXUS_CLOUD_");
+   // [DUPLICATE CLOUD REMOVED] - Primary heatmap is Section 4 (LuxAlgo Style)
+   ObjectsDeleteAll(0, "NEXUS_CLOUD_");
 
    // Define prioridade máxima para todos os labels do HUD
    for(int i=0; i<ObjectsTotal(0, 0, OBJ_LABEL); i++) {
@@ -766,9 +778,9 @@ void DrawHUDRow(string id, string label, string val, color valClr, int baseX, in
     DrawHUDText(id + "_L", label, baseX + 15, y, RGB(140, 140, 145), 9, false, corner); 
     DrawHUDText(id + "_V", val, baseX + panelW - 15, y, valClr, 9, true, corner);
 }
-void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash, double qddFidelity, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus)
+void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash, double qddFidelity, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus, double mhdStrength, double msnrFidelity)
 {
-    int panelW = 280; int panelH = 500; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
+    int panelW = 280; int panelH = 560; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
     string bgName = "NEXUS_HUD_BASE"; if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
     ObjectSetInteger(0, bgName, OBJPROP_CORNER, corner); ObjectSetInteger(0, bgName, OBJPROP_XDISTANCE, baseX); ObjectSetInteger(0, bgName, OBJPROP_YDISTANCE, baseY);
     ObjectSetInteger(0, bgName, OBJPROP_XSIZE, panelW); ObjectSetInteger(0, bgName, OBJPROP_YSIZE, panelH); 
@@ -798,7 +810,7 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 100);
 
     int rowY = baseY + 45; int rowH = 20;
-    for(int k=0; k<15; k++) {
+    for(int k=0; k<25; k++) {
         string rBgName = "NEXUS_HUD_ROW_BG_" + IntegerToString(k); if(ObjectFind(0, rBgName) < 0) ObjectCreate(0, rBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
         ObjectSetInteger(0, rBgName, OBJPROP_CORNER, corner); 
         ObjectSetInteger(0, rBgName, OBJPROP_XDISTANCE, baseX); 
@@ -844,12 +856,26 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     
     DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner); rowY += rowH;
 
+    // --- MSNR FIDELITY ---
+    color msnrClr = (msnrFidelity >= 0.9) ? RGB(0, 255, 180) : (msnrFidelity >= 0.6 ? RGB(189, 0, 255) : RGB(140, 140, 145));
+    DrawHUDRow("NEXUS_HUD_L_MSNR", "MSNR Fidelity", DoubleToString(msnrFidelity, 4), msnrClr, baseX, rowY, panelW, corner);
+    rowY += 15;
+    DrawEnergyBar("NEXUS_MSNR_BAR", msnrFidelity, 1.0, baseX + 15, rowY, panelW - 30, 5, msnrClr, corner);
+    rowY += 12;
+
     // --- DIMENSIONAL COHERENCE (QDD) ---
     color qddClr = (MathAbs(qddFidelity) >= 0.8) ? RGB(0, 255, 120) : (MathAbs(qddFidelity) >= 0.4 ? RGB(255, 180, 0) : RGB(255, 60, 60));
     DrawHUDRow("NEXUS_HUD_L_QDD", "Dim. Coherence", DoubleToString(qddFidelity, 3), qddClr, baseX, rowY, panelW, corner);
     rowY += 15;
-    DrawEnergyBar("NEXUS_QDD_BAR", MathAbs(qddFidelity), 1.0, baseX + 15, rowY, panelW - 30, 6, qddClr, corner);
+    DrawEnergyBar("NEXUS_QDD_BAR", MathAbs(qddFidelity), 1.0, baseX + 15, rowY, panelW - 30, 5, qddClr, corner);
     rowY += 12;
+
+    color mhdClr = (mhdStrength > 7.0) ? clrGold : (mhdStrength > 4.0 ? RGB(255, 150, 0) : RGB(140, 140, 145));
+    DrawHUDRow("NEXUS_HUD_L_MHD", "Magnetic Pull", DoubleToString(mhdStrength, 2) + " mT", mhdClr, baseX, rowY, panelW, corner);
+    rowY += rowH;
+
+    DrawHUDRow("NEXUS_HUD_L_QTE", "Tunnel Exit P", DoubleToString(qteProb * 100, 1) + "%", (qteProb > 0.8 ? clrGold : clrWhite), baseX, rowY, panelW, corner);
+    rowY += rowH;
 
     // --- NEW: SCHRÖDINGER CLOUD ANALYSIS ---
     color qCloudClr = (qteProb > 0.6) ? RGB(0, 255, 255) : RGB(140, 140, 145);
@@ -879,3 +905,107 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
    
    ChartRedraw();
 }
+
+//+------------------------------------------------------------------+
+//| Sub-Módulos de Renderização Quântica                             |
+//+------------------------------------------------------------------+
+void DrawMSNRZones(double eq, double prem, double disc)
+{
+   if(eq <= 0) return;
+   string eqN = "NEX_MSNR_EQ"; 
+   if(ObjectFind(0, eqN) < 0) ObjectCreate(0, eqN, OBJ_TREND, 0, iTime(_Symbol, _Period, 100), eq, TimeCurrent(), eq);
+   ObjectSetDouble(0, eqN, OBJPROP_PRICE, 0, eq); 
+   ObjectSetDouble(0, eqN, OBJPROP_PRICE, 1, eq);
+   ObjectSetInteger(0, eqN, OBJPROP_COLOR, RGB(60, 60, 65)); // Subtle equilibrium
+   ObjectSetInteger(0, eqN, OBJPROP_STYLE, STYLE_DOT);
+   ObjectSetInteger(0, eqN, OBJPROP_BACK, true);
+   ObjectSetInteger(0, eqN, OBJPROP_TIME, 0, iTime(_Symbol, _Period, 100)); 
+   ObjectSetInteger(0, eqN, OBJPROP_TIME, 1, TimeCurrent() + 3600);
+
+   string pN = "NEX_MSNR_PREM"; 
+   if(ObjectFind(0, pN) < 0) ObjectCreate(0, pN, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, 100), prem, TimeCurrent(), eq);
+   ObjectSetDouble(0, pN, OBJPROP_PRICE, 0, prem); 
+   ObjectSetDouble(0, pN, OBJPROP_PRICE, 1, eq);
+   ObjectSetInteger(0, pN, OBJPROP_COLOR, RGB(25, 8, 8)); // Ultra-subtle premium
+   ObjectSetInteger(0, pN, OBJPROP_FILL, true);
+   ObjectSetInteger(0, pN, OBJPROP_BACK, true);
+
+   string dN = "NEX_MSNR_DISC"; 
+   if(ObjectFind(0, dN) < 0) ObjectCreate(0, dN, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, 100), eq, TimeCurrent(), disc);
+   ObjectSetDouble(0, dN, OBJPROP_PRICE, 0, eq); 
+   ObjectSetDouble(0, dN, OBJPROP_PRICE, 1, disc);
+   ObjectSetInteger(0, dN, OBJPROP_COLOR, RGB(8, 25, 15)); // Ultra-subtle discount
+   ObjectSetInteger(0, dN, OBJPROP_FILL, true);
+   ObjectSetInteger(0, dN, OBJPROP_BACK, true);
+}
+
+void DrawMSNRHistorySignals(string hist)
+{
+   ObjectsDeleteAll(0, "NEX_MS_SIG_");
+   if(StringLen(hist) == 0) return;
+   string sigs[]; StringSplit(hist, ',', sigs);
+   int t = ArraySize(sigs);
+   for(int k=0; k < t && k < 150; k++) {
+      int v = (int)StringToInteger(sigs[t - 1 - k]);
+      if(v == 0) continue;
+      datetime tm = iTime(_Symbol, _Period, k);
+      double p = iClose(_Symbol, _Period, k);
+      color c = (v == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); // TradingView palette
+      CreateTradingViewTag("NEX_MS_SIG_" + IntegerToString(k), tm, p, (v == 1 ? "MSNR BUY" : "MSNR SELL"), c, (v == 2), 65, 30);
+   }
+}
+
+void DrawLBMHistory(string hist)
+{
+   ObjectsDeleteAll(0, "NEX_LBM_H_");
+   if(StringLen(hist) == 0) return;
+   string sigs[]; StringSplit(hist, ',', sigs);
+   int t = ArraySize(sigs);
+   for(int k=0; k < t && k < 150; k++) {
+      int v = (int)StringToInteger(sigs[t - 1 - k]);
+      if(v == 0) continue;
+      datetime tm = iTime(_Symbol, _Period, k);
+      double p = (v == 1) ? iLow(_Symbol, _Period, k) : iHigh(_Symbol, _Period, k);
+      color c = (v == 1) ? RGB(0, 255, 255) : (v == 2 ? RGB(255, 0, 255) : clrGold);
+      string n = "NEX_LBM_H_" + IntegerToString(k);
+      ObjectCreate(0, n, OBJ_ARROW, 0, tm, p);
+      ObjectSetInteger(0, n, OBJPROP_ARROWCODE, 159);
+      ObjectSetInteger(0, n, OBJPROP_COLOR, c);
+      ObjectSetInteger(0, n, OBJPROP_ANCHOR, (v == 1 ? ANCHOR_TOP : ANCHOR_BOTTOM));
+   }
+}
+
+void DrawQGCHistory(string data)
+{
+   ObjectsDeleteAll(0, "NEX_QGC_");
+   if(StringLen(data) == 0) return;
+   string lines[]; StringSplit(data, ',', lines);
+   for(int k=0; k<ArraySize(lines); k++) {
+      string p[]; StringSplit(lines[k], '|', p);
+      if(ArraySize(p) == 3) {
+         double price = StringToDouble(p[1]);
+         double mass = StringToDouble(p[2]);
+         string n = "NEX_QGC_" + IntegerToString(k);
+         ObjectCreate(0, n, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, (int)StringToInteger(p[0])), price + mass*10, TimeCurrent() + 3600, price - mass*10);
+         ObjectSetInteger(0, n, OBJPROP_BGCOLOR, RGB(60, 10, 15));
+         ObjectSetInteger(0, n, OBJPROP_FILL, true);
+         ObjectSetInteger(0, n, OBJPROP_BACK, true);
+      }
+   }
+}
+
+void DrawQHOShells(string shells)
+{
+   ObjectsDeleteAll(0, "NEX_QHO_");
+   if(StringLen(shells) == 0) return;
+   string p[]; StringSplit(shells, ',', p);
+   for(int k=0; k<ArraySize(p); k++) {
+      double pr = StringToDouble(p[k]);
+      string n = "NEX_QHO_" + IntegerToString(k);
+      ObjectCreate(0, n, OBJ_HLINE, 0, 0, pr);
+      ObjectSetInteger(0, n, OBJPROP_COLOR, RGB(0, 60, 60));
+      ObjectSetInteger(0, n, OBJPROP_STYLE, STYLE_DOT);
+      ObjectSetInteger(0, n, OBJPROP_BACK, true);
+   }
+}
+

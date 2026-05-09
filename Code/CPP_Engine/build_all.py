@@ -30,6 +30,7 @@ ENGINES = [
     ("cyt_engine",        "src/cyt/cyt_engine.cpp"),
     ("qgc_engine",        "src/qgc/qgc_engine.cpp"),
     ("rht_engine",        "src/rht/rht_engine.cpp"),
+    ("msnr_engine",       "src/msnr/msnr_engine.cpp"),
 ]
 
 def build_engine(name, src):

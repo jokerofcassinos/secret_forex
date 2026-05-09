@@ -1,17 +1,47 @@
 import numpy as np
 import pandas as pd
+import os
+import sys
+
+# [BOOTLOADER] Integração MSNR C++
+if os.name == 'nt':
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    bin_path = os.path.join(root, "Code", "CPP_Engine", "bin")
+    
+    # Adiciona raiz e bin ao caminho de busca
+    for p in [root, bin_path]:
+        if os.path.exists(p):
+            os.add_dll_directory(p)
+            if p not in sys.path: sys.path.insert(0, p)
+
+try:
+    import msnr_engine as msnr_module
+except ImportError:
+    # Fallback se não encontrar o .pyd
+    msnr_module = None
 
 class MSNRAlchemist:
     """
     MSNR-Alchemist (Market Structure Noise Reduction)
-    Agente responsável por transmutar dados brutos em zonas de Ressonância Quântica.
-    Funde conceitos de SMC, Liquidez Institucional e Estrutura de Fluxo.
+    Agente de Alquimia Espectral ASI v6.0.
+    Funde Spectral Pruning C++ com Estrutura de Mercado SMC.
     """
     
-    def __init__(self, fibo_levels=[0.5, 0.618, 0.786], bb_period=20, bb_std=2.0):
+    def __init__(self, fibo_levels=[0.5, 0.618, 0.786], cut_off=0.15):
         self.fibo_levels = fibo_levels
-        self.bb_period = bb_period
-        self.bb_std = bb_std
+        self.cut_off = cut_off
+        self.engine = msnr_module.MSNREngine() if msnr_module else None
+
+    def apply_spectral_alchemy(self, series):
+        """
+        Extrai o Sinal Puro através da Poda Espectral C++.
+        """
+        raw = np.array(series, dtype=np.float64)
+        if not self.engine: return raw, 1.0 # Fallback: 100% fidelity se não houver engine
+        
+        filtered = self.engine.spectral_denoising(raw, self.cut_off)
+        fidelity = self.engine.calculate_resonance_fidelity(raw, filtered)
+        return filtered, fidelity
 
     def calculate_dealing_range(self, df, lookback=100):
         """
@@ -34,37 +64,25 @@ class MSNRAlchemist:
             'discount': discount_zone
         }
 
-    def detect_structure_change(self, df, lookback=50):
+    def detect_institutional_shift(self, df, lookback=50):
         """
-        Detecta BOS (Break of Structure) e CHoCH (Change of Character).
-        BOS: Continuação de tendência (Fechamento além do topo/fundo anterior).
-        CHoCH: Reversão (Fechamento além do pivô contrário).
+        Gera um sinal MSNR ultra-preciso (Sniper).
+        Condição: Ocorreu uma Varredura de Liquidez (Sweep) SEGUIDA de um Vácuo de Liquidez (FVG) na direção oposta.
         """
-        if len(df) < lookback + 5: return None
+        sweep = self.detect_liquidity_sweeps(df, lookback)
+        fvgs = self.detect_fvgs(df, lookback=10) # FVG recente (displacement)
         
-        # Encontrar últimos pivôs (Highs e Lows significativos)
-        # Usamos uma janela de 5 velas para definir um pivô
-        pivots_high = []
-        pivots_low = []
-        
-        for i in range(len(df) - lookback, len(df) - 2):
-            if df['high'].iloc[i] > df['high'].iloc[i-1] and df['high'].iloc[i] > df['high'].iloc[i+1]:
-                pivots_high.append(df['high'].iloc[i])
-            if df['low'].iloc[i] < df['low'].iloc[i-1] and df['low'].iloc[i] < df['low'].iloc[i+1]:
-                pivots_low.append(df['low'].iloc[i])
-
-        if not pivots_high or not pivots_low: return None
-
-        last_high = pivots_high[-1]
-        last_low = pivots_low[-1]
-        curr_close = df['close'].iloc[-1]
-        prev_close = df['close'].iloc[-2]
-
-        # Lógica de CHoCH (Change of Character)
-        choch_bull = (prev_close <= last_high < curr_close)
-        choch_bear = (prev_close >= last_low > curr_close)
-
-        return "CHOCH_BULL" if choch_bull else "CHOCH_BEAR" if choch_bear else None
+        # Bullish Shift: Varreu liquidez de venda (SSL) e criou FVG de alta
+        if sweep == "SSL_SWEEP":
+            if any(f['type'] == 'BULL_FVG' for f in fvgs):
+                return "1" # STRONG BUY
+                
+        # Bearish Shift: Varreu liquidez de compra (BSL) e criou FVG de baixa
+        if sweep == "BSL_SWEEP":
+            if any(f['type'] == 'BEAR_FVG' for f in fvgs):
+                return "2" # STRONG SELL
+                
+        return "0"
 
     def detect_liquidity_sweeps(self, df, lookback=50):
         """

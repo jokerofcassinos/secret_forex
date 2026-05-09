@@ -66,6 +66,7 @@ public:
             d["price"] = zone.price;
             d["mass"] = zone.current_mass;
             d["ratio"] = zone.current_mass / zone.mass;
+            d["age"] = zone.creation_time;
             out.append(d);
         }
         return out;
