@@ -46,6 +46,7 @@ from Code.N_Core.tensor_network import TensorNetworkNode
 from Code.N_Core.quantum_tunneling import QuantumTunnelingNode
 from Code.N_Core.quantum_oscillator import QuantumOscillatorNode
 from Code.N_Core.quantum_glass import QuantumGlassNode
+from Code.N_Core.quantum_setups import QuantumSetupEngine
 
 
 
@@ -119,6 +120,7 @@ class AethelgardSwarm:
         self.qte_engine = QuantumTunnelingNode()
         self.qho_engine = QuantumOscillatorNode()
         self.qgc_node = QuantumGlassNode()
+        self.setup_engine = QuantumSetupEngine()
         
         self.is_running = False
         self.active_tf = None
@@ -133,6 +135,7 @@ class AethelgardSwarm:
         self.rht_cache = []
         self.qcd_cache = []
         self.cyt_danger_cache = []
+        self.setup_cache = []
         self.last_time = 0
         self.genesis_count = 0
         self.prev_s = 0
@@ -209,6 +212,12 @@ class AethelgardSwarm:
         from Code.N_Core.market_qcd import MarketQCDTracker
         qcd_hist_tracker = MarketQCDTracker()
         
+        from Code.N_Core.quantum_oscillator import QuantumOscillatorNode
+        qho_boot = QuantumOscillatorNode()
+        
+        from Code.N_Core.quantum_setups import QuantumSetupEngine
+        setup_boot = QuantumSetupEngine()
+        
         self.regimes_cache = []
         self.signals_cache = []
         self.lbm_cache = []
@@ -217,6 +226,7 @@ class AethelgardSwarm:
         self.qcd_cache = []
         self.cyt_danger_cache = []
         self.sec_cache = []
+        self.setup_cache = []
         
         scores_hist = []
         self.prev_s, self.prev_c = 0, 0
@@ -228,6 +238,7 @@ class AethelgardSwarm:
                 self.lbm_cache.append("0")
                 self.z_pinch_cache.append("0")
                 self.qrw_cache.append("0")
+                self.setup_cache.append("0")
                 self.cyt_danger_cache.append("0")
                 scores_hist.append(0)
                 continue
@@ -276,6 +287,44 @@ class AethelgardSwarm:
             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
             scores_hist.append(r_score)
             
+            # --- SETUP ENGINE BACKFILL ---
+            try:
+                qho_h = qho_boot.calculate_quantum_state(slice_df)
+                ricci_h_val = 0.0
+                if has_cpp_hist:
+                    try: ricci_h_val = float(def_arr[-1]) if len(def_arr) > 0 else 0.0
+                    except: pass
+                lbm_sig_str = "LAMINAR_FLOW"
+                if lbm_sig_hist == "1": lbm_sig_str = "FLUID_RUPTURE_BULL"
+                elif lbm_sig_hist == "2": lbm_sig_str = "FLUID_RUPTURE_BEAR"
+                elif lbm_sig_hist == "3": lbm_sig_str = "BOSONIC_SQUEEZE"
+                
+                qcd_sig_str = "CONFINED"
+                if "FISSION_EXPANSION_UP" in qcd_sig: qcd_sig_str = "FISSION_EXPANSION_UP"
+                elif "FISSION_EXPANSION_DOWN" in qcd_sig: qcd_sig_str = "FISSION_EXPANSION_DOWN"
+                
+                setup_ctx_h = {
+                    "regime": r_score, "conf": conf, "prev_regime": scores_hist[-2] if len(scores_hist) > 1 else 0,
+                    "lbm_signal": lbm_sig_str, "qcd_signal": qcd_sig_str,
+                    "rht_flash": 0.0, "rmt_signal": "NOISE_x1.0",
+                    "qrw_signal": "NEUTRAL", "z_pinch_signal": "NEUTRAL",
+                    "qgc_pull": 0.0, "qho_n": qho_h.get('n', 0), "qho_status": qho_h.get('status', ''),
+                    "qte_prob": 0.0, "qte_advice": "STABLE_ORBIT",
+                    "qdd_fidelity": 0.0, "ricci": ricci_h_val,
+                    "is_collapsed": False, "sec_metrics": None,
+                }
+                hist_setups = setup_boot.evaluate(setup_ctx_h, backfill=True)
+                if hist_setups:
+                    best = max(hist_setups, key=lambda s: s.get('confidence', 0))
+                    # Encode: setup number (1-7) * direction sign
+                    snum = int(best['setup'][1])  # S1..S7 → 1..7
+                    sdir = 1 if best['direction'] == 'LONG' else -1
+                    self.setup_cache.append(str(snum * sdir))
+                else:
+                    self.setup_cache.append("0")
+            except Exception:
+                self.setup_cache.append("0")
+            
             if i == len(df) - 1 and has_cpp_hist:
                 try:
                     q_slc = df.tail(500)
@@ -290,7 +339,8 @@ class AethelgardSwarm:
 
         self.last_time = df.iloc[-1]['time']
         self.rht_cache = ["0"] * 300
-        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot N-Core Concluído. {sum(1 for x in self.qcd_cache if x != '0')} QCD signals restored.")
+        setup_count = sum(1 for x in self.setup_cache if x != '0')
+        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot N-Core Concluído. {sum(1 for x in self.qcd_cache if x != '0')} QCD, {setup_count} Setup signals restored.")
 
     def live_evolution_loop(self):
         global nexus_data_str, current_mt5_tf
@@ -480,12 +530,39 @@ class AethelgardSwarm:
                     
                     self.qgc_data_str = ",".join(q_parts)
 
-                    # 7. CONSULTA À FÍSICA (REQ-REP)
+                    # 8. QUANTUM SETUP ENGINE (Hybrid Execution Setups)
+                    setup_ctx = {
+                        "regime": r_score, "conf": conf, "prev_regime": self.prev_s,
+                        "lbm_signal": lbm_s, "qcd_signal": qcd_s,
+                        "rht_flash": rht_f, "rmt_signal": rmt_s,
+                        "qrw_signal": qrw_s, "z_pinch_signal": z_p_s,
+                        "qgc_pull": qgc_tel.get('gravity_pull', 0.0),
+                        "qho_n": qho_state.get('n', 0), "qho_status": qho_state.get('status', ''),
+                        "qte_prob": qte_prob, "qte_advice": qte_advice,
+                        "qdd_fidelity": qdd_fidelity, "ricci": ricci_c,
+                        "is_collapsed": q_state.get("is_collapsed", False),
+                        "sec_metrics": q_state.get("sec_metrics"),
+                    }
+                    active_setups = self.setup_engine.evaluate(setup_ctx)
+                    setup_tel = self.setup_engine.format_telemetry()
+                    
+                    # Cache de setup histórico (live append)
+                    if active_setups:
+                        best = max(active_setups, key=lambda s: s.get('confidence', 0))
+                        snum = int(best['setup'][1])
+                        sdir = 1 if best['direction'] == 'LONG' else -1
+                        self.setup_cache.append(str(snum * sdir))
+                        for s in active_setups:
+                            print(f"⚡ SETUP ATIVO: {s['setup']} → {s['direction']} (Confiança: {s['confidence']})")
+                    else:
+                        self.setup_cache.append("0")
+
+                    # 9. CONSULTA À FÍSICA (REQ-REP)
                     # Verifica colapso topológico ou quebra física do SL Virtual
                     self.bridge.enforce_quantum_boundary(df, None, None, q_state.get("is_collapsed", False))
 
                     # [FULL TELEMETRY + HEATMAP ANALYSIS]
-                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{qte_prob:.4f};{qte_advice};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells};{mhd_strength:.4f};0|0|0;0"
+                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{qte_prob:.4f};{qte_advice};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells};{mhd_strength:.4f};{setup_tel};{','.join(self.setup_cache)}"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()
 

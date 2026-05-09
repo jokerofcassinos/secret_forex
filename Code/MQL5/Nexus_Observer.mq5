@@ -11,9 +11,8 @@ string last_payload = "";
 
 // --- PROTÓTIPOS DE INTERFACE ---
 void ParseAndDraw(string data);
-void DrawModernDashboard(string status, double instAvg, double health, string rhtStatus, string lbm, string z, string qrw, string sec, string rmt, string ricci, string h_ent, bool collapsed, string rhtF, double qddFid, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus, double mhdStrength, double msnrFidelity);
-void DrawMSNRZones(double eq, double prem, double disc);
-void DrawMSNRHistorySignals(string hist);
+void DrawModernDashboard(string status, double instAvg, double health, string rhtStatus, string lbm, string z, string qrw, string sec, string rmt, string ricci, string h_ent, bool collapsed, string rhtF, double qddFid, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus, double mhdStrength, string setupTel);
+void DrawSetupSignal(string setupTel);
 void DrawLBMHistory(string hist);
 void DrawQGCHistory(string data);
 void DrawQHOShells(string shells);
@@ -68,7 +67,7 @@ void ParseAndDraw(string data)
    ObjectsDeleteAll(0, "NEXUS_CYT_HIST_");
    ObjectsDeleteAll(0, "NEXUS_HEAT_");
    ObjectsDeleteAll(0, "NEXUS_DOT_");
-   ObjectsDeleteAll(0, "NEXUS_QCD_");
+   // [ANTI-FLICKER] QCD objects updated in-place, not purged
    
    string parts[];
    StringSplit(data, ';', parts);
@@ -116,22 +115,67 @@ void ParseAndDraw(string data)
    string mhd_s = (ArraySize(parts) > 38) ? parts[38] : "0.00";
    double mhdStrength = StringToDouble(mhd_s);
     
-    // --- MSNR PARSING (v6.0) ---
-    string msnrTel = (ArraySize(parts) > 39) ? parts[39] : "0|0|0|0|0";
-    string msnrHistory = (ArraySize(parts) > 40) ? parts[40] : "";
-    
-    string mTelParts[]; StringSplit(msnrTel, '|', mTelParts);
-    double msnrFidelity = (ArraySize(mTelParts) > 0) ? StringToDouble(mTelParts[0]) : 0.0;
-    int msnrSigNow = (ArraySize(mTelParts) > 1) ? (int)StringToInteger(mTelParts[1]) : 0;
-    double msnrEq = (ArraySize(mTelParts) > 2) ? StringToDouble(mTelParts[2]) : 0.0;
-    double msnrPrem = (ArraySize(mTelParts) > 3) ? StringToDouble(mTelParts[3]) : 0.0;
-    double msnrDisc = (ArraySize(mTelParts) > 4) ? StringToDouble(mTelParts[4]) : 0.0;
+    // --- SETUP ENGINE PARSING (v1.0) ---
+     string setupTel = (ArraySize(parts) > 39) ? parts[39] : "NO_SETUP";
+     string setupHistory = (ArraySize(parts) > 40) ? parts[40] : "";
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, msnrFidelity);
+   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, setupTel);
 
-    // --- MSNR VISUALS ---
-    DrawMSNRZones(msnrEq, msnrPrem, msnrDisc);
-    DrawMSNRHistorySignals(msnrHistory);
+     // --- SETUP VISUALS (CURRENT BAR) ---
+     DrawSetupSignal(setupTel);
+
+     // --- SETUP HISTORY VISUALS ---
+     // [ANTI-FLICKER] Setup history objects updated in-place
+     if(StringLen(setupHistory) > 0) {
+        string shSteps[]; StringSplit(setupHistory, ',', shSteps);
+        int totalSH = ArraySize(shSteps);
+        for(int sh=0; sh < totalSH && sh < iBars(_Symbol, _Period) && sh < 500; sh++) {
+           int shVal = (int)StringToInteger(shSteps[totalSH - 1 - sh]);
+           if(shVal == 0) continue;
+           
+           bool isLong = (shVal > 0);
+           int setupNum = MathAbs(shVal);
+           
+           color shClr = clrWhite;
+           string shLabel = "";
+           if(setupNum == 1) { shClr = RGB(255, 165, 0);  shLabel = "S1"; }
+           else if(setupNum == 2) { shClr = RGB(255, 50, 50);  shLabel = "S2"; }
+           else if(setupNum == 3) { shClr = RGB(255, 215, 0);  shLabel = "S3"; }
+           else if(setupNum == 4) { shClr = RGB(0, 255, 180);  shLabel = "S4"; }
+           else if(setupNum == 5) { shClr = RGB(255, 0, 85);   shLabel = "S5"; }
+           else if(setupNum == 6) { shClr = RGB(0, 200, 255);  shLabel = "S6"; }
+           else if(setupNum == 7) { shClr = RGB(0, 255, 255);  shLabel = "S7"; }
+           
+           double pHigh = iHigh(_Symbol, _Period, sh);
+           double pLow = iLow(_Symbol, _Period, sh);
+           double atr_off = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, sh)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, sh))) * 0.08;
+           if(atr_off < 150 * _Point) atr_off = 150 * _Point;
+           
+           double markerP = isLong ? pLow - atr_off * 3.5 : pHigh + atr_off * 3.5;
+           
+           string shName = "NEXUS_SH_D_" + IntegerToString(sh);
+           if(ObjectFind(0, shName) < 0) ObjectCreate(0, shName, OBJ_ARROW, 0, 0, 0);
+           ObjectSetInteger(0, shName, OBJPROP_TIME, iTime(_Symbol, _Period, sh));
+           ObjectSetDouble(0, shName, OBJPROP_PRICE, markerP);
+           ObjectSetInteger(0, shName, OBJPROP_ARROWCODE, 74);
+           ObjectSetInteger(0, shName, OBJPROP_COLOR, shClr);
+           ObjectSetInteger(0, shName, OBJPROP_WIDTH, 2);
+           ObjectSetInteger(0, shName, OBJPROP_ANCHOR, isLong ? ANCHOR_TOP : ANCHOR_BOTTOM);
+           ObjectSetInteger(0, shName, OBJPROP_BACK, false);
+           ObjectSetInteger(0, shName, OBJPROP_ZORDER, 90);
+           
+           string shTxtName = "NEXUS_SH_T_" + IntegerToString(sh);
+           if(ObjectFind(0, shTxtName) < 0) ObjectCreate(0, shTxtName, OBJ_TEXT, 0, 0, 0);
+           ObjectSetInteger(0, shTxtName, OBJPROP_TIME, iTime(_Symbol, _Period, sh));
+           ObjectSetDouble(0, shTxtName, OBJPROP_PRICE, markerP + (isLong ? -atr_off * 0.5 : atr_off * 0.5));
+           ObjectSetString(0, shTxtName, OBJPROP_TEXT, shLabel + (isLong ? " L" : " S"));
+           ObjectSetString(0, shTxtName, OBJPROP_FONT, "Consolas");
+           ObjectSetInteger(0, shTxtName, OBJPROP_FONTSIZE, 7);
+           ObjectSetInteger(0, shTxtName, OBJPROP_COLOR, shClr);
+           ObjectSetInteger(0, shTxtName, OBJPROP_ANCHOR, isLong ? ANCHOR_LEFT_UPPER : ANCHOR_LEFT_LOWER);
+           ObjectSetInteger(0, shTxtName, OBJPROP_BACK, false);
+        }
+     }
 
    // --- 1.8 RHT THERMODYNAMIC VISUALS (IGNIÇÕES HISTÓRICAS) ---
    if(StringLen(rhtFlashHistory) > 0) {
@@ -778,7 +822,7 @@ void DrawHUDRow(string id, string label, string val, color valClr, int baseX, in
     DrawHUDText(id + "_L", label, baseX + 15, y, RGB(140, 140, 145), 9, false, corner); 
     DrawHUDText(id + "_V", val, baseX + panelW - 15, y, valClr, 9, true, corner);
 }
-void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash, double qddFidelity, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus, double mhdStrength, double msnrFidelity)
+void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash, double qddFidelity, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus, double mhdStrength, string setupTel)
 {
     int panelW = 280; int panelH = 560; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
     string bgName = "NEXUS_HUD_BASE"; if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
@@ -856,12 +900,23 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     
     DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner); rowY += rowH;
 
-    // --- MSNR FIDELITY ---
-    color msnrClr = (msnrFidelity >= 0.9) ? RGB(0, 255, 180) : (msnrFidelity >= 0.6 ? RGB(189, 0, 255) : RGB(140, 140, 145));
-    DrawHUDRow("NEXUS_HUD_L_MSNR", "MSNR Fidelity", DoubleToString(msnrFidelity, 4), msnrClr, baseX, rowY, panelW, corner);
-    rowY += 15;
-    DrawEnergyBar("NEXUS_MSNR_BAR", msnrFidelity, 1.0, baseX + 15, rowY, panelW - 30, 5, msnrClr, corner);
-    rowY += 12;
+    // --- ACTIVE SETUP DISPLAY ---
+     string setupDisplayName = "No Setup";
+     color setupClr2 = RGB(80, 85, 100);
+     if(StringFind(setupTel, "S1_") >= 0) { setupDisplayName = "Slingshot"; setupClr2 = RGB(255, 165, 0); }
+     else if(StringFind(setupTel, "S2_") >= 0) { setupDisplayName = "Vacuum Kill"; setupClr2 = RGB(255, 50, 50); }
+     else if(StringFind(setupTel, "S3_") >= 0) { setupDisplayName = "Bosonic Fire"; setupClr2 = RGB(255, 215, 0); }
+     else if(StringFind(setupTel, "S4_") >= 0) { setupDisplayName = "Harmonic PB"; setupClr2 = RGB(0, 255, 180); }
+     else if(StringFind(setupTel, "S5_") >= 0) { setupDisplayName = "!! COLLAPSE !!"; setupClr2 = RGB(255, 0, 85); }
+     else if(StringFind(setupTel, "S6_") >= 0) { setupDisplayName = "Tunneling"; setupClr2 = RGB(0, 200, 255); }
+     else if(StringFind(setupTel, "S7_") >= 0) { setupDisplayName = "TSUNAMI MACRO"; setupClr2 = RGB(0, 255, 255); }
+     
+     string setupDir2 = "";
+     if(StringFind(setupTel, "LONG") >= 0) setupDir2 = " LONG";
+     else if(StringFind(setupTel, "SHORT") >= 0) setupDir2 = " SHORT";
+     
+     DrawHUDRow("NEXUS_HUD_L_SETUP", "Active Setup", setupDisplayName + setupDir2, setupClr2, baseX, rowY, panelW, corner);
+     rowY += rowH;
 
     // --- DIMENSIONAL COHERENCE (QDD) ---
     color qddClr = (MathAbs(qddFidelity) >= 0.8) ? RGB(0, 255, 120) : (MathAbs(qddFidelity) >= 0.4 ? RGB(255, 180, 0) : RGB(255, 60, 60));
@@ -909,49 +964,83 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
 //+------------------------------------------------------------------+
 //| Sub-Módulos de Renderização Quântica                             |
 //+------------------------------------------------------------------+
-void DrawMSNRZones(double eq, double prem, double disc)
+void DrawSetupSignal(string setupTel)
 {
-   if(eq <= 0) return;
-   string eqN = "NEX_MSNR_EQ"; 
-   if(ObjectFind(0, eqN) < 0) ObjectCreate(0, eqN, OBJ_TREND, 0, iTime(_Symbol, _Period, 100), eq, TimeCurrent(), eq);
-   ObjectSetDouble(0, eqN, OBJPROP_PRICE, 0, eq); 
-   ObjectSetDouble(0, eqN, OBJPROP_PRICE, 1, eq);
-   ObjectSetInteger(0, eqN, OBJPROP_COLOR, RGB(60, 60, 65)); // Subtle equilibrium
-   ObjectSetInteger(0, eqN, OBJPROP_STYLE, STYLE_DOT);
-   ObjectSetInteger(0, eqN, OBJPROP_BACK, true);
-   ObjectSetInteger(0, eqN, OBJPROP_TIME, 0, iTime(_Symbol, _Period, 100)); 
-   ObjectSetInteger(0, eqN, OBJPROP_TIME, 1, TimeCurrent() + 3600);
-
-   string pN = "NEX_MSNR_PREM"; 
-   if(ObjectFind(0, pN) < 0) ObjectCreate(0, pN, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, 100), prem, TimeCurrent(), eq);
-   ObjectSetDouble(0, pN, OBJPROP_PRICE, 0, prem); 
-   ObjectSetDouble(0, pN, OBJPROP_PRICE, 1, eq);
-   ObjectSetInteger(0, pN, OBJPROP_COLOR, RGB(25, 8, 8)); // Ultra-subtle premium
-   ObjectSetInteger(0, pN, OBJPROP_FILL, true);
-   ObjectSetInteger(0, pN, OBJPROP_BACK, true);
-
-   string dN = "NEX_MSNR_DISC"; 
-   if(ObjectFind(0, dN) < 0) ObjectCreate(0, dN, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, 100), eq, TimeCurrent(), disc);
-   ObjectSetDouble(0, dN, OBJPROP_PRICE, 0, eq); 
-   ObjectSetDouble(0, dN, OBJPROP_PRICE, 1, disc);
-   ObjectSetInteger(0, dN, OBJPROP_COLOR, RGB(8, 25, 15)); // Ultra-subtle discount
-   ObjectSetInteger(0, dN, OBJPROP_FILL, true);
-   ObjectSetInteger(0, dN, OBJPROP_BACK, true);
-}
-
-void DrawMSNRHistorySignals(string hist)
-{
-   ObjectsDeleteAll(0, "NEX_MS_SIG_");
-   if(StringLen(hist) == 0) return;
-   string sigs[]; StringSplit(hist, ',', sigs);
-   int t = ArraySize(sigs);
-   for(int k=0; k < t && k < 150; k++) {
-      int v = (int)StringToInteger(sigs[t - 1 - k]);
-      if(v == 0) continue;
-      datetime tm = iTime(_Symbol, _Period, k);
-      double p = iClose(_Symbol, _Period, k);
-      color c = (v == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); // TradingView palette
-      CreateTradingViewTag("NEX_MS_SIG_" + IntegerToString(k), tm, p, (v == 1 ? "MSNR BUY" : "MSNR SELL"), c, (v == 2), 65, 30);
+   // [ANTI-FLICKER] Only clean excess markers, not all
+   
+   if(setupTel == "NO_SETUP" || StringLen(setupTel) < 3) {
+      // No active setup: clean all markers (0-9)
+      for(int c=0; c<10; c++) {
+         ObjectDelete(0, "NEXUS_SETUP_DIA_" + IntegerToString(c));
+         ObjectDelete(0, "NEXUS_SETUP_LBL_" + IntegerToString(c));
+      }
+      return;
+   }
+   
+   // Parse: "S3_BOSONIC_IGNITION:LONG:C3|S7_TSUNAMI_MACRO:LONG:C3"
+   string setups[]; StringSplit(setupTel, '|', setups);
+   
+   for(int s=0; s < ArraySize(setups) && s < 5; s++) {
+      string parts[]; StringSplit(setups[s], ':', parts);
+      if(ArraySize(parts) < 3) continue;
+      
+      string setupName = parts[0];
+      string direction = parts[1];
+      string conf = parts[2];
+      bool isLong = (direction == "LONG");
+      
+      // Visual mapping
+      string shortName = "";
+      color setupClr = RGB(255, 215, 0);
+      
+      if(StringFind(setupName, "S1_") >= 0) { shortName = "SLINGSHOT"; setupClr = RGB(255, 165, 0); }
+      else if(StringFind(setupName, "S2_") >= 0) { shortName = "VACUUM"; setupClr = RGB(255, 50, 50); }
+      else if(StringFind(setupName, "S3_") >= 0) { shortName = "BOSONIC"; setupClr = RGB(255, 215, 0); }
+      else if(StringFind(setupName, "S4_") >= 0) { shortName = "HARMONIC"; setupClr = RGB(0, 255, 180); }
+      else if(StringFind(setupName, "S5_") >= 0) { shortName = "COLLAPSE"; setupClr = RGB(255, 0, 85); }
+      else if(StringFind(setupName, "S6_") >= 0) { shortName = "TUNNEL"; setupClr = RGB(0, 200, 255); }
+      else if(StringFind(setupName, "S7_") >= 0) { shortName = "TSUNAMI"; setupClr = RGB(0, 255, 255); }
+      else { shortName = setupName; }
+      
+      // Diamond marker on current bar
+      string diamondName = "NEXUS_SETUP_DIA_" + IntegerToString(s);
+      double pHigh = iHigh(_Symbol, _Period, 0);
+      double pLow = iLow(_Symbol, _Period, 0);
+      double atr_off = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, 0)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, 0))) * 0.12;
+      if(atr_off < 200 * _Point) atr_off = 200 * _Point;
+      
+      double markerPrice = isLong ? pLow - atr_off * (1 + s * 1.5) : pHigh + atr_off * (1 + s * 1.5);
+      
+      if(ObjectFind(0, diamondName) < 0) ObjectCreate(0, diamondName, OBJ_ARROW, 0, 0, 0);
+      ObjectSetInteger(0, diamondName, OBJPROP_TIME, iTime(_Symbol, _Period, 0));
+      ObjectSetDouble(0, diamondName, OBJPROP_PRICE, markerPrice);
+      ObjectSetInteger(0, diamondName, OBJPROP_ARROWCODE, 74); // Diamond (Wingdings)
+      ObjectSetInteger(0, diamondName, OBJPROP_COLOR, setupClr);
+      ObjectSetInteger(0, diamondName, OBJPROP_WIDTH, 3);
+      ObjectSetInteger(0, diamondName, OBJPROP_ANCHOR, isLong ? ANCHOR_TOP : ANCHOR_BOTTOM);
+      ObjectSetInteger(0, diamondName, OBJPROP_BACK, false);
+      ObjectSetInteger(0, diamondName, OBJPROP_ZORDER, 99);
+      
+      // Text label next to diamond
+      string labelName = "NEXUS_SETUP_LBL_" + IntegerToString(s);
+      string labelTxt = (isLong ? "▲ " : "▼ ") + shortName + " " + direction + " " + conf;
+      
+      if(ObjectFind(0, labelName) < 0) ObjectCreate(0, labelName, OBJ_TEXT, 0, 0, 0);
+      ObjectSetInteger(0, labelName, OBJPROP_TIME, iTime(_Symbol, _Period, 0));
+      ObjectSetDouble(0, labelName, OBJPROP_PRICE, markerPrice + (isLong ? -atr_off * 0.3 : atr_off * 0.3));
+      ObjectSetString(0, labelName, OBJPROP_TEXT, labelTxt);
+      ObjectSetString(0, labelName, OBJPROP_FONT, "Consolas");
+      ObjectSetInteger(0, labelName, OBJPROP_FONTSIZE, 9);
+      ObjectSetInteger(0, labelName, OBJPROP_COLOR, setupClr);
+      ObjectSetInteger(0, labelName, OBJPROP_ANCHOR, isLong ? ANCHOR_LEFT_UPPER : ANCHOR_LEFT_LOWER);
+      ObjectSetInteger(0, labelName, OBJPROP_BACK, false);
+      ObjectSetInteger(0, labelName, OBJPROP_ZORDER, 99);
+   }
+   // Clean excess markers beyond the active count
+   int activeCount = ArraySize(setups);
+   for(int c=activeCount; c<10; c++) {
+      ObjectDelete(0, "NEXUS_SETUP_DIA_" + IntegerToString(c));
+      ObjectDelete(0, "NEXUS_SETUP_LBL_" + IntegerToString(c));
    }
 }
 
