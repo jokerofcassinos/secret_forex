@@ -41,6 +41,7 @@ from Code.N_Core.random_matrix import RandomMatrixTracker
 from Code.N_Core.quantum_walk import QRWTracker
 from Code.N_Core.market_qcd import MarketQCDTracker
 from Code.N_Core.live_rht import LiveRHTTracker
+from Code.N_Core.quantum_projection import QuantumPreCognitionNode
 
 import cyt_engine
 
@@ -64,6 +65,8 @@ class QMathNode:
         self.qcd_tracker = None
         self.rht_tracker = None
         self.cyt = cyt_engine.CYTEngine()
+        self.ksi_engine = None
+        self.precog_node = None
         
         # Estado atual cacheado para responder rapidamente
         self.current_state = {
@@ -136,6 +139,17 @@ class QMathNode:
             if self.rht_tracker is None:
                 # O símbolo agora vem do payload do roteador, não dos attrs do df
                 self.rht_tracker = LiveRHTTracker(symbol=getattr(self, "current_symbol", "GER40.cash"), lookback=300)
+
+            if self.ksi_engine is None:
+                try:
+                    import ksi_engine
+                    self.ksi_engine = ksi_engine.KSIEngine(4, 50) # 4 oscillators, 50 steps
+                except Exception as e:
+                    print(f"❌ Q-MATH :: Erro Crítico no Motor KSI: {e}")
+                    self.ksi_engine = None
+
+            if self.precog_node is None:
+                self.precog_node = QuantumPreCognitionNode(symbol=getattr(self, "current_symbol", "GER40.cash"))
 
             current_close = df['close'].iloc[-1]
             
@@ -341,6 +355,37 @@ class QMathNode:
                     is_collapsed = False
                 return {"ricci_curvature": ricci_curvature, "cyt_danger": cyt_danger, "h_entropy": h_entropy, "is_collapsed": is_collapsed}
 
+            def run_ksi():
+                ksi_val = 0.0
+                if self.ksi_engine is not None and len(df) >= 100:
+                    try:
+                        import numpy as np
+                        recent_df = df.tail(100).copy()
+                        N = 50
+                        data_4d = np.zeros((4, N))
+                        data_4d[0, :] = recent_df['close'].rolling(3).mean().tail(N).values
+                        data_4d[1, :] = recent_df['close'].rolling(8).mean().tail(N).values
+                        data_4d[2, :] = recent_df['close'].rolling(14).mean().tail(N).values
+                        data_4d[3, :] = recent_df['close'].rolling(21).mean().tail(N).values
+                        
+                        self.ksi_engine.load_oscillator_data(data_4d)
+                        self.ksi_engine.compute_synchronization()
+                        ksi_val = self.ksi_engine.get_current_ksi()
+                    except Exception as e:
+                        pass
+                return {"ksi_val": ksi_val}
+
+            def run_precog():
+                # Calcula ATR
+                atr = df['high'].iloc[-20:].max() - df['low'].iloc[-20:].min()
+                if atr == 0: atr = 10.0
+                try:
+                    res = self.precog_node.project_containment_horizon(df, current_close, atr)
+                    return {"precog_sl_long": res.get("sl_bull_singular", 0.0), 
+                            "precog_sl_short": res.get("sl_bear_singular", 0.0)}
+                except Exception:
+                    return {"precog_sl_long": current_close - (atr*3), "precog_sl_short": current_close + (atr*3)}
+
             # Orquestração Paralela de Física (LBM primeiro para prover velocidade ao RMT)
             lbm_res = run_lbm(regime=getattr(self, "current_regime_context", 0))
             lbm_v = lbm_res.get("lbm_v_current")
@@ -353,7 +398,9 @@ class QMathNode:
                     executor.submit(run_qrw),
                     executor.submit(run_qcd),
                     executor.submit(run_rht),
-                    executor.submit(run_cyt)
+                    executor.submit(run_cyt),
+                    executor.submit(run_ksi),
+                    executor.submit(run_precog)
                 ]
                 
                 results = {"lbm_signal": lbm_res["lbm_signal"]}
@@ -382,6 +429,9 @@ class QMathNode:
                 self.current_state["cyt_danger"] = results.get("cyt_danger", 0.0)
                 self.current_state["h_entropy"] = results.get("h_entropy", 0.0)
                 self.current_state["is_collapsed"] = results.get("is_collapsed", False)
+                self.current_state["ksi_val"] = results.get("ksi_val", 0.0)
+                self.current_state["precog_sl_long"] = results.get("precog_sl_long", current_close)
+                self.current_state["precog_sl_short"] = results.get("precog_sl_short", current_close)
 
         except Exception as e:
             print(f"❌ Q-MATH :: Erro no processamento interno: {e}")

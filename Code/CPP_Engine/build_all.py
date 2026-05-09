@@ -31,6 +31,7 @@ ENGINES = [
     ("qgc_engine",        "src/qgc/qgc_engine.cpp"),
     ("rht_engine",        "src/rht/rht_engine.cpp"),
     ("msnr_engine",       "src/msnr/msnr_engine.cpp"),
+    ("ksi_engine",        "src/ksi/ksi_engine.cpp"),
 ]
 
 def build_engine(name, src):

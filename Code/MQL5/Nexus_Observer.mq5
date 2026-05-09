@@ -115,14 +115,36 @@ void ParseAndDraw(string data)
    string mhd_s = (ArraySize(parts) > 38) ? parts[38] : "0.00";
    double mhdStrength = StringToDouble(mhd_s);
     
-    // --- SETUP ENGINE PARSING (v1.0) ---
+     // --- SETUP ENGINE PARSING (v1.0) ---
      string setupTel = (ArraySize(parts) > 39) ? parts[39] : "NO_SETUP";
      string setupHistory = (ArraySize(parts) > 40) ? parts[40] : "";
+     
+     // Extrai SL e TP Dinâmicos (ANZ) da Telemetria de Setup
+     string sParts[]; StringSplit(setupTel, '|', sParts);
+     double anzSl = 0.0; double anzTp = 0.0;
+     if(ArraySize(sParts) >= 4) {
+         anzSl = StringToDouble(sParts[2]);
+         anzTp = StringToDouble(sParts[3]);
+     }
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, setupTel);
+   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, sParts[0]);
 
-     // --- SETUP VISUALS (CURRENT BAR) ---
-     DrawSetupSignal(setupTel);
+     // --- ADAPTIVE NEURAL ZONES (ANZ) VISUALS ---
+     if(anzSl > 0.1) {
+         if(ObjectFind(0, "NEXUS_ANZ_SL") < 0) ObjectCreate(0, "NEXUS_ANZ_SL", OBJ_HLINE, 0, 0, anzSl);
+         ObjectSetDouble(0, "NEXUS_ANZ_SL", OBJPROP_PRICE, anzSl);
+         ObjectSetInteger(0, "NEXUS_ANZ_SL", OBJPROP_COLOR, RGB(220, 20, 60)); // Crimson Red
+         ObjectSetInteger(0, "NEXUS_ANZ_SL", OBJPROP_STYLE, STYLE_DASHDOT);
+         ObjectSetInteger(0, "NEXUS_ANZ_SL", OBJPROP_WIDTH, 1);
+     } else ObjectDelete(0, "NEXUS_ANZ_SL");
+
+     if(anzTp > 0.1) {
+         if(ObjectFind(0, "NEXUS_ANZ_TP") < 0) ObjectCreate(0, "NEXUS_ANZ_TP", OBJ_HLINE, 0, 0, anzTp);
+         ObjectSetDouble(0, "NEXUS_ANZ_TP", OBJPROP_PRICE, anzTp);
+         ObjectSetInteger(0, "NEXUS_ANZ_TP", OBJPROP_COLOR, RGB(0, 255, 255)); // Cyan
+         ObjectSetInteger(0, "NEXUS_ANZ_TP", OBJPROP_STYLE, STYLE_DASHDOT);
+         ObjectSetInteger(0, "NEXUS_ANZ_TP", OBJPROP_WIDTH, 1);
+     } else ObjectDelete(0, "NEXUS_ANZ_TP");
 
      // --- SETUP HISTORY VISUALS ---
      // [ANTI-FLICKER] Setup history objects updated in-place
@@ -148,16 +170,16 @@ void ParseAndDraw(string data)
            
            double pHigh = iHigh(_Symbol, _Period, sh);
            double pLow = iLow(_Symbol, _Period, sh);
-           double atr_off = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, sh)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, sh))) * 0.08;
-           if(atr_off < 150 * _Point) atr_off = 150 * _Point;
+           double atr_off = (iHigh(_Symbol, _Period, iHighest(_Symbol, _Period, MODE_HIGH, 20, sh)) - iLow(_Symbol, _Period, iLowest(_Symbol, _Period, MODE_LOW, 20, sh))) * 0.05;
+           if(atr_off < 100 * _Point) atr_off = 100 * _Point;
            
-           double markerP = isLong ? pLow - atr_off * 3.5 : pHigh + atr_off * 3.5;
+           double markerP = isLong ? pLow - atr_off * 2.0 : pHigh + atr_off * 2.0;
            
            string shName = "NEXUS_SH_D_" + IntegerToString(sh);
            if(ObjectFind(0, shName) < 0) ObjectCreate(0, shName, OBJ_ARROW, 0, 0, 0);
            ObjectSetInteger(0, shName, OBJPROP_TIME, iTime(_Symbol, _Period, sh));
            ObjectSetDouble(0, shName, OBJPROP_PRICE, markerP);
-           ObjectSetInteger(0, shName, OBJPROP_ARROWCODE, 74);
+           ObjectSetInteger(0, shName, OBJPROP_ARROWCODE, isLong ? 233 : 234); // Setas limpas
            ObjectSetInteger(0, shName, OBJPROP_COLOR, shClr);
            ObjectSetInteger(0, shName, OBJPROP_WIDTH, 2);
            ObjectSetInteger(0, shName, OBJPROP_ANCHOR, isLong ? ANCHOR_TOP : ANCHOR_BOTTOM);
@@ -167,12 +189,12 @@ void ParseAndDraw(string data)
            string shTxtName = "NEXUS_SH_T_" + IntegerToString(sh);
            if(ObjectFind(0, shTxtName) < 0) ObjectCreate(0, shTxtName, OBJ_TEXT, 0, 0, 0);
            ObjectSetInteger(0, shTxtName, OBJPROP_TIME, iTime(_Symbol, _Period, sh));
-           ObjectSetDouble(0, shTxtName, OBJPROP_PRICE, markerP + (isLong ? -atr_off * 0.5 : atr_off * 0.5));
-           ObjectSetString(0, shTxtName, OBJPROP_TEXT, shLabel + (isLong ? " L" : " S"));
+           ObjectSetDouble(0, shTxtName, OBJPROP_PRICE, markerP + (isLong ? -atr_off * 0.8 : atr_off * 0.8));
+           ObjectSetString(0, shTxtName, OBJPROP_TEXT, shLabel);
            ObjectSetString(0, shTxtName, OBJPROP_FONT, "Consolas");
-           ObjectSetInteger(0, shTxtName, OBJPROP_FONTSIZE, 7);
+           ObjectSetInteger(0, shTxtName, OBJPROP_FONTSIZE, 8);
            ObjectSetInteger(0, shTxtName, OBJPROP_COLOR, shClr);
-           ObjectSetInteger(0, shTxtName, OBJPROP_ANCHOR, isLong ? ANCHOR_LEFT_UPPER : ANCHOR_LEFT_LOWER);
+           ObjectSetInteger(0, shTxtName, OBJPROP_ANCHOR, isLong ? ANCHOR_TOP : ANCHOR_BOTTOM);
            ObjectSetInteger(0, shTxtName, OBJPROP_BACK, false);
         }
      }
@@ -393,40 +415,17 @@ void ParseAndDraw(string data)
          
          if(ObjectFind(0, qName) < 0) ObjectCreate(0, qName, OBJ_ARROW, 0, 0, 0);
          ObjectSetInteger(0, qName, OBJPROP_TIME, iTime(_Symbol, _Period, q));
-         ObjectSetDouble(0, qName, OBJPROP_PRICE, symPrice);
-         ObjectSetInteger(0, qName, OBJPROP_ARROWCODE, isBuy ? 233 : 234); 
+         ObjectSetDouble(0, qName, OBJPROP_PRICE, isBuy ? pLow - atr_offset : pHigh + atr_offset);
+         ObjectSetInteger(0, qName, OBJPROP_ARROWCODE, 159); // Ponto sutil
          ObjectSetInteger(0, qName, OBJPROP_COLOR, corporateClr);
-         ObjectSetInteger(0, qName, OBJPROP_WIDTH, 2); // Símbolo sutil
+         ObjectSetInteger(0, qName, OBJPROP_WIDTH, 1);
          ObjectSetInteger(0, qName, OBJPROP_ANCHOR, (isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM));
-         ObjectSetInteger(0, qName, OBJPROP_BACK, false);
+         ObjectSetInteger(0, qName, OBJPROP_BACK, true);
          
-         string labelTxt = (isBuy ? "▲ SHORT " : "▼ SHORT ") + DoubleToString(iClose(_Symbol, _Period, q), _Digits);
-         
-         // Remove a caixa antiga se existir
+         // Limpar artefatos legados da versão anterior
          ObjectDelete(0, qBoxName);
-         
-         // Linha guia conectando o texto ao preço
-         string qLineName = "NEXUS_QCD_LINE_" + IntegerToString(q);
-         if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_TREND, 0, 0, 0, 0, 0);
-         ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, q));
-         ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, symPrice - (isBuy ? atr_offset : -atr_offset));
-         ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, q));
-         ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 1, boxCenterPrice);
-         ObjectSetInteger(0, qLineName, OBJPROP_COLOR, corporateClr);
-         ObjectSetInteger(0, qLineName, OBJPROP_STYLE, STYLE_DOT);
-         ObjectSetInteger(0, qLineName, OBJPROP_RAY_RIGHT, false);
-         ObjectSetInteger(0, qLineName, OBJPROP_BACK, true);
-
-         // Texto Minimalista
-         if(ObjectFind(0, qTextName) < 0) ObjectCreate(0, qTextName, OBJ_TEXT, 0, 0, 0);
-         ObjectSetInteger(0, qTextName, OBJPROP_TIME, iTime(_Symbol, _Period, q));
-         ObjectSetDouble(0, qTextName, OBJPROP_PRICE, isBuy ? boxCenterPrice - atr_offset : boxCenterPrice + atr_offset);
-         ObjectSetString(0, qTextName, OBJPROP_TEXT, labelTxt);
-         ObjectSetString(0, qTextName, OBJPROP_FONT, "Consolas");
-         ObjectSetInteger(0, qTextName, OBJPROP_FONTSIZE, 8);
-         ObjectSetInteger(0, qTextName, OBJPROP_COLOR, corporateClr);
-         ObjectSetInteger(0, qTextName, OBJPROP_ANCHOR, isBuy ? ANCHOR_TOP : ANCHOR_BOTTOM);
-         ObjectSetInteger(0, qTextName, OBJPROP_BACK, false);
+         ObjectDelete(0, "NEXUS_QCD_LINE_" + IntegerToString(q));
+         ObjectDelete(0, qTextName);
       }
    }
 

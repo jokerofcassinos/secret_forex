@@ -47,6 +47,7 @@ from Code.N_Core.quantum_tunneling import QuantumTunnelingNode
 from Code.N_Core.quantum_oscillator import QuantumOscillatorNode
 from Code.N_Core.quantum_glass import QuantumGlassNode
 from Code.N_Core.quantum_setups import QuantumSetupEngine
+from Code.N_Core.virtual_neural_zones import AdaptiveNeuralZones
 
 
 
@@ -121,6 +122,7 @@ class AethelgardSwarm:
         self.qho_engine = QuantumOscillatorNode()
         self.qgc_node = QuantumGlassNode()
         self.setup_engine = QuantumSetupEngine()
+        self.anz_engine = AdaptiveNeuralZones()
         
         self.is_running = False
         self.active_tf = None
@@ -431,6 +433,8 @@ class AethelgardSwarm:
                         self.lbm_cache.pop(0); self.lbm_cache.append("0")
                         self.cyt_danger_cache.pop(0); self.cyt_danger_cache.append("0")
                         self.qcd_cache.pop(0); self.qcd_cache.append("0")
+                        if len(self.setup_cache) > 0: self.setup_cache.pop(0)
+                        self.setup_cache.append("0")
                         self.sec_cache.append("0|0|0")
                         if len(self.sec_cache) > 300: self.sec_cache.pop(0)
                         s_list = [int(r.split('|')[0]) for r in self.regimes_cache]
@@ -538,24 +542,59 @@ class AethelgardSwarm:
                         "qrw_signal": qrw_s, "z_pinch_signal": z_p_s,
                         "qgc_pull": qgc_tel.get('gravity_pull', 0.0),
                         "qho_n": qho_state.get('n', 0), "qho_status": qho_state.get('status', ''),
+                        "qho_shells": qho_state.get('shells', []), "atr": df['high'].iloc[-20:].max() - df['low'].iloc[-20:].min() if len(df) > 20 else 10.0,
                         "qte_prob": qte_prob, "qte_advice": qte_advice,
                         "qdd_fidelity": qdd_fidelity, "ricci": ricci_c,
                         "is_collapsed": q_state.get("is_collapsed", False),
                         "sec_metrics": q_state.get("sec_metrics"),
+                        "ksi_val": q_state.get("ksi_val", 0.0),
+                        "precog_sl_long": q_state.get("precog_sl_long", df['close'].iloc[-1] - 30.0),
+                        "precog_sl_short": q_state.get("precog_sl_short", df['close'].iloc[-1] + 30.0),
                     }
                     active_setups = self.setup_engine.evaluate(setup_ctx)
-                    setup_tel = self.setup_engine.format_telemetry()
                     
-                    # Cache de setup histórico (live append)
+                    # 9. ADAPTIVE NEURAL ZONES (ANZ) - Gestão de Risco
+                    # Se um setup novo disparar, registra na ANZ para acompanhamento
+                    if active_setups:
+                        best = self.setup_engine.get_strongest_signal()
+                        if best:
+                            ticket = f"virt_{int(time.time())}"
+                            self.anz_engine.register_position(ticket, best['setup'], best['direction'], df['close'].iloc[-1])
+                    
+                    # Avalia as zonas de todas as posições virtuais ativas
+                    anz_zones = self.anz_engine.evaluate_zones(setup_ctx, df['close'].iloc[-1])
+                    
+                    # Remove posições que mandaram fechar (Virtual Exit)
+                    to_remove = []
+                    for tkt, zone in anz_zones.items():
+                        if zone["action"] != "HOLD":
+                            to_remove.append(tkt)
+                            print(f"🛑 ANZ :: ORDEM COLAPSADA ({tkt}) -> {zone['action']} | SL:{zone['sl']:.2f}")
+                    for tkt in to_remove:
+                        del self.anz_engine.active_positions[tkt]
+                        
+                    setup_tel_base = self.setup_engine.format_telemetry()
+                    # Adiciona a primeira zona ativa (se existir) para plotagem visual no HUD
+                    if anz_zones:
+                        first_zone = list(anz_zones.values())[0]
+                        setup_tel = f"{setup_tel_base}|{float(first_zone['sl']):.2f}|{float(first_zone['tp']):.2f}"
+                    else:
+                        setup_tel = f"{setup_tel_base}|0.00|0.00"
+
+                    # Cache de setup histórico (live update in-place)
+                    current_setup_val = "0"
                     if active_setups:
                         best = max(active_setups, key=lambda s: s.get('confidence', 0))
                         snum = int(best['setup'][1])
                         sdir = 1 if best['direction'] == 'LONG' else -1
-                        self.setup_cache.append(str(snum * sdir))
+                        current_setup_val = str(snum * sdir)
                         for s in active_setups:
                             print(f"⚡ SETUP ATIVO: {s['setup']} → {s['direction']} (Confiança: {s['confidence']})")
+                            
+                    if len(self.setup_cache) > 0:
+                        self.setup_cache[-1] = current_setup_val
                     else:
-                        self.setup_cache.append("0")
+                        self.setup_cache.append(current_setup_val)
 
                     # 9. CONSULTA À FÍSICA (REQ-REP)
                     # Verifica colapso topológico ou quebra física do SL Virtual

@@ -36,7 +36,27 @@ class QuantumSetupEngine:
         self.prev_regime_dir = 0         # S7 backfill: regime anterior
         self.prev_rht_heat_sign = 0      # S5: sinal de calor anterior
         self.last_setup_time = 0         # Cooldown: timestamp do último sinal emitido
-        self.cooldown_seconds = 30       # Cooldown mínimo entre sinais do mesmo setup
+        self.cooldown_seconds = 30       # Cooldown mínimo entre sinais do mesmo setup (time-based)
+        
+        # Cooldowns baseados em barras (Essencial para evitar spam visual e operacional)
+        self.bar_cooldowns = {
+            "S1_GRAVITATIONAL_SLINGSHOT": 0,
+            "S2_VACUUM_ANNIHILATION": 0,
+            "S3_BOSONIC_IGNITION": 0,
+            "S4_HARMONIC_RESONANCE": 0,
+            "S5_TOPOLOGICAL_COLLAPSE": 0,
+            "S6_INSTITUTIONAL_TUNNELING": 0,
+            "S7_TSUNAMI_MACRO": 0
+        }
+        self.cooldown_limits = {
+            "S1_GRAVITATIONAL_SLINGSHOT": 15,
+            "S2_VACUUM_ANNIHILATION": 15,
+            "S3_BOSONIC_IGNITION": 15,
+            "S4_HARMONIC_RESONANCE": 20,
+            "S5_TOPOLOGICAL_COLLAPSE": 30, # Reversão macro demora
+            "S6_INSTITUTIONAL_TUNNELING": 15,
+            "S7_TSUNAMI_MACRO": 40         # Tsunami é raro, 1 sinal por pernada
+        }
 
         # ── Emitted Signals Log ──
         self.active_setups = []          # Lista de setups ativos no tick atual
@@ -278,6 +298,7 @@ class QuantumSetupEngine:
         conf = ctx.get("conf", 0)
         ricci = ctx.get("ricci", 0.0)
         qho_n = ctx.get("qho_n", 0)
+        ksi = ctx.get("ksi_val", 0.0)
 
         if regime == 0 or conf < 100:
             self.rht_heat_streak = 0
@@ -288,6 +309,10 @@ class QuantumSetupEngine:
             return None
 
         direction = 1 if regime == 1 else -1
+
+        # KSI Filter: S7 é continuação de tendência direcional (requer alta sincronia / coerência macro)
+        if ksi < 0.5 and not backfill:
+            return None
 
         if backfill:
             # In backfill: use regime streak instead of RHT/QDD/QRW
@@ -412,8 +437,14 @@ class QuantumSetupEngine:
         qho_n = ctx.get("qho_n", 0)
         lbm = ctx.get("lbm_signal", "")
         ricci = ctx.get("ricci", 0.0)
+        ksi = ctx.get("ksi_val", 0.0)
 
         if qho_n < 5:
+            return None
+
+        # KSI Filter: S5 é reversão de um extremo topológico. 
+        # A coerência tem que estar caótica (desacoplada < 0.4) ou super-esticada absurda (> 0.95)
+        if 0.4 <= ksi <= 0.90 and not backfill:
             return None
 
         if backfill:
@@ -489,24 +520,32 @@ class QuantumSetupEngine:
         """
         self.active_setups = []
 
+        # Decrementa todos os cooldowns
+        for k in self.bar_cooldowns.keys():
+            if self.bar_cooldowns[k] > 0:
+                self.bar_cooldowns[k] -= 1
+
         evaluators = [
-            self._eval_s3_bosonic_ignition,
-            self._eval_s4_harmonic_resonance,
-            self._eval_s1_gravitational_slingshot,
-            self._eval_s6_institutional_tunneling,
-            self._eval_s7_tsunami_macro,
-            self._eval_s2_vacuum_annihilation,
-            self._eval_s5_topological_collapse,
+            ("S3_BOSONIC_IGNITION", self._eval_s3_bosonic_ignition),
+            ("S4_HARMONIC_RESONANCE", self._eval_s4_harmonic_resonance),
+            ("S1_GRAVITATIONAL_SLINGSHOT", self._eval_s1_gravitational_slingshot),
+            ("S6_INSTITUTIONAL_TUNNELING", self._eval_s6_institutional_tunneling),
+            ("S7_TSUNAMI_MACRO", self._eval_s7_tsunami_macro),
+            ("S2_VACUUM_ANNIHILATION", self._eval_s2_vacuum_annihilation),
+            ("S5_TOPOLOGICAL_COLLAPSE", self._eval_s5_topological_collapse),
         ]
 
-        for evaluator in evaluators:
-            try:
-                result = evaluator(ctx, backfill=backfill)
-                if result is not None:
-                    result["timestamp"] = time.time()
-                    self.active_setups.append(result)
-            except Exception:
-                pass
+        for setup_id, evaluator in evaluators:
+            if self.bar_cooldowns.get(setup_id, 0) <= 0:
+                try:
+                    result = evaluator(ctx, backfill=backfill)
+                    if result is not None:
+                        result["timestamp"] = time.time()
+                        self.active_setups.append(result)
+                        # Aplica o cooldown
+                        self.bar_cooldowns[setup_id] = self.cooldown_limits.get(setup_id, 15)
+                except Exception:
+                    pass
 
         for s in self.active_setups:
             self.setup_history.append(s)
