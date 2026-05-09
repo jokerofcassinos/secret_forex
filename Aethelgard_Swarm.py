@@ -37,7 +37,6 @@ if os.name == 'nt':
                 sys.path.insert(0, p)
 
 from Code.N_Core.quantum_indicators import QuantumIndicators
-from Code.N_Core.msnr_alchemist import MSNRAlchemist
 from Code.N_Core.quantum_oracle import QuantumOracle
 from Code.N_Core.yield_governor import YieldGovernor
 from Code.N_Core.live_rht import LiveRHTTracker
@@ -113,7 +112,6 @@ class AethelgardSwarm:
         self.bridge = MT5NeuralBridge(symbol)
         self.q_logic = QuantumIndicators()
         self.rht_tracker = LiveRHTTracker(symbol, lookback=300)
-        self.msnr_alchemist = MSNRAlchemist()
         self.oracle = QuantumOracle(simulations=5000)
         self.yield_governor = YieldGovernor(danger_window=30, danger_threshold=25.0)
         self.pre_cognition = QuantumPreCognitionNode(symbol=self.symbol)
@@ -134,7 +132,6 @@ class AethelgardSwarm:
         self.sec_cache = []
         self.rht_cache = []
         self.qcd_cache = []
-        self.msnr_cache = []
         self.cyt_danger_cache = []
         self.last_time = 0
         self.genesis_count = 0
@@ -218,7 +215,6 @@ class AethelgardSwarm:
         self.z_pinch_cache = []
         self.qrw_cache = []
         self.qcd_cache = []
-        self.msnr_cache = []
         self.cyt_danger_cache = []
         self.sec_cache = []
         
@@ -232,7 +228,6 @@ class AethelgardSwarm:
                 self.lbm_cache.append("0")
                 self.z_pinch_cache.append("0")
                 self.qrw_cache.append("0")
-                self.msnr_cache.append("0")
                 self.cyt_danger_cache.append("0")
                 scores_hist.append(0)
                 continue
@@ -277,19 +272,6 @@ class AethelgardSwarm:
             elif "FISSION" in qcd_sig: self.qcd_cache.append("1" if curr_h['close'] > curr_h['open'] else "2")
             else: self.qcd_cache.append("0")
             
-            # MSNR Historical Backfill (Institutional Sniper)
-            msnr_sig_hist = "0"
-            if i >= window_calc + 20:
-                try:
-                    msnr_sig = self.msnr_alchemist.detect_institutional_shift(slice_df, lookback=30)
-                    msnr_range = self.msnr_alchemist.calculate_dealing_range(slice_df, lookback=100)
-                    
-                    if msnr_sig == "1" and curr_h['close'] < msnr_range['equilibrium']:
-                        msnr_sig_hist = "1"
-                    elif msnr_sig == "2" and curr_h['close'] > msnr_range['equilibrium']:
-                        msnr_sig_hist = "2"
-                except: pass
-            self.msnr_cache.append(msnr_sig_hist)
             self.sec_cache.append("0|0|0")
             if len(self.sec_cache) > 300: self.sec_cache.pop(0)
             scores_hist.append(r_score)
@@ -308,7 +290,7 @@ class AethelgardSwarm:
 
         self.last_time = df.iloc[-1]['time']
         self.rht_cache = ["0"] * 300
-        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot N-Core Concluído. {sum(1 for x in self.qcd_cache if x != '0')} QCD signals | {sum(1 for x in self.msnr_cache if x != '0')} MSNR signals restored.")
+        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Boot N-Core Concluído. {sum(1 for x in self.qcd_cache if x != '0')} QCD signals restored.")
 
     def live_evolution_loop(self):
         global nexus_data_str, current_mt5_tf
@@ -399,7 +381,6 @@ class AethelgardSwarm:
                         self.lbm_cache.pop(0); self.lbm_cache.append("0")
                         self.cyt_danger_cache.pop(0); self.cyt_danger_cache.append("0")
                         self.qcd_cache.pop(0); self.qcd_cache.append("0")
-                        self.msnr_cache.pop(0); self.msnr_cache.append("0")
                         self.sec_cache.append("0|0|0")
                         if len(self.sec_cache) > 300: self.sec_cache.pop(0)
                         s_list = [int(r.split('|')[0]) for r in self.regimes_cache]
@@ -499,24 +480,12 @@ class AethelgardSwarm:
                     
                     self.qgc_data_str = ",".join(q_parts)
 
-                    # 8. ALQUIMIA MSNR (REAL-TIME)
-                    msnr_filt, msnr_fid = self.msnr_alchemist.apply_spectral_alchemy(df['close'].values)
-                    msnr_sig = self.msnr_alchemist.detect_institutional_shift(df, lookback=30)
-                    msnr_range = self.msnr_alchemist.calculate_dealing_range(df, lookback=100)
-                    
-                    msnr_sig_val = "0"
-                    if msnr_sig == "1" and df['close'].iloc[-1] < msnr_range['equilibrium']: msnr_sig_val = "1"
-                    elif msnr_sig == "2" and df['close'].iloc[-1] > msnr_range['equilibrium']: msnr_sig_val = "2"
-                    
-                    msnr_tel = f"{msnr_fid:.4f}|{msnr_sig_val}|{msnr_range['equilibrium']:.2f}|{msnr_range['premium']:.2f}|{msnr_range['discount']:.2f}"
-                    self.msnr_cache[-1] = msnr_sig_val
-
                     # 7. CONSULTA À FÍSICA (REQ-REP)
                     # Verifica colapso topológico ou quebra física do SL Virtual
                     self.bridge.enforce_quantum_boundary(df, None, None, q_state.get("is_collapsed", False))
 
                     # [FULL TELEMETRY + HEATMAP ANALYSIS]
-                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{qte_prob:.4f};{qte_advice};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells};{mhd_strength:.4f};{msnr_tel};{','.join(self.msnr_cache)}"
+                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{qte_prob:.4f};{qte_advice};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells};{mhd_strength:.4f};0|0|0;0"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()
 
