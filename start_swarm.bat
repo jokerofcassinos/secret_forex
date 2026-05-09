@@ -4,6 +4,12 @@ title [NEXUS EXECUTIVE TERMINAL]
 
 :MENU
 cls
+echo [!] Protocolo de Limpeza Pre-Ignicao...
+taskkill /F /IM python.exe /T >nul 2>&1
+echo [!] Memoria Purificada.
+timeout /t 1 >nul
+
+cls
 echo ============================================================
 echo      🌌 AETHELGARD QUANTUM SWARM :: EXECUTIVE TERMINAL
 echo ============================================================

@@ -77,12 +77,19 @@ void ParseAndDraw(string data)
    string rhtHistory = (ArraySize(parts) > 28) ? parts[28] : "";
    string rhtFlash = (ArraySize(parts) > 29) ? parts[29] : "0";
    string rhtFlashHistory = (ArraySize(parts) > 30) ? parts[30] : "";
+   double qddFidelity = (ArraySize(parts) > 31) ? StringToDouble(parts[31]) : 0.0;
+   double qteProb = (ArraySize(parts) > 32) ? StringToDouble(parts[32]) : 0.0;
+   string qteAdvice = (ArraySize(parts) > 33) ? parts[33] : "STABLE_ORBIT";
+   int qhoN = (ArraySize(parts) > 34) ? (int)StringToInteger(parts[34]) : 0;
+   double qhoStability = (ArraySize(parts) > 35) ? StringToDouble(parts[35]) : 1.0;
+   string qhoStatus = (ArraySize(parts) > 36) ? parts[36] : "GROUND_STATE";
+   string qhoShells = (ArraySize(parts) > 37) ? parts[37] : "";
 
-   // Limpa as antigas poluições textuais
-   ObjectDelete(0, "NEXUS_HEADER");
-   // ... (rest of deletions)
+   // --- 1. ESTABILIZAÇÃO VISUAL (ANTI-FLICKER) ---
+   // Removida a purga global para evitar o efeito estroboscópico.
+   // Objetos agora são atualizados in-place.
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash);
+   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus);
 
    // --- 1.8 RHT THERMODYNAMIC VISUALS (IGNIÇÕES HISTÓRICAS) ---
    if(StringLen(rhtFlashHistory) > 0) {
@@ -101,19 +108,15 @@ void ParseAndDraw(string data)
             ObjectSetDouble(0, fName, OBJPROP_PRICE, 0, pricePos);
             ObjectSetInteger(0, fName, OBJPROP_ARROWCODE, arrowCode);
             ObjectSetInteger(0, fName, OBJPROP_COLOR, fClr);
+            ObjectSetInteger(0, fName, OBJPROP_BACK, true);
+            ObjectSetInteger(0, fName, OBJPROP_ZORDER, 0);
             ObjectSetInteger(0, fName, OBJPROP_WIDTH, 2);
             ObjectSetInteger(0, fName, OBJPROP_ANCHOR, (fVal == 1) ? ANCHOR_TOP : ANCHOR_BOTTOM);
          } else ObjectDelete(0, "NEXUS_SPARK_HIST_" + IntegerToString(s));
       }
    }
 
-   // 1.9 [HEATMAP DELETED FOR CLARITY]
-   ObjectsDeleteAll(0, "NEXUS_HEAT_");
-   ObjectsDeleteAll(0, "NEXUS_CYT_HIST_");
-
-   // --- [QRW & WYCKOFF DISABLED] ---
-   ObjectsDeleteAll(0, "NEXUS_SINGULARITY_");
-   ObjectsDeleteAll(0, "NEXUS_WYCK_");
+    // [PURGA INTERNA REMOVIDA PARA EVITAR FLICKER]
 
    // 1. ATUALIZAÇÃO DAS CAIXAS (Apenas Bordas - Revertido)
    string hReg[]; StringSplit(historyRegimes, ',', hReg);
@@ -403,11 +406,75 @@ void ParseAndDraw(string data)
             qgcBoxIdx++;
          }
       }
+      for(int k=qgcBoxIdx; k<10; k++) ObjectDelete(0, "NEXUS_QGC_"+IntegerToString(k));
    }
-   // 9. QUANTUM DENSITY CLOUDS (DESATIVADO PARA CLAREZA VISUAL)
-   ObjectsDeleteAll(0, "NEXUS_CLOUD_");
+   
+   // --- 7.1 HARMONIC ENERGY SHELLS (QHO) ---
+   if(StringLen(qhoShells) > 0) {
+      string shells[]; StringSplit(qhoShells, ',', shells);
+      for(int s=0; s < ArraySize(shells); s++) {
+         double sPrice = StringToDouble(shells[s]);
+         string sName = "NEXUS_QHO_SHELL_" + IntegerToString(s);
+         if(ObjectFind(0, sName) < 0) ObjectCreate(0, sName, OBJ_HLINE, 0, 0, sPrice);
+         ObjectSetDouble(0, sName, OBJPROP_PRICE, sPrice);
+         color sClr = (s < 2) ? RGB(0, 150, 150) : (s < 4 ? RGB(0, 100, 100) : RGB(0, 50, 50));
+         ObjectSetInteger(0, sName, OBJPROP_COLOR, sClr);
+         ObjectSetInteger(0, sName, OBJPROP_STYLE, STYLE_DOT);
+         ObjectSetInteger(0, sName, OBJPROP_BACK, true);
+      }
+   } else ObjectsDeleteAll(0, "NEXUS_QHO_SHELL_");
 
-   ChartRedraw(0);
+   // --- 7.2 TUNNELING EXIT TARGET (QTE) ---
+   if(qteProb > 0.7) {
+      string tName = "NEXUS_QTE_TARGET";
+      double tPrice = instAvgPrice + (qteAdvice == "TUNNEL_BULL" ? 500*_Point : -500*_Point); 
+      if(ObjectFind(0, tName) < 0) ObjectCreate(0, tName, OBJ_ARROW_RIGHT_PRICE, 0, 0, tPrice);
+      ObjectSetDouble(0, tName, OBJPROP_PRICE, tPrice);
+      ObjectSetInteger(0, tName, OBJPROP_COLOR, clrGold);
+      ObjectSetString(0, tName, OBJPROP_TEXT, "TUNNEL EXIT: " + qteAdvice);
+      ObjectSetInteger(0, tName, OBJPROP_ZORDER, 0);
+   } else ObjectDelete(0, "NEXUS_QTE_TARGET");
+
+   // 9. QUANTUM DENSITY CLOUDS (DESATIVADO PARA CLAREZA VISUAL)
+   // --- 9. SCHRÖDINGER HEATMAP CLOUDS ---
+   string cloudRaw = (ArraySize(parts) > 10) ? parts[10] : "";
+   if(StringLen(cloudRaw) > 0) {
+      string cloudParts[]; StringSplit(cloudRaw, ':', cloudParts);
+      if(ArraySize(cloudParts) >= 2) {
+         string data[]; StringSplit(cloudParts[1], ',', data);
+         int cloudMax = ArraySize(data);
+         for(int c=0; c < cloudMax && c < 50; c++) {
+            string pair[]; StringSplit(data[c], '|', pair);
+            if(ArraySize(pair) == 2) {
+               double cPrice = StringToDouble(pair[0]);
+               double cDens = StringToDouble(pair[1]);
+               
+               string cName = "NEXUS_CLOUD_" + IntegerToString(c);
+               if(ObjectFind(0, cName) < 0) ObjectCreate(0, cName, OBJ_TREND, 0, iTime(_Symbol, _Period, 50), cPrice, TimeCurrent(), cPrice);
+               
+               ObjectSetDouble(0, cName, OBJPROP_PRICE, 0, cPrice);
+               ObjectSetDouble(0, cName, OBJPROP_PRICE, 1, cPrice);
+               ObjectSetInteger(0, cName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, 50));
+               ObjectSetInteger(0, cName, OBJPROP_TIME, 1, TimeCurrent());
+               
+               color cClr = (cDens > 0.7) ? RGB(0, 255, 255) : (cDens > 0.4 ? RGB(171, 71, 188) : RGB(49, 27, 146));
+               ObjectSetInteger(0, cName, OBJPROP_COLOR, cClr);
+               ObjectSetInteger(0, cName, OBJPROP_WIDTH, (int)MathMax(1, cDens * 8.0));
+               ObjectSetInteger(0, cName, OBJPROP_BACK, true);
+               ObjectSetInteger(0, cName, OBJPROP_ZORDER, 0);
+            }
+         }
+         for(int k=cloudMax; k<50; k++) ObjectDelete(0, "NEXUS_CLOUD_"+IntegerToString(k));
+      }
+   } else ObjectsDeleteAll(0, "NEXUS_CLOUD_");
+
+   // Define prioridade máxima para todos os labels do HUD
+   for(int i=0; i<ObjectsTotal(0, 0, OBJ_LABEL); i++) {
+      string n = ObjectName(0, i, 0, OBJ_LABEL);
+      if(StringFind(n, "NEXUS_") >= 0) ObjectSetInteger(0, n, OBJPROP_ZORDER, 100);
+   }
+   
+   ChartRedraw();
 }
 
 void DrawWyckoffHUD(string score, string phase, string div, string strength)
@@ -450,6 +517,7 @@ void DrawLabel(string name, string text, int x, int y, color clr, int fontSize)
    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
    ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
+   ObjectSetInteger(0, name, OBJPROP_ZORDER, 100);
 }
 
 void DrawModernTradeHistory()
@@ -511,6 +579,7 @@ void DrawModernTradeHistory()
                         ObjectSetInteger(0, lineName, OBJPROP_STYLE, STYLE_DOT);
                         ObjectSetInteger(0, lineName, OBJPROP_RAY_RIGHT, false);
                         ObjectSetInteger(0, lineName, OBJPROP_BACK, true);
+                        ObjectSetInteger(0, lineName, OBJPROP_ZORDER, 0);
                     }
                 }
             }
@@ -539,6 +608,7 @@ void CreateTradingViewTag(string name, datetime time, double price, string text,
     ObjectSetInteger(0, stemName, OBJPROP_BGCOLOR, bg);
     ObjectSetInteger(0, stemName, OBJPROP_COLOR, bg);
     ObjectSetInteger(0, stemName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(0, stemName, OBJPROP_ZORDER, 100);
 
     if(ObjectFind(0, btnName) < 0) {
         ObjectCreate(0, btnName, OBJ_BUTTON, 0, 0, 0);
@@ -556,6 +626,7 @@ void CreateTradingViewTag(string name, datetime time, double price, string text,
     ObjectSetInteger(0, btnName, OBJPROP_BGCOLOR, bg);
     ObjectSetInteger(0, btnName, OBJPROP_COLOR, clrWhite);
     ObjectSetInteger(0, btnName, OBJPROP_STATE, false);
+    ObjectSetInteger(0, btnName, OBJPROP_ZORDER, 100);
 }
 
 // Helper para cálculo de volatilidade dinâmica (ATR)
@@ -643,7 +714,7 @@ void DrawNeuralHealthBar(string id, double health, int x, int y, int w, int h, i
     ObjectSetInteger(0, bgName, OBJPROP_XSIZE, w); ObjectSetInteger(0, bgName, OBJPROP_YSIZE, h);
     ObjectSetInteger(0, bgName, OBJPROP_BGCOLOR, RGB(12, 15, 20)); 
     ObjectSetInteger(0, bgName, OBJPROP_COLOR, RGB(35, 40, 50)); 
-    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 1000);
+    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 100);
 
     int fillW = (int)(health * w); if(fillW > w) fillW = w; if(fillW < 2) fillW = 2;
     color hClr = (health < 0.3) ? RGB(239, 83, 80) : (health < 0.6 ? RGB(255, 167, 38) : RGB(38, 166, 154));
@@ -652,7 +723,7 @@ void DrawNeuralHealthBar(string id, double health, int x, int y, int w, int h, i
     ObjectSetInteger(0, fillName, OBJPROP_CORNER, corner); ObjectSetInteger(0, fillName, OBJPROP_XDISTANCE, x); ObjectSetInteger(0, fillName, OBJPROP_YDISTANCE, y);
     ObjectSetInteger(0, fillName, OBJPROP_XSIZE, fillW); ObjectSetInteger(0, fillName, OBJPROP_YSIZE, h);
     ObjectSetInteger(0, fillName, OBJPROP_BGCOLOR, hClr); ObjectSetInteger(0, fillName, OBJPROP_COLOR, hClr);
-    ObjectSetInteger(0, fillName, OBJPROP_ZORDER, 1010);
+    ObjectSetInteger(0, fillName, OBJPROP_ZORDER, 100);
 }
 void DrawEnergyBar(string id, double val, double maxVal, int x, int y, int w, int h, color clr, int corner)
 {
@@ -669,7 +740,7 @@ void DrawEnergyBar(string id, double val, double maxVal, int x, int y, int w, in
     ObjectSetInteger(0, fillName, OBJPROP_CORNER, corner); ObjectSetInteger(0, fillName, OBJPROP_XDISTANCE, x); ObjectSetInteger(0, fillName, OBJPROP_YDISTANCE, y);
     ObjectSetInteger(0, fillName, OBJPROP_XSIZE, fillW); ObjectSetInteger(0, fillName, OBJPROP_YSIZE, h);
     ObjectSetInteger(0, fillName, OBJPROP_BGCOLOR, clr); ObjectSetInteger(0, fillName, OBJPROP_COLOR, clr);
-    ObjectSetInteger(0, fillName, OBJPROP_ZORDER, 110);
+    ObjectSetInteger(0, fillName, OBJPROP_ZORDER, 100);
 }
 void DrawHUDText(string name, string text, int x, int y, color clr, int fontSize, bool isRightAligned=false, int corner=CORNER_LEFT_UPPER)
 {
@@ -685,7 +756,7 @@ void DrawHUDText(string name, string text, int x, int y, color clr, int fontSize
     ENUM_ANCHOR_POINT anchor = isRightAligned ? ANCHOR_RIGHT_UPPER : ANCHOR_LEFT_UPPER;
     ObjectSetInteger(0, name, OBJPROP_ANCHOR, anchor);
     
-    ObjectSetInteger(0, name, OBJPROP_ZORDER, 1100);
+    ObjectSetInteger(0, name, OBJPROP_ZORDER, 100);
     ObjectSetInteger(0, name, OBJPROP_BACK, false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
 }
@@ -695,9 +766,9 @@ void DrawHUDRow(string id, string label, string val, color valClr, int baseX, in
     DrawHUDText(id + "_L", label, baseX + 15, y, RGB(140, 140, 145), 9, false, corner); 
     DrawHUDText(id + "_V", val, baseX + panelW - 15, y, valClr, 9, true, corner);
 }
-void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash)
+void DrawModernDashboard(string status, double instAvg, double health, string rht, string lbm, string zp, string qrw, string sec, string rmt, string ricci, string entropy, bool collapsed, string rhtFlash, double qddFidelity, double qteProb, string qteAdvice, int qhoN, double qhoStability, string qhoStatus)
 {
-    int panelW = 280; int panelH = 360; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
+    int panelW = 280; int panelH = 500; int corner = CORNER_LEFT_UPPER; int baseX = 20; int baseY = 30;
     string bgName = "NEXUS_HUD_BASE"; if(ObjectFind(0, bgName) < 0) ObjectCreate(0, bgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
     ObjectSetInteger(0, bgName, OBJPROP_CORNER, corner); ObjectSetInteger(0, bgName, OBJPROP_XDISTANCE, baseX); ObjectSetInteger(0, bgName, OBJPROP_YDISTANCE, baseY);
     ObjectSetInteger(0, bgName, OBJPROP_XSIZE, panelW); ObjectSetInteger(0, bgName, OBJPROP_YSIZE, panelH); 
@@ -705,7 +776,7 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     ObjectSetInteger(0, bgName, OBJPROP_BGCOLOR, mainBg);
     ObjectSetInteger(0, bgName, OBJPROP_COLOR, RGB(35, 40, 50)); 
     ObjectSetInteger(0, bgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 1000); 
+    ObjectSetInteger(0, bgName, OBJPROP_ZORDER, 100); 
     ObjectSetInteger(0, bgName, OBJPROP_BACK, false);
 
     string hBgName = "NEXUS_HUD_HEADER_BG"; if(ObjectFind(0, hBgName) < 0) ObjectCreate(0, hBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
@@ -724,10 +795,7 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     }
     ObjectSetInteger(0, hBgName, OBJPROP_COLOR, clrNONE); 
     ObjectSetInteger(0, hBgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-    ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 1010);
-
-    // Neural Health Gauge (v3.0) - REMOVED PER USER REQUEST
-    // DrawNeuralHealthBar("NEXUS_HEALTH_GAUGE", health, baseX, baseY + 35, panelW, 3, corner);
+    ObjectSetInteger(0, hBgName, OBJPROP_ZORDER, 100);
 
     int rowY = baseY + 45; int rowH = 20;
     for(int k=0; k<15; k++) {
@@ -742,7 +810,7 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
         ObjectSetInteger(0, rBgName, OBJPROP_BGCOLOR, rCol); 
         ObjectSetInteger(0, rBgName, OBJPROP_COLOR, clrNONE); 
         ObjectSetInteger(0, rBgName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-        ObjectSetInteger(0, rBgName, OBJPROP_ZORDER, 1005);
+        ObjectSetInteger(0, rBgName, OBJPROP_ZORDER, 100);
         ObjectSetInteger(0, rBgName, OBJPROP_BACK, false);
     }
 
@@ -774,14 +842,40 @@ void DrawModernDashboard(string status, double instAvg, double health, string rh
     DrawEnergyBar("NEXUS_CYT_BAR", rCurv, 5.0, baseX + 15, rowY, panelW - 30, 5, cytClr, corner);
     rowY += 12;
     
-    DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner);
-    
-    // [CYT AURA DELETED PERMANENTLY]
-    ObjectDelete(0, "NEXUS_CYT_AURA");
-    ObjectDelete(0, "NEXUS_CYT_WARNING");
+    DrawHUDRow("NEXUS_HUD_L_8", "Inst. Avg", DoubleToString(instAvg, 2), RGB(200, 200, 200), baseX, rowY, panelW, corner); rowY += rowH;
 
-    ObjectDelete(0, "NEXUS_SEC_ICON");
-    ObjectDelete(0, "NEXUS_SEC_ALERT");
-    ObjectsDeleteAll(0, "NEXUS_BLACK_HOLE_");
-    ObjectDelete(0, "NEXUS_BH_LABEL");
+    // --- DIMENSIONAL COHERENCE (QDD) ---
+    color qddClr = (MathAbs(qddFidelity) >= 0.8) ? RGB(0, 255, 120) : (MathAbs(qddFidelity) >= 0.4 ? RGB(255, 180, 0) : RGB(255, 60, 60));
+    DrawHUDRow("NEXUS_HUD_L_QDD", "Dim. Coherence", DoubleToString(qddFidelity, 3), qddClr, baseX, rowY, panelW, corner);
+    rowY += 15;
+    DrawEnergyBar("NEXUS_QDD_BAR", MathAbs(qddFidelity), 1.0, baseX + 15, rowY, panelW - 30, 6, qddClr, corner);
+    rowY += 12;
+
+    // --- NEW: SCHRÖDINGER CLOUD ANALYSIS ---
+    color qCloudClr = (qteProb > 0.6) ? RGB(0, 255, 255) : RGB(140, 140, 145);
+    DrawHUDRow("NEXUS_HUD_L_QCLOUD_D", "Q-Cloud Density", DoubleToString(qteProb, 3), qCloudClr, baseX, rowY, panelW, corner);
+    rowY += 15;
+    DrawEnergyBar("NEXUS_QCLOUD_BAR", qteProb, 1.0, baseX + 15, rowY, panelW - 30, 6, qCloudClr, corner);
+    rowY += 12;
+    DrawHUDRow("NEXUS_HUD_L_QCLOUD_A", "Q-Cloud Analysis", qteAdvice, qCloudClr, baseX, rowY, panelW, corner);
+    rowY += rowH;
+
+    // --- QUANTUM HARMONIC OSCILLATOR (QHO) ---
+    color qhoClr = (qhoN >= 5) ? RGB(255, 80, 80) : (qhoN >= 3 ? RGB(255, 200, 0) : RGB(0, 255, 180));
+    DrawHUDRow("NEXUS_HUD_L_QHO_N", "Energy Level (n)", IntegerToString(qhoN), qhoClr, baseX, rowY, panelW, corner);
+    rowY += 15;
+    DrawEnergyBar("NEXUS_QHO_BAR", qhoStability, 1.0, baseX + 15, rowY, panelW - 30, 6, qhoClr, corner);
+    rowY += 12;
+    DrawHUDRow("NEXUS_HUD_L_QHO_S", "QHO State", qhoStatus, qhoClr, baseX, rowY, panelW, corner);
+    
+   // Protocolo de Soberania Total: Eleva toda a estrutura NEXUS (Texto e Painéis)
+   for(int i=0; i<ObjectsTotal(0, 0, -1); i++) {
+      string n = ObjectName(0, i, 0, -1);
+      if(StringFind(n, "NEXUS_HUD") >= 0 || StringFind(n, "NEXUS_BG") >= 0 || StringFind(n, "NEXUS_RMT_BAR") >= 0) {
+         ObjectSetInteger(0, n, OBJPROP_ZORDER, 100);
+         ObjectSetInteger(0, n, OBJPROP_BACK, false);
+      }
+   }
+   
+   ChartRedraw();
 }

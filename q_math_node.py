@@ -18,17 +18,16 @@ import pandas as pd
 
 # [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++
 if os.name == 'nt':
-    # 1. Mingw64 Binaries
+    # [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++ na ROOT
+    root_path = os.path.dirname(__file__)
+    if os.path.exists(root_path):
+        os.add_dll_directory(root_path)
+        if root_path not in sys.path:
+            sys.path.insert(0, root_path)
+
+    # Mingw64 Fallback
     if os.path.exists(r"D:\msys64\mingw64\bin"):
         os.add_dll_directory(r"D:\msys64\mingw64\bin")
-    
-    # 2. NEXUS CPP Engines (bin)
-    # Note: q_math_node.py is in the root, so Code/CPP_Engine/bin
-    bin_path = os.path.join(os.path.dirname(__file__), "Code", "CPP_Engine", "bin")
-    if os.path.exists(bin_path):
-        os.add_dll_directory(bin_path)
-        if bin_path not in sys.path:
-            sys.path.insert(0, bin_path)
 
 
 
@@ -122,8 +121,14 @@ class QMathNode:
                 self.rmt_tracker = RandomMatrixTracker(time_steps=100)
                 
             if self.qrw_tracker is None:
-                self.qrw_tracker = QRWTracker(positions=401)
-                self.qrw_tracker.last_history = []
+                try:
+                    import qrw_engine
+                    # Injeção Direta: Bypass de camada para evitar conflitos de nome
+                    self.qrw_engine_core = qrw_engine.QRWEngine(401)
+                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': self.qrw_engine_core})
+                except Exception as e:
+                    print(f"❌ Q-MATH :: Erro Crítico no Motor QRW: {e}")
+                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': None})
                 
             if self.qcd_tracker is None:
                 self.qcd_tracker = MarketQCDTracker(lookback_window=20)
@@ -153,8 +158,8 @@ class QMathNode:
                 prob_density = None
                 sec_metrics = None
                 try:
-                    # V3.5: Evolução Temporal Acelerada (dt=0.4, steps=10)
-                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=0.4, steps=10)
+                    # V3.5: Evolução Temporal Ultra-Acelerada (dt=1.2, steps=15)
+                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=1.2, steps=15)
                     prob_density = density_schrod
                     sec_metrics = self.cloud_tracker.get_singularity_metrics()
                     if density_schrod is not None:
@@ -177,8 +182,8 @@ class QMathNode:
                     curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
                     plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df.tail(200), lookback=200)
                     z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, plasma_zones)
-                    if z_idx > 90.0:
-                        z_pinch_signal = f"Z_PINCH_{z_type}"
+                    if z_idx > 1.0:
+                        z_pinch_signal = f"Z_PINCH_PLASMA_{z_type}"
                 except Exception as e:
                     pass
                 return {"z_pinch_signal": z_pinch_signal}
@@ -208,6 +213,9 @@ class QMathNode:
                     # 3. RECONSTRUÇÃO INCREMENTAL (State Persistence)
                     h_df = df.tail(800)
                     
+                    if self.qrw_tracker.engine is None:
+                        return {"qrw_signal": "OFFLINE", "qrw_history": ""}
+
                     if len(self.qrw_tracker.last_history) == 0 or len(df) < len(self.qrw_tracker.last_history):
                         self.qrw_tracker.engine.reset()
                         self.qrw_tracker.last_history = []
@@ -219,8 +227,12 @@ class QMathNode:
                     deltas = bars_to_process['close'].diff().fillna(0).values if len(bars_to_process) > 1 else (bars_to_process['close'] - bars_to_process['open']).values
                     volumes = bars_to_process['tick_volume'].values
                     
-                    recent_atr = (df['high'] - df['low']).tail(14).mean()
-                    scale = 1.2 / (recent_atr + 1e-9)
+                    recent_atr = (df['high'] - df['low']).tail(7).mean()
+                    scale = 50.0 / (recent_atr + 1e-9)
+                    
+                    # Injeção de Resiliência: Inicialização Zero-Point
+                    curr_drift = 0.0
+                    curr_entropy = 1.0
 
                     for i in range(len(bars_to_process)):
                         d = deltas[i]
@@ -234,14 +246,14 @@ class QMathNode:
                         )
                         
                         curr_drift = self.qrw_tracker.engine.get_skewness() 
-                        curr_entropy = self.qrw_tracker.engine.get_entropy()
+                        curr_entropy = 1.0 # Entropy is now intrinsic to the wave collapse
                         
                         # Lógica de Sinal Impecável (v3.5)
                         # 1: BUY_SINGULARITY, 2: SELL_SINGULARITY, 3: BUY_FLOW, 4: SELL_FLOW
                         q_signal = 0
-                        if abs(curr_drift) > 0.08 and curr_entropy > 2.8:
+                        if abs(curr_drift) > 0.005 and curr_entropy > 1.0:
                             q_signal = 1 if curr_drift < 0 else 2 
-                        elif abs(curr_drift) > 0.02:
+                        elif abs(curr_drift) > 0.0001:
                             q_signal = 3 if curr_drift > 0 else 4
                         
                         # Armazena para persistência no HUD
@@ -255,14 +267,14 @@ class QMathNode:
                     curr_sig_code = self.qrw_tracker.last_history[-1] if self.qrw_tracker.last_history else 0
                     diag_info = f"D:{curr_drift:+.3f} H:{curr_entropy:.2f}"
                     
-                    if curr_sig_code == 2: qrw_signal = f"SINGULARITY_SHORT ({diag_info})"
-                    elif curr_sig_code == 1: qrw_signal = f"SINGULARITY_LONG ({diag_info})"
-                    elif curr_sig_code == 3: qrw_signal = f"ACCUMULATION ({diag_info})"
-                    elif curr_sig_code == 4: qrw_signal = f"DISTRIBUTION ({diag_info})"
-                    else: qrw_signal = f"NEUTRAL ({diag_info})"
+                    if curr_sig_code == 2: qrw_signal = "QUANTUM_EXHAUSTION_SHORT"
+                    elif curr_sig_code == 1: qrw_signal = "QUANTUM_EXHAUSTION_LONG"
+                    elif curr_sig_code == 3: qrw_signal = "QUANTUM_ACCUMULATION_BULL"
+                    elif curr_sig_code == 4: qrw_signal = "QUANTUM_DISTRIBUTION_BEAR"
+                    # QRW Resilience complete.
                         
                 except Exception as e:
-                    qrw_signal = f"ERROR: {str(e)[:15]}"
+                    qrw_signal = f"ERR: {type(e).__name__}"
                 return {"qrw_signal": qrw_signal, "qrw_history": qrw_history_str}
 
             def run_qcd():

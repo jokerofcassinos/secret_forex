@@ -39,6 +39,19 @@ class MT5NeuralBridge:
         print(f"NEXUS Bridge conectada ao {self.symbol}")
         return True
 
+    def fetch_sync_multi_tf(self, count=256):
+        """Extrai M1, M5 e M15 sincronizados para o motor QDD."""
+        tfs = {"M1": mt5.TIMEFRAME_M1, "M5": mt5.TIMEFRAME_M5, "M15": mt5.TIMEFRAME_M15}
+        sync_data = {}
+        for name, tf in tfs.items():
+            rates = mt5.copy_rates_from_pos(self.symbol, tf, 0, count)
+            if rates is not None and len(rates) > 0:
+                df = pd.DataFrame(rates)
+                df['time'] = pd.to_datetime(df['time'], unit='s')
+                df.set_index('time', inplace=True)
+                sync_data[name] = df[['close']]
+        return sync_data
+
     def fetch_full_history(self, count=10000):
         import gc
         print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🧠 Iniciando Brain Scan Estrutural...")

@@ -7,10 +7,13 @@ sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine', 'bin'))
 sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine'))
 
 try:
+    # Adiciona diretório raiz para localizar os .pyd
+    root_path = os.path.dirname(os.path.dirname(current_dir))
+    if root_path not in sys.path:
+        sys.path.insert(0, root_path)
     if os.name == 'nt':
-        mingw_bin = r"D:\msys64\mingw64\bin"
-        if os.path.exists(mingw_bin):
-            os.add_dll_directory(mingw_bin)
+        os.add_dll_directory(root_path)
+
     import qrw_engine
 except ImportError as e:
     print(f"WARNING: qrw_engine C++ module not found. Error: {e}")
@@ -23,10 +26,13 @@ class QRWTracker:
     """
     def __init__(self, positions=401):
         try:
+            # Sincronização com binário v3.5 (QRWEngine)
             self.engine = qrw_engine.QRWEngine(positions)
             self.is_active = True
-        except NameError:
+        except (NameError, AttributeError) as e:
+            print(f"❌ QRWTracker :: Erro de Interface: {e}")
             self.is_active = False
+            self.engine = None
             
         self.num_positions = positions
         self.last_skew = 0.0

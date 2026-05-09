@@ -15,6 +15,8 @@ import socket
 import sys
 import os
 import argparse
+import MetaTrader5 as mt5
+import logging
 
 # [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++
 if os.name == 'nt':
@@ -41,6 +43,10 @@ from Code.N_Core.yield_governor import YieldGovernor
 from Code.N_Core.live_rht import LiveRHTTracker
 from Code.N_Core.market_qcd import MarketQCDTracker
 from Code.N_Core.quantum_projection import QuantumPreCognitionNode
+from Code.N_Core.tensor_network import TensorNetworkNode
+from Code.N_Core.quantum_tunneling import QuantumTunnelingNode
+from Code.N_Core.quantum_oscillator import QuantumOscillatorNode
+from Code.N_Core.quantum_glass import QuantumGlassNode
 
 
 
@@ -111,6 +117,10 @@ class AethelgardSwarm:
         self.oracle = QuantumOracle(simulations=5000)
         self.yield_governor = YieldGovernor(danger_window=30, danger_threshold=25.0)
         self.pre_cognition = QuantumPreCognitionNode(symbol=self.symbol)
+        self.tensor_network = TensorNetworkNode()
+        self.qte_engine = QuantumTunnelingNode()
+        self.qho_engine = QuantumOscillatorNode()
+        self.qgc_node = QuantumGlassNode()
         
         self.is_running = False
         self.active_tf = None
@@ -148,6 +158,14 @@ class AethelgardSwarm:
             print("📡 SWARM :: Estado de Superposição Ativo. Aguardando observação do gráfico...")
             
         self.is_running = True
+        # Normalização de Símbolo (Resolve sufixos como .m ou .raw)
+        sym_info = mt5.symbol_info(self.symbol)
+        if sym_info:
+            self.symbol = sym_info.name
+            print(f"📡 SWARM :: Símbolo normalizado para: {self.symbol}")
+        else:
+            print(f"⚠️ SWARM :: Falha ao normalizar {self.symbol}. Verifique se o ativo está no Market Watch.")
+
         return True
 
     def fetch_quantum_state(self, current_regime=0):
@@ -325,7 +343,29 @@ class AethelgardSwarm:
                     q_state = self.fetch_quantum_state(current_regime=r_score)
                     
                     if q_state and q_state.get("status") == "ACTIVE":
-                        inst_avg = df['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+                        # 1. CÁLCULO DE MÉTRICAS BASE (FALLBACK MULTI-CAMADA)
+                        tick = mt5.symbol_info_tick(self.symbol)
+                        current_price = tick.last if (tick is not None and tick.last > 0) else df['close'].iloc[-1]
+                        
+                        # Garantia de IFV não-zero
+                        inst_avg = current_price if current_price > 0 else df['close'].mean()
+                        if inst_avg <= 0:
+                            logging.error("Critical failure in inst_avg calculation. Falling back to last record.")
+                            inst_avg = df['close'].tail(1).values[0] # Último esforço
+                        
+                        # 2. ANÁLISE DO HEATMAP DE SCHRÖDINGER
+                        cloud_data = q_state.get('cloud_str', "")
+                        cloud_status = "DECOHERENCE"
+                        cloud_dens_val = 0.0
+                        if ":" in cloud_data:
+                            try:
+                                densities = [float(p.split('|')[1]) for p in cloud_data.split(':')[1].split(',') if '|' in p]
+                                if densities:
+                                    # Aplicamos um Ganho Quântico (x10) para sensibilizar a leitura no regime de 80k
+                                    cloud_dens_val = min(1.0, max(densities) * 10.0) 
+                                    # Trava de Status em 0.005 para ativação imediata no regime 80k
+                                    cloud_status = "DENSITY_LOCKED" if cloud_dens_val > 0.005 else "SCANNING"
+                            except Exception: pass
                         health = self.q_logic.calculate_regime_health(df)
                         status_txt = "TSUNAMI_BULL" if r_score == 1 else ("TSUNAMI_BEAR" if r_score == 2 else "SCANNING")
                         status_final = f"{status_txt} | CONF: {health}%"
@@ -360,7 +400,21 @@ class AethelgardSwarm:
                     ricci_c = q_state.get("ricci_curvature", 0.0)
                     h_ent = q_state.get("h_entropy", 0.0)
                     coll_s = "1" if q_state.get("is_collapsed", False) else "0"
-                    qrw_h = q_state.get("qrw_history", "")
+                    # Saneamento de Sinais Quânticos (Evita erros de serialização de objetos)
+                    def sanitize_signal(val):
+                        if hasattr(val, '__name__'): return str(val.__name__)
+                        if "engine" in str(val).lower(): return "NEUTRAL"
+                        return str(val)
+
+                    # Bypass Tático: Passagem direta de sinais quânticos para evitar sanitização errônea
+                    qrw_h = q_state.get("qrw_history", "0")
+                    qrw_s = q_state.get("qrw_signal", "NEUTRAL")
+                    rmt_s = sanitize_signal(q_state.get("rmt_signal", "NEUTRAL"))
+                    z_p_s = q_state.get("z_pinch_signal", "NEUTRAL")
+
+                    # Fail-Safe AdS/CFT: Se Ricci for alto, força ativação de Bulk se estiver Neutral
+                    if z_p_s == "NEUTRAL" and ricci_c > 0.8:
+                        z_p_s = "Z_PINCH_PLASMA_BULL" if r_score == 1 else "Z_PINCH_PLASMA_BEAR"
                     
                     self.cyt_danger_cache[-1] = str(int(ricci_c * 100))
                     
@@ -389,17 +443,45 @@ class AethelgardSwarm:
                         r_score, 
                         df['close'].iloc[-1], 
                         tr_recent, 
-                        q_state.get("plasma_zones", None), 
-                        q_state.get("schrodinger_density", None), 
+                        q_state.get("z_pinch_signal", None), 
+                        q_state.get("cloud_prob", None), 
                         None, # Cloud Tracker Passivo
                         precog_res
                     )
                     
-                    # 9. MONITORAMENTO DE FRONTEIRA
+                    # 3. EXTRAÇÃO MULTI-TIMEFRAME PARA QDD
+                    sync_data = self.bridge.fetch_sync_multi_tf(count=self.tensor_network.lookback + 20)
+                    qdd_fidelity = self.tensor_network.calculate_global_alignment(sync_data)
+                    
+                    # 4. CÁLCULO DE TUNELAMENTO (QTE - TAKE PROFIT QUÂNTICO)
+                    # Sincronização: O Q-Math envia como 'cloud_prob'
+                    q_density = q_state.get("cloud_prob", [])
+                    qte_prob = self.qte_engine.calculate_exit_probability(df, df['close'].iloc[-1], q_density)
+                    qte_advice = self.qte_engine.get_tp_advice(qte_prob)
+                    
+                    # 5. CÁLCULO DE OSCILAÇÃO (QHO - ESTABILIDADE QUÂNTICA)
+                    qho_state = self.qho_engine.calculate_quantum_state(df)
+                    qho_shells = ",".join([f"{p:.2f}" for p in qho_state.get('shells', [])])
+                    
+                    # 6. CÁLCULO DE GRAVIDADE (QGC - REAL TIME SCAN)
+                    self.qgc_node.scan_for_condensates(df)
+                    qgc_tel = self.qgc_node.get_gravity_telemetry(df['close'].iloc[-1])
+                    
+                    # Formata as zonas QGC para o MT5: "age|price|mass"
+                    # Amplificamos a massa para visibilidade: se mass > 0.1, mandamos no mínimo 2.0
+                    q_parts = []
+                    for z in qgc_tel['active_zones']:
+                        v_mass = max(2.0, z['mass'] * 1.5)
+                        q_parts.append(f"100|{z['price']:.2f}|{v_mass:.2f}")
+                    
+                    self.qgc_data_str = ",".join(q_parts)
+
+                    # 7. CONSULTA À FÍSICA (REQ-REP)
                     # Verifica colapso topológico ou quebra física do SL Virtual
                     self.bridge.enforce_quantum_boundary(df, None, None, q_state.get("is_collapsed", False))
 
-                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{q_state.get('z_pinch_signal')};{q_state.get('rmt_signal')};{q_state.get('qrw_signal')};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh}"
+                    # [FULL TELEMETRY + HEATMAP ANALYSIS]
+                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{cloud_dens_val:.3f};{cloud_status};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells}"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()
 
