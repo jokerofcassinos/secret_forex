@@ -497,7 +497,7 @@ class AethelgardSwarm:
                         r_score, 
                         df['close'].iloc[-1], 
                         tr_recent, 
-                        q_state.get("z_pinch_signal", None), 
+                        None, # plasma_zones removido, usando PreCog
                         q_state.get("cloud_prob", None), 
                         None, # Cloud Tracker Passivo
                         precog_res
@@ -553,31 +553,55 @@ class AethelgardSwarm:
                     }
                     active_setups = self.setup_engine.evaluate(setup_ctx)
                     
-                    # 9. ADAPTIVE NEURAL ZONES (ANZ) - Gestão de Risco
-                    # Se um setup novo disparar, registra na ANZ para acompanhamento
+                    # 9. ADAPTIVE NEURAL ZONES (ANZ) - Gestão de Risco Híbrida
+                    # Sincroniza posições REAIS do MT5 para a ANZ
+                    live_positions = mt5.positions_get(symbol=self.symbol)
+                    live_tickets = []
+                    if live_positions:
+                        for p in live_positions:
+                            tkt_str = str(p.ticket)
+                            live_tickets.append(tkt_str)
+                            if tkt_str not in self.anz_engine.active_positions:
+                                p_dir = "LONG" if p.type == mt5.ORDER_TYPE_BUY else "SHORT"
+                                # Ordens manuais recebem S1 (Gestão Absoluta PreCog + QTE)
+                                self.anz_engine.register_position(tkt_str, "S1_GRAVITATIONAL_SLINGSHOT", p_dir, p.price_open)
+                    
+                    # Remove posições reais que já foram fechadas no MT5
+                    for tkt in list(self.anz_engine.active_positions.keys()):
+                        if not tkt.startswith("virt_") and tkt not in live_tickets:
+                            del self.anz_engine.active_positions[tkt]
+
+                    # Se um setup novo disparar, registra na ANZ para acompanhamento virtual
                     if active_setups:
                         best = self.setup_engine.get_strongest_signal()
                         if best:
                             ticket = f"virt_{int(time.time())}"
                             self.anz_engine.register_position(ticket, best['setup'], best['direction'], df['close'].iloc[-1])
                     
-                    # Avalia as zonas de todas as posições virtuais ativas
+                    # Avalia as zonas de todas as posições ativas
                     anz_zones = self.anz_engine.evaluate_zones(setup_ctx, df['close'].iloc[-1])
                     
-                    # Remove posições que mandaram fechar (Virtual Exit)
+                    # Remove posições que mandaram fechar (Virtual Exit ou Real Exit)
                     to_remove = []
                     for tkt, zone in anz_zones.items():
                         if zone["action"] != "HOLD":
                             to_remove.append(tkt)
                             print(f"🛑 ANZ :: ORDEM COLAPSADA ({tkt}) -> {zone['action']} | SL:{zone['sl']:.2f}")
+                            if not tkt.startswith("virt_"):
+                                # É uma ordem real! Fecha no MT5 via bridge
+                                is_buy = self.anz_engine.active_positions[tkt]["direction"] == "LONG"
+                                self.bridge.close_position(int(tkt), is_buy)
+                                
                     for tkt in to_remove:
-                        del self.anz_engine.active_positions[tkt]
+                        if tkt in self.anz_engine.active_positions:
+                            del self.anz_engine.active_positions[tkt]
                         
                     setup_tel_base = self.setup_engine.format_telemetry()
                     # Adiciona a primeira zona ativa (se existir) para plotagem visual no HUD
                     if anz_zones:
                         first_zone = list(anz_zones.values())[0]
                         setup_tel = f"{setup_tel_base}|{float(first_zone['sl']):.2f}|{float(first_zone['tp']):.2f}"
+                        print(f"📡 ANZ PAYLOAD: {setup_tel}")
                     else:
                         setup_tel = f"{setup_tel_base}|0.00|0.00"
 

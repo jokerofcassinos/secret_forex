@@ -120,14 +120,20 @@ void ParseAndDraw(string data)
      string setupHistory = (ArraySize(parts) > 40) ? parts[40] : "";
      
      // Extrai SL e TP Dinâmicos (ANZ) da Telemetria de Setup
+     // Extrai SL e TP Dinâmicos (ANZ) da Telemetria de Setup
      string sParts[]; StringSplit(setupTel, '|', sParts);
      double anzSl = 0.0; double anzTp = 0.0;
-     if(ArraySize(sParts) >= 4) {
-         anzSl = StringToDouble(sParts[2]);
-         anzTp = StringToDouble(sParts[3]);
+     int nParts = ArraySize(sParts);
+     if(nParts >= 3) {
+         anzSl = StringToDouble(sParts[nParts-2]);
+         anzTp = StringToDouble(sParts[nParts-1]);
      }
+     
+     // Reconstrói a string do setup para as outras funções ignorarem os preços no final
+     string cleanSetup = sParts[0];
+     for(int x=1; x < nParts-2; x++) cleanSetup += "|" + sParts[x];
 
-   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, sParts[0]);
+   DrawModernDashboard(statusTxt, instAvgPrice, health, rhtStatus, lbm_signal, z_signal, qrw_signal, secData, rmt_signal, ricci_c, h_entropy, (is_collapsed == "1"), rhtFlash, qddFidelity, qteProb, qteAdvice, qhoN, qhoStability, qhoStatus, mhdStrength, cleanSetup);
 
      // --- ADAPTIVE NEURAL ZONES (ANZ) VISUALS ---
      if(anzSl > 0.1) {

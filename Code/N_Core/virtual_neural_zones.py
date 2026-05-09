@@ -98,8 +98,13 @@ class AdaptiveNeuralZones:
                     if qdd_f > 0.5: action = "EXIT_QDD_REVERSAL"
                     
             elif setup == "S1_GRAVITATIONAL_SLINGSHOT":
-                # S1 confia 100% no PreCognition SL e QTE TP
-                pass
+                # S1: TP Dinâmico flutuando conforme o Emaranhamento Quântico (QDD)
+                # O alvo expande se a fidelidade for alta, e contrai se a entropia aumentar.
+                target_mult = 3.0 + (abs(qdd_f) * 4.0) # Varia de 3 ATR a 7 ATR
+                if direction == "LONG":
+                    tp_price = pos["entry_price"] + (atr * target_mult)
+                else:
+                    tp_price = pos["entry_price"] - (atr * target_mult)
 
             zones[ticket] = {
                 "sl": sl_price,
