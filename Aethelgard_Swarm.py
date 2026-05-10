@@ -248,9 +248,17 @@ class AethelgardSwarm:
             slice_df = df.iloc[:i+1]
             curr_h = df.iloc[i]
             r_score, conf = self.q_logic.advanced_regime_score(slice_df.tail(200), self.prev_s, self.prev_c)
-            self.prev_s, self.prev_c = r_score, conf
-
             
+            # Bridge Padding Logic (v22.1)
+            if r_score != 0 and self.prev_s == 0:
+                last_p = self.prev_c // 100000000
+                gap_n = self.prev_c % 100
+                if last_p == r_score and 0 < gap_n < 5:
+                    for j in range(1, gap_n + 1):
+                        if len(self.regimes_cache) >= j:
+                            self.regimes_cache[-j] = f"{r_score}|{conf}"
+            
+            self.prev_s, self.prev_c = r_score, conf
             self.regimes_cache.append(f"{r_score}|{conf}")
             self.signals_cache.append("0")
             
@@ -431,6 +439,16 @@ class AethelgardSwarm:
                         q_state = {}
 
                     if df.iloc[-1]['time'] > self.last_time:
+                        # Bridge Padding Logic (v22.1)
+                        if r_score != 0 and self.prev_s == 0:
+                            last_p = self.prev_c // 100000000
+                            gap_n = self.prev_c % 100
+                            if last_p == r_score and 0 < gap_n < 5:
+                                # Preenche retrospectivamente o cache para garantir monólito visual
+                                for j in range(1, gap_n + 1):
+                                    if len(self.regimes_cache) >= j:
+                                        self.regimes_cache[-j] = f"{r_score}|{conf}"
+
                         self.regimes_cache.pop(0); self.regimes_cache.append(f"{r_score}|{conf}")
                         self.signals_cache.pop(0); self.signals_cache.append("0")
                         self.lbm_cache.pop(0); self.lbm_cache.append("0")

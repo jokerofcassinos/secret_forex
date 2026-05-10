@@ -36,7 +36,7 @@ class QuantumIndicators:
     @staticmethod
     def _get_qdd_regime_with_direction(data_series, timeframe_period=16386, atr=1.0, window=34, pti=0.0):
         """
-        Internal helper v21.0 PHASE SYNC MODE:
+        Internal helper v22.0 PHASE SYNC MODE:
         - window=8 (Ignition): WMA(5), uv_cutoff=1.
         - window=34 (Stability): SMA(34), uv_cutoff=3.
         - Histerese Dinâmica: Encolhe para 0.01 ATR se PTI > 0.80.
@@ -134,18 +134,17 @@ class QuantumIndicators:
 
     def advanced_regime_score(self, df_slice, prev_score=0, prev_conf=0, q_math_data=None, debug=False):
         """
-        LÓGICA NEXUS-TQFM v210 (SINCRONIZAÇÃO DE FASE / MONÓLITO ABSOLUTO):
-        1. FORÇA BRUTA: Flip instantâneo se Body > 1.5x ATR (Ignora Lock).
-        2. TREND GLUE: Health > 30% bloqueia saída (Zero White Gaps).
-        3. ADAPTIVE HYST: Histerese de 0.01 ATR em momentos críticos.
-        4. GRAVITY BYPASS: Movimentos de exaustão anulam EMA 200.
+        LÓGICA NEXUS-TQFM v220 (INCOMPRESSIBILIDADE DE FLUXO / MONÓLITO ABSOLUTO):
+        1. TENSÃO SUPERFICIAL: Proíbe flips sem cruzamento da EMA 34.
+        2. FILTRO DE CONTRA-FLUXO: Se health > 50%, ignora sinais contra EMA 89.
+        3. MONÓLITO TOTAL: r_conf sempre incremental se score for mantido.
+        4. FORÇA BRUTA: Flip instantâneo se Body > 1.5x ATR (Ignora Lock).
         """
         if len(df_slice) < 120: 
             return (0, 0, {}) if debug else (0, 0)
         
         curr = df_slice.iloc[-1]
         atr = (df_slice['high'] - df_slice['low']).rolling(14).mean().iloc[-1]
-        # CALIBRAÇÃO BTCUSD (v21.0): Divisor 2.0 para maior sensibilidade
         health = QuantumIndicators.calculate_regime_health(df_slice)
 
         # 1. Camadas de Fluxo
@@ -181,19 +180,29 @@ class QuantumIndicators:
         wick_rejection_bull = (curr['low'] <= local_low_20) and (lower_wick > body * 1.5)
         wick_rejection_bear = (curr['high'] >= local_high_20) and (upper_wick > body * 1.5)
 
-        # 5. DUAL-QDD PURIFICATION (v21.0 Adaptive)
+        # 5. DUAL-QDD PURIFICATION (v22.0 Incompressível)
         _, qdd_ign = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'], 16386, atr, window=8, pti=pti)
         _, qdd_ign_p1 = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[:-1], 16386, atr, window=8, pti=pti)
         _, qdd_stab = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'], 16386, atr, window=34, pti=pti)
         _, qdd_p1 = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[:-1], 16386, atr, window=34, pti=pti)
         _, qdd_p2 = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[:-2], 16386, atr, window=34, pti=pti)
 
-        # 6. Gravity Block com Bypass v21.0
+        # 6. FILTRO DE CONTRA-FLUXO (v22.0)
+        # Se Health > 50%, sinais contra a EMA 89 são ignorados a menos que PTI seja crítico
+        if health > 50 and pti < 0.99:
+            if curr['close'] > ema_macro: # Tendência Bull
+                if qdd_stab == 2: qdd_stab = 0
+                if qdd_ign == 2: qdd_ign = 0
+            elif curr['close'] < ema_macro: # Tendência Bear
+                if qdd_stab == 1: qdd_stab = 0
+                if qdd_ign == 1: qdd_ign = 0
+
+        # 7. Gravity Block com Bypass v21.0
         has_bypass = (pti > 0.95) or (body > atr * 1.2) or is_breakout_bull or is_breakout_bear or is_brute_force
         gravity_bull_block = (curr['close'] < ema_gravity) and not has_bypass and not wick_rejection_bull
         gravity_bear_block = (curr['close'] > ema_gravity) and not has_bypass and not wick_rejection_bear
 
-        # 7. Máquina de Estado v21.0 (SINCRONIZAÇÃO DE FASE)
+        # 8. Máquina de Estado v22.0 (INCOMPRESSIBILIDADE)
         r_score, r_conf = 0, 0
         effective_qdd = qdd_stab if prev_score != 0 else qdd_ign
         
@@ -214,9 +223,11 @@ class QuantumIndicators:
 
         # ESTADO BULL (1)
         elif prev_score == 1:
-            # FORÇA BRUTA: Flip instantâneo se queda for violenta
-            flip_to_bear = (qdd_stab == 2 and qdd_p1 == 2 and qdd_p2 == 2) or (pti > 0.95) or (is_brute_force and curr['close'] < ema_fast)
-            # TREND GLUE: Health > 30% proíbe saída para 0
+            # TENSÃO SUPERFICIAL: Proíbe flip para Bear se preço acima da EMA 34
+            flip_to_bear = (qdd_stab == 2 and qdd_p1 == 2 and qdd_p2 == 2) or (pti > 0.95) or (is_brute_force and curr['close'] < ema_trend)
+            if curr['close'] > ema_trend and not (pti > 0.99 or is_brute_force):
+                flip_to_bear = False
+                
             exit_denied = (health > 30) and (not flip_to_bear) and (curr['close'] > ema_macro)
             
             if exit_denied or (curr['close'] > ema_macro and qdd_stab == 1):
@@ -230,7 +241,10 @@ class QuantumIndicators:
 
         # ESTADO BEAR (2)
         elif prev_score == 2:
-            flip_to_bull = (qdd_stab == 1 and qdd_p1 == 1 and qdd_p2 == 1) or (pti > 0.95) or (is_brute_force and curr['close'] > ema_fast)
+            flip_to_bull = (qdd_stab == 1 and qdd_p1 == 1 and qdd_p2 == 1) or (pti > 0.95) or (is_brute_force and curr['close'] > ema_trend)
+            if curr['close'] < ema_trend and not (pti > 0.99 or is_brute_force):
+                flip_to_bull = False
+
             exit_denied = (health > 30) and (not flip_to_bull) and (curr['close'] < ema_macro)
             
             if exit_denied or (curr['close'] < ema_macro and qdd_stab == 2):
@@ -244,13 +258,17 @@ class QuantumIndicators:
 
         # ESTADO NEUTRO (0)
         else:
-            # 1. FORÇA BRUTA / PAVIO / BREAKOUT (Ignora tudo)
-            if is_brute_force or is_breakout_bull or wick_rejection_bull:
-                if curr['close'] > ema_fast and not gravity_bull_block: r_score, r_conf = 1, 1
-            if r_score == 0 and (is_brute_force or is_breakout_bear or wick_rejection_bear):
-                if curr['close'] < ema_fast and not gravity_bear_block: r_score, r_conf = 2, 1
+            # 1. NOISE BYPASS (v22.1): Se a saúde for extrema, reentra imediatamente sem pulso QDD
+            if last_polar != 0 and health > 85 and bars_neutral < 5:
+                r_score, r_conf = last_polar, last_dur + bars_neutral + 1
             
-            # 2. RE-ENTRADA DE MEMÓRIA (< 60 velas)
+            # 2. FORÇA BRUTA / PAVIO / BREAKOUT (Ignora tudo)
+            if r_score == 0 and (is_brute_force or is_breakout_bull or wick_rejection_bull):
+                if curr['close'] > ema_trend and not gravity_bull_block: r_score, r_conf = 1, 1
+            if r_score == 0 and (is_brute_force or is_breakout_bear or wick_rejection_bear):
+                if curr['close'] < ema_trend and not gravity_bear_block: r_score, r_conf = 2, 1
+            
+            # 3. RE-ENTRADA DE MEMÓRIA (< 60 velas)
             if r_score == 0 and bars_neutral < 60:
                 pulse_bull = (qdd_ign == 1 and qdd_ign_p1 == 1)
                 pulse_bear = (qdd_ign == 2 and qdd_ign_p1 == 2)
@@ -259,11 +277,15 @@ class QuantumIndicators:
                 elif last_polar == 2 and (pulse_bear or curr['close'] < ema_trend):
                     r_score, r_conf = 2, last_dur + bars_neutral + 1
             
-            # 3. ENTRADA QDD PADRÃO
+            # 4. ENTRADA QDD PADRÃO
             if r_score == 0:
-                if qdd_ign == 1 and qdd_ign_p1 == 1 and curr['close'] > ema_fast and not gravity_bull_block: r_score, r_conf = 1, 1
-                elif qdd_ign == 2 and qdd_ign_p1 == 2 and curr['close'] < ema_fast and not gravity_bear_block: r_score, r_conf = 2, 1
+                if qdd_ign == 1 and qdd_ign_p1 == 1 and curr['close'] > ema_trend and not gravity_bull_block: r_score, r_conf = 1, 1
+                elif qdd_ign == 2 and qdd_ign_p1 == 2 and curr['close'] < ema_trend and not gravity_bear_block: r_score, r_conf = 2, 1
                 else: r_score, r_conf = 0, (last_polar * 100000000) + (min(last_dur, 999999) * 100) + min(bars_neutral + 1, 99)
+
+        # MONÓLITO TOTAL (v22.0): Força continuidade visual
+        if r_score == prev_score and r_score != 0:
+            r_conf = prev_conf + 1
 
         if debug: return r_score, r_conf, debug_data
         return r_score, r_conf
@@ -285,62 +307,6 @@ class QuantumIndicators:
         health = min(100, (gap / (atr * 2.0)) * 100)
         return int(health)
 
-    def calculate_nexus_score(self, df, density, velocity, regime):
-        """
-        NEXUS Wyckoff Score (0-100)
-        Funde Regime, LBM e Momentum para uma métrica única de dominância.
-        """
-        try:
-            # 1. Componente LBM (40%)
-            rho_peak = np.max(density)
-            rho_mean = np.mean(density)
-            lbm_score = np.clip((rho_peak / (rho_mean + 1e-9)) * 10, 0, 40)
-            
-            # 2. Componente Momentum (30%)
-            mom_score = np.clip(abs(velocity.mean()) * 100, 0, 30)
-            
-            # 3. Componente de Regime (30%)
-            reg_score = 30 if regime != 0 else 10
-            
-            total_score = lbm_score + mom_score + reg_score
-            return int(np.clip(total_score, 0, 100))
-        except:
-            return 50
-
-    def detect_divergences(self, df, density):
-        """
-        Detecta divergências entre Preço e Densidade Institucional (LBM).
-        """
-        if len(df) < 20: return "None"
-        
-        # Preço fazendo novas máximas vs Densidade caindo
-        price_trend = df['close'].iloc[-1] > df['close'].iloc[-10]
-        lbm_trend = np.max(density) < 50.0 # Exemplo simplificado
-        
-        if price_trend and lbm_trend: return "Bearish Div"
-        if not price_trend and not lbm_trend: return "Bullish Div"
-        return "None"
-
-    def get_market_state(self, df, density, velocity, regime):
-        """
-        Gera o estado consolidado para o Wyckoff HUD.
-        """
-        score = self.calculate_nexus_score(df, density, velocity, regime)
-        div = self.detect_divergences(df, density)
-        
-        # Tradução Wyckoff
-        state = "NEUTRAL"
-        if regime == 1: state = "ACCUMULATION" if score < 70 else "MARK-UP"
-        elif regime == 2: state = "DISTRIBUTION" if score < 70 else "MARK-DOWN"
-        
-        return {
-            "score": score,
-            "divergence": div,
-            "wyckoff_phase": state,
-            "strength": round(abs(float(velocity.mean()) * 10), 2)
-        }
-
-    @staticmethod
     def calculate_rsi(prices, window=14):
         delta = prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()

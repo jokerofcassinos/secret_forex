@@ -232,7 +232,9 @@ void ParseAndDraw(string data)
 
     // [PURGA INTERNA REMOVIDA PARA EVITAR FLICKER]
 
-   // 1. ATUALIZAÇÃO DAS CAIXAS (Apenas Bordas - Revertido)
+   // 1. ATUALIZAÇÃO DAS CAIXAS (Apenas Bordas - Monólito v22.1)
+   ObjectsDeleteAll(0, "NEXUS_ZONE_");
+   
    string hReg[]; StringSplit(historyRegimes, ',', hReg);
    int totalR = ArraySize(hReg);
    
@@ -248,7 +250,23 @@ void ParseAndDraw(string data)
          while(end + 1 < totalR && end + 1 < iBars(_Symbol, _Period)) {
             string nextVal = hReg[totalR - 1 - (end + 1)];
             string nSub[]; StringSplit(nextVal, '|', nSub);
-            if(ArraySize(nSub) > 0 && (int)StringToInteger(nSub[0]) == r) end++; else break;
+            int nr = (ArraySize(nSub) > 0) ? (int)StringToInteger(nSub[0]) : -1;
+            
+            if(nr == r) end++;
+            else if(nr == 0) { // Unificação de Hiato (Peek-ahead v22.1)
+                bool found = false;
+                // Busca até 5 velas no futuro por uma reentrada no mesmo regime
+                for(int look=1; look<=5 && (end+1+look) < totalR; look++) {
+                    string v = hReg[totalR - 1 - (end+1+look)];
+                    string s[]; StringSplit(v, '|', s);
+                    if(ArraySize(s) > 0) {
+                        int lr = (int)StringToInteger(s[0]);
+                        if(lr == r) { found = true; break; }
+                        if(lr != 0) break; // Encontrou outro regime, para a busca
+                    }
+                }
+                if(found) end++; else break;
+            } else break;
          }
          
          double maxH = 0; double minL = 9999999;
@@ -258,24 +276,20 @@ void ParseAndDraw(string data)
          }
          
          string bName = "NEXUS_ZONE_" + IntegerToString(boxIdx);
-         color zClr = (r == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); // TradingView Teal / Red
+         color zClr = (r == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); 
          
-         if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-         ObjectSetInteger(0, bName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, start));
-         ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, maxH);
-         ObjectSetInteger(0, bName, OBJPROP_TIME, 1, iTime(_Symbol, _Period, end));
-         ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, minL);
-         ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
-         ObjectSetInteger(0, bName, OBJPROP_WIDTH, 1);
-         ObjectSetInteger(0, bName, OBJPROP_FILL, false); 
-         ObjectSetInteger(0, bName, OBJPROP_BACK, true); 
-         ObjectSetInteger(0, bName, OBJPROP_ZORDER, 0);
+         if(ObjectCreate(0, bName, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, start), maxH, iTime(_Symbol, _Period, end), minL)) {
+             ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
+             ObjectSetInteger(0, bName, OBJPROP_WIDTH, 1);
+             ObjectSetInteger(0, bName, OBJPROP_FILL, false); 
+             ObjectSetInteger(0, bName, OBJPROP_BACK, true); 
+             ObjectSetInteger(0, bName, OBJPROP_ZORDER, 0);
+         }
          
          boxIdx++;
          i = end + 1;
       } else i++;
    }
-   for(int k=boxIdx; k<100; k++) ObjectDelete(0, "NEXUS_ZONE_"+IntegerToString(k));
 
    // 1.5 [CYT HIST DELETED PERMANENTLY]
    ObjectsDeleteAll(0, "NEXUS_CYT_HIST_");
