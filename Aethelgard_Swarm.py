@@ -449,7 +449,7 @@ class AethelgardSwarm:
                         inst_avg = df['close'].mean()
                         health = 0
                         status_final = "PHYSICS_OFFLINE | RECONNECTING..."
-                        q_state = {}
+                        q_state = {"cloud_str": "0.0001:", "status": "OFFLINE"}
 
                     if df.iloc[-1]['time'] > self.last_time:
                         # Bridge Padding Logic (v22.1)

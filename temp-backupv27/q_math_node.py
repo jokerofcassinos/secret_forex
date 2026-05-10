@@ -73,7 +73,6 @@ class QMathNode:
             "status": "INITIALIZING",
             "lbm_zones": [],
             "cloud_zones": [],
-            "cloud_str": "0.0001:",
             "rmt_signal": 0.0,
             "qrw_density": [],
             "qcd_signal": "CONFINED",
@@ -81,11 +80,6 @@ class QMathNode:
             "rht_history": [],
             "ricci_curvature": 0.0
         }
-        
-        # Persistência Quântica (v27.2)
-        self.last_raw_density = None
-        self.last_cloud_str = "0.0001:"
-        self.cloud_trail = []
         
         # Trava para evitar conflito de leitura/escrita no estado interno
         self.state_lock = threading.Lock()
@@ -113,42 +107,34 @@ class QMathNode:
 
             # Inicializações Lazy (só ocorrem quando chegam os primeiros dados)
             if self.cloud_tracker is None:
-                # v34.0: Resolução Espectrográfica (512 Bins) para Pincel Vertical
-                p_current = df['close'].iloc[-1]
-                p_min = p_current - 400
-                p_max = p_current + 400
-                
+                p_min = df['low'].min() - 100
+                p_max = df['high'].max() + 100
                 self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=512)
                 
+                # Warm-Up Loop (v27.0): Pré-calcula as últimas 30 velas para evitar flicker no MQL5
+                import numpy as np
                 self.cloud_trail = []
                 self.last_candle_time = None
                 
                 warmup_len = min(35, len(df))
                 start_idx = len(df) - warmup_len
-                print(f"⚛️ Q-MATH :: Executando Warm-Up Histórico v34.0 ({warmup_len} velas)...")
+                print(f"⚛️ Q-MATH :: Executando Warm-Up Histórico da Malha Quântica ({warmup_len} velas)...")
                 
-                self.cloud_tracker.initialize_wave(df['close'].iloc[start_idx], sigma=(self.cloud_tracker.dx * 65.0))
+                self.cloud_tracker.initialize_wave(df['close'].iloc[start_idx], sigma=(self.cloud_tracker.dx * 65))
                 
                 for i in range(start_idx, len(df)):
-                    sub_df = df.iloc[max(0, i - 19):i+1]
-                    # v34.0: Evolução Estabilizada
-                    density_schrod, _ = self.cloud_tracker.step(sub_df, dt=0.5, steps=2, pti=0.0)
+                    sub_df = df.iloc[max(0, i - 199):i+1]
+                    density_schrod, _ = self.cloud_tracker.step(sub_df, dt=1.2, steps=15, pti=0.0)
                     
                     if density_schrod is not None:
-                        # v27.0: Persistência Original (Suavidade Temporal)
-                        if self.last_raw_density is not None:
-                            density_schrod = 0.4 * density_schrod + 0.6 * self.last_raw_density
-                        self.last_raw_density = density_schrod.copy()
-
-                        # Gamma 1.2: Visibilidade de névoa densa
-                        density_gamma = np.power(density_schrod, 1.2)
+                        density_gamma = np.power(density_schrod, 1.8)
                         if np.max(density_gamma) > 0:
                             density_gamma /= np.max(density_gamma)
                             
                         max_d = np.max(density_gamma)
                         cloud_arr = []
                         for idx_c, d in enumerate(density_gamma):
-                            if d > max_d * 0.01: # Threshold sensível para espectrografia completa
+                            if d > max_d * 0.12: 
                                 p_level = self.cloud_tracker.index_to_price(idx_c)
                                 cloud_arr.append(f"{p_level:.2f}|{d:.4f}")
                         
@@ -223,72 +209,54 @@ class QMathNode:
                 return {"lbm_signal": lbm_signal, "lbm_v_current": lbm_v_current}
 
             def run_schrodinger():
-                cloud_str = getattr(self, 'last_cloud_str', "0.0001:")
-                prob_density = getattr(self, 'last_prob_density', None)
+                cloud_str = "0.0001:"
+                prob_density = None
                 sec_metrics = None
                 try:
-                    curr_time = df.iloc[-1]['time']
-                    pti_val = getattr(self, "current_pti_context", 0.0)
-                    
                     # V3.5: Evolução Temporal Ultra-Acelerada (dt=1.2, steps=15)
-                    # Agora roda em CADA TICK para paridade total
-                    density_schrod, _ = self.cloud_tracker.step(df.tail(20), dt=1.2, steps=15, pti=pti_val)
-                    
+                    # v25.0: Acoplamento de Massa via PTI (Feedback Loop)
+                    pti_val = getattr(self, "current_pti_context", 0.0)
+                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=1.2, steps=15, pti=pti_val)
+                    prob_density = density_schrod
+                    sec_metrics = self.cloud_tracker.get_singularity_metrics()
                     if density_schrod is not None:
                         import numpy as np
                         
+                        # Histórico para o Comet Trail no MT5 (v27.0)
                         if not hasattr(self, 'cloud_trail'):
                             self.cloud_trail = []
-                            self.last_raw_density = None
+                            self.last_candle_time = None
                             
-                        # v30.0: Inércia Crítica (98% Histerese) para fluidez LuxAlgo
-                        if self.last_raw_density is not None:
-                            density_schrod = 0.02 * density_schrod + 0.98 * self.last_raw_density
-
-                        # Blur de Convolução 5pt (Preserva o núcleo, evita gigantismo)
-                        density_schrod = np.convolve(density_schrod, np.ones(5)/5, mode='same')
-
-                        density_schrod /= (np.sum(density_schrod) + 1e-9)
-                        self.last_raw_density = density_schrod.copy()
-                        self.last_prob_density = density_schrod
-
-                        # v3.5: Gamma 1.2 para alto contraste no núcleo
-                        density_gamma = np.power(density_schrod, 1.2)
+                        # Correção Gamma Neon v26.1 na fatia atual
+                        density_gamma = np.power(density_schrod, 1.8)
                         if np.max(density_gamma) > 0:
                             density_gamma /= np.max(density_gamma)
-
+                            
                         max_d = np.max(density_gamma)
                         cloud_arr = []
                         for i, d in enumerate(density_gamma):
-                            if d > max_d * 0.05: # v30.0: Threshold de visibilidade focalizada
+                            if d > max_d * 0.12: 
                                 p = self.cloud_tracker.index_to_price(i)
-                                cloud_arr.append(f"{p:.2f}|{d:.4f}")                        
-                        if len(cloud_arr) > 0:
-                            current_slice_str = ",".join(cloud_arr)
-                            
-                            if not hasattr(self, 'last_physics_time') or curr_time > self.last_physics_time:
-                                self.cloud_trail.insert(0, current_slice_str)
-                                if len(self.cloud_trail) > 30: # Histórico de 30 velas para fluidez
-                                    self.cloud_trail.pop()
-                                self.last_physics_time = curr_time
+                                cloud_arr.append(f"{p:.2f}|{d:.4f}")
+                        
+                        current_slice_str = ",".join(cloud_arr)
+                        curr_time = df.iloc[-1]['time']
+                        
+                        if self.last_candle_time is None or curr_time > self.last_candle_time:
+                            self.cloud_trail.insert(0, current_slice_str)
+                            if len(self.cloud_trail) > 30: # Histórico de 30 velas para fluidez
+                                self.cloud_trail.pop()
+                            self.last_candle_time = curr_time
+                        else:
+                            if len(self.cloud_trail) > 0:
+                                self.cloud_trail[0] = current_slice_str
                             else:
-                                if len(self.cloud_trail) > 0:
-                                    self.cloud_trail[0] = current_slice_str
-                                else:
-                                    self.cloud_trail.append(current_slice_str)
-                                    
-                        self.last_cloud_str = f"{self.cloud_tracker.dx:.6f}:" + "^".join(self.cloud_trail)
-                        cloud_str = self.last_cloud_str
-                    else:
-                        # Se falhar o motor, envia pelo menos o rastro antigo ou default
-                        cloud_str = getattr(self, 'last_cloud_str', "0.0001:")
-                    
-                    sec_metrics = self.cloud_tracker.get_singularity_metrics()
+                                self.cloud_trail.append(current_slice_str)
+                                
+                        cloud_str = f"{self.cloud_tracker.dx:.4f}:" + ";".join(self.cloud_trail)
                 except Exception as e:
                     print(f"[Q-Math] Erro Schrödinger: {e}")
-                    cloud_str = getattr(self, 'last_cloud_str', "0.0001:")
                 return {"prob_density": prob_density, "sec_metrics": sec_metrics, "cloud_str": cloud_str}
-
 
 
             def run_plasma():

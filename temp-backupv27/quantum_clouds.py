@@ -20,7 +20,6 @@ class QuantumCloudTracker:
     """
     N-Core Agent: Quantum Cloud Tracker v3.4 (Gaussian Gravity Wells)
     v24.1: Institutional Attraction & Doppler Effect.
-    RESTAURADO v27 DNA (DNA v31.0 Fusion)
     """
     def __init__(self, price_min, price_max, bins=512):
         self.price_min = price_min
@@ -44,7 +43,7 @@ class QuantumCloudTracker:
     def initialize_wave(self, current_price, sigma=None, k0=0.0):
         if not self.is_active: return
         if sigma is None:
-            sigma = self.dx * 65.0 # Restaurado v27
+            sigma = self.dx * 35 # Expandido v24.1
         sigma = max(self.dx * 5.0, sigma)
         x0 = current_price - self.price_min
         x0 = max(self.dx * 5.0, min(x0, (self.bins - 5) * self.dx))
@@ -86,8 +85,8 @@ class QuantumCloudTracker:
         tr = (df_slice['high'] - df_slice['low']).rolling(14).mean().iloc[-1]
         if np.isnan(tr) or tr < self.dx: tr = self.dx * 10.0
         
-        # v32.0: QUANTUM FOG (hbar=8.0) para expansão suave
-        hbar_dynamic = max(8.0, min(25.0, tr / (self.dx * 2.0)))
+        # v25.3: QUANTUM BLOOM (hbar=12.0) para fusão de fatias
+        hbar_dynamic = max(12.0, min(30.0, tr / (self.dx * 1.0)))
 
         # 1. SMOOTH GRID SHIFTING
         curr_price = df_slice['close'].iloc[-1]
@@ -114,15 +113,7 @@ class QuantumCloudTracker:
         mass = base_mass * 0.1 if price_dist > tr * 2.0 else base_mass
         mass = max(5.0, min(2000.0, mass))
 
-        # v31.1: Inicialização do Potencial Base (Volume Profile)
-        V_base = self.generate_potential_from_volume_profile(df_slice)
-        
-        # v33.0: GRAVIDADE SUAVE (k=0.5)
-        # Permite que a nuvem ganhe volume e brilho sem colapsar em um dot.
-        idx_curr = self.price_to_index(curr_price)
-        x_grid = np.arange(self.bins)
-        V_gravity = 0.5 * (x_grid - idx_curr)**2 
-        V = np.array(V_base) + V_gravity
+        V = self.generate_potential_from_volume_profile(df_slice)
         
         vol_col = 'tick_volume' if 'tick_volume' in df_slice.columns else 'volume'
         vol_profile = df_slice[vol_col].values if vol_col in df_slice.columns else np.ones(len(df_slice))
@@ -130,6 +121,11 @@ class QuantumCloudTracker:
         mass_scale_factor = 1.0 / (1.0 + atr_rel * 50.0) 
         global_mass = mass * mass_scale_factor
         
+        # ACOPLAMENTO MASSA-PREÇO v25.0 (SUPERFLUIDEZ)
+        # Se PTI elevado (exaustão), a nuvem derrete para seguir o preço instantaneamente
+        if pti > 0.85:
+            global_mass *= 0.05
+            
         spatial_mass = np.ones(self.bins, dtype=np.float64)
         visc_cap = 5.0 / (len(df_slice) + 1e-9)
         
@@ -143,21 +139,21 @@ class QuantumCloudTracker:
             
         spatial_mass = np.clip(spatial_mass, 0.5, 5.0) 
         
-        self.solver.update_potential(list(V))
+        self.solver.update_potential(V)
         self.solver.update_spatial_mass(list(spatial_mass))
         
         # 3. DRIFT MOMENTUM
         price_velocity = (df_slice['close'].iloc[-1] - df_slice['close'].iloc[-2]) if len(df_slice) > 1 else 0.0
         drift_k = np.clip(price_velocity / (self.dx * 5.0), -0.3, 0.3)
-        drift_k *= 1.2 
+        drift_k *= 1.2 # v25.1: Compensação de advecção para Trail contínuo
         
-        # 4. EVOLUTION STEP (v32.0: Estabilidade LuxAlgo)
+        # 4. EVOLUTION STEP
         for _ in range(steps):
             self.solver.step_forward(dt, global_mass, hbar_dynamic, drift_k)
         
-        # v32.0: RECENTER PADRÃO OURO (Sigma 65.0)
+        # v26.0: SOFT RECENTER (Injeção Contínua de Energia via Soft Blend no C++)
         x0 = curr_price - self.price_min
-        sigma = self.dx * 65.0 
+        sigma = self.dx * 65
         self.solver.recenter_wave(x0, sigma)
         
         density = self.solver.get_probability_density()
