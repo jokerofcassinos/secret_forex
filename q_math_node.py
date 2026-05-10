@@ -317,7 +317,8 @@ class QMathNode:
                 cyt_danger = 0.0
                 try:
                     import numpy as np
-                    recent_df = df.tail(200).copy()
+                    # V3.6: Reduzido lookback para 34 barras para detecção ultra-sensível de reversão
+                    recent_df = df.tail(34).copy()
                     N = len(recent_df)
                     data_10d = np.zeros((10, N))
                     data_10d[0, :] = recent_df['open'].values
@@ -334,7 +335,7 @@ class QMathNode:
                     flow = self.cyt.analyze_manifold_flow(data_10d)
                     def_array = flow["deformation"]
                     det_array = flow["determinant"]
-                    danger_array = self.cyt.calculate_danger_zones(data_10d, 50, 2.5)
+                    danger_array = self.cyt.calculate_danger_zones(data_10d, 15, 2.5) # Reduzido window para 15
                     
                     if len(def_array) > 0:
                         ricci_curvature = def_array[-1]

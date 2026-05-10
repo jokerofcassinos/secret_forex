@@ -390,9 +390,12 @@ class AethelgardSwarm:
                     df = latest_df
                     if not self.regimes_cache: self.initialize_caches(df)
                     
+                    # 1. CONSULTA À FÍSICA (REQ-REP) - ANTES DO SCORE DE REGIME
+                    # Buscamos os tensores de criticalidade para o QPT (Quantum Phase Transition)
+                    q_state = self.fetch_quantum_state(current_regime=self.prev_s)
+                    
                     window_calc = 200
-                    r_score, conf = self.q_logic.advanced_regime_score(df.tail(window_calc), self.prev_s, self.prev_c)
-                    q_state = self.fetch_quantum_state(current_regime=r_score)
+                    r_score, conf = self.q_logic.advanced_regime_score(df.tail(window_calc), self.prev_s, self.prev_c, q_math_data=q_state)
                     
                     if q_state and q_state.get("status") == "ACTIVE":
                         # 1. CÁLCULO DE MÉTRICAS BASE (FALLBACK MULTI-CAMADA)
