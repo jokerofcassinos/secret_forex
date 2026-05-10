@@ -34,44 +34,49 @@ class QuantumIndicators:
         self.qpt = QuantumPhaseTransition()
 
     @staticmethod
-    def _get_qdd_regime_with_direction(data_series, timeframe_period=16386, atr=1.0):
+    def _get_qdd_regime_with_direction(data_series, timeframe_period=16386, atr=1.0, window=34, pti=0.0):
         """
-        Internal helper v5.4 Stability Patch:
-        Elimina oscilação de direção e aplica histerese de fase.
+        Internal helper v21.0 PHASE SYNC MODE:
+        - window=8 (Ignition): WMA(5), uv_cutoff=1.
+        - window=34 (Stability): SMA(34), uv_cutoff=3.
+        - Histerese Dinâmica: Encolhe para 0.01 ATR se PTI > 0.80.
         """
-        if not QDD_AVAILABLE or len(data_series) < 64:
+        if not QDD_AVAILABLE or len(data_series) < window:
             return 0, 0
         
-        uv_cutoff = 3
-        slope_window = 5
-        energy_mult = 0.08
+        uv_cutoff = 3 if window >= 32 else 1
+        energy_mult = 0.03
         
-        if timeframe_period <= 1: 
-            uv_cutoff = 6; slope_window = 30; energy_mult = 0.15
-        elif timeframe_period <= 5: 
-            uv_cutoff = 5; slope_window = 20; energy_mult = 0.12
-        elif timeframe_period <= 15: 
-            uv_cutoff = 4; slope_window = 15; energy_mult = 0.10
+        if timeframe_period <= 1: energy_mult = 0.05
+        elif timeframe_period <= 5: energy_mult = 0.04
             
-        arr = np.array(data_series, dtype=np.float64)
+        arr = np.array(data_series.tail(window), dtype=np.float64)
         try:
             res = _QDD_ENGINE_INST.quantize_regime(arr, uv_cutoff, energy_threshold=atr*energy_mult)
             state = res['regime_state']
             
             direction = 0
             if state >= 1:
-                # ANCORAGEM MACRO-ESTRUTURAL (SMA 64)
-                # Em vez de olhar a inclinação bruta (que cai em pullbacks),
-                # comparamos o preço atual com o preço médio da janela quântica (SMA 64).
-                macro_mean = data_series.mean()
-                curr_price = data_series.iloc[-1]
+                # ADAPTIVE HYSTERESIS (v21.0)
+                # Se PTI elevado, sensibilidade máxima para captura de pivot
+                if pti > 0.80:
+                    hyst = atr * 0.01
+                elif window < 10:
+                    hyst = atr * 0.03
+                else:
+                    hyst = atr * 0.05
                 
-                # HISTERESE DIRECONAL: Reduzido de 0.1 para 0.02 ATR para ignição instantânea
-                slope_threshold = atr * 0.02
-                if curr_price > macro_mean + slope_threshold:
-                    direction = 1 # Bull
-                elif curr_price < macro_mean - slope_threshold:
-                    direction = 2 # Bear
+                if window < 10:
+                    weights = np.arange(1, 6)
+                    subset = data_series.tail(5)
+                    pivot = (subset.values * weights).sum() / weights.sum()
+                else:
+                    pivot = data_series.tail(window).mean()
+                
+                curr_price = data_series.iloc[-1]
+                if curr_price > pivot + hyst: direction = 1
+                elif curr_price < pivot - hyst: direction = 2
+                else: direction = 1 if curr_price > pivot else 2
                 
             return state, direction
         except Exception:
@@ -127,160 +132,147 @@ class QuantumIndicators:
         
         return zones
 
-    def advanced_regime_score(self, df_slice, prev_score=0, prev_conf=0, q_math_data=None):
+    def advanced_regime_score(self, df_slice, prev_score=0, prev_conf=0, q_math_data=None, debug=False):
         """
-        LÓGICA NEXUS-TQFM v80 (IGNITIVIDADE ABSOLUTA / ZERO LAG):
-        1. IGNITIVIDADE ABSOLUTA: Entrada forçada se QDD confirmar + 2 velas de momentum.
-        2. EXTREMO LOCAL (40 VELAS): Captura de pivots rápidos em escalas fractais.
-        3. FOME DE TENDÊNCIA: Re-entrada imediata na EMA 9 sem threshold de ATR.
-        4. MONÓLITO DE FLUXO: Proteção de Tsunami mantida para estabilidade.
+        LÓGICA NEXUS-TQFM v210 (SINCRONIZAÇÃO DE FASE / MONÓLITO ABSOLUTO):
+        1. FORÇA BRUTA: Flip instantâneo se Body > 1.5x ATR (Ignora Lock).
+        2. TREND GLUE: Health > 30% bloqueia saída (Zero White Gaps).
+        3. ADAPTIVE HYST: Histerese de 0.01 ATR em momentos críticos.
+        4. GRAVITY BYPASS: Movimentos de exaustão anulam EMA 200.
         """
-        if len(df_slice) < 120: return 0, 0
+        if len(df_slice) < 120: 
+            return (0, 0, {}) if debug else (0, 0)
         
         curr = df_slice.iloc[-1]
-        prev1 = df_slice.iloc[-2]
-        prev2 = df_slice.iloc[-3]
+        atr = (df_slice['high'] - df_slice['low']).rolling(14).mean().iloc[-1]
+        # CALIBRAÇÃO BTCUSD (v21.0): Divisor 2.0 para maior sensibilidade
+        health = QuantumIndicators.calculate_regime_health(df_slice)
 
-        # 1. Camadas de Fluxo e Momentum (EMAs)
-        if 'ema_fast' in df_slice.columns:
-            ema_fast = df_slice['ema_fast'].iloc[-1]; ema_mid = df_slice['ema_mid'].iloc[-1]
-            ema_trend = df_slice['ema_trend'].iloc[-1]; ema_macro = df_slice['ema_macro'].iloc[-1]
-            ema_gravity = df_slice['ema_gravity'].iloc[-1]
-        else:
-            ema_fast = df_slice['close'].ewm(span=9, adjust=False).mean().iloc[-1]
-            ema_mid = df_slice['close'].ewm(span=21, adjust=False).mean().iloc[-1]
-            ema_trend = df_slice['close'].ewm(span=34, adjust=False).mean().iloc[-1]
-            ema_macro = df_slice['close'].ewm(span=89, adjust=False).mean().iloc[-1]
-            ema_gravity = df_slice['close'].ewm(span=200, adjust=False).mean().iloc[-1]
-        
-        bull_momentum = (ema_fast > ema_mid); bear_momentum = (ema_fast < ema_mid)
-        
-        # 2. Dinâmica de Entropia (ATR)
-        high_low = df_slice['high'] - df_slice['low']
-        high_close = np.abs(df_slice['high'] - df_slice['close'].shift(1))
-        low_close = np.abs(df_slice['low'] - df_slice['close'].shift(1))
-        atr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1).rolling(14).mean().iloc[-1]
+        # 1. Camadas de Fluxo
+        ema_fast = df_slice['close'].ewm(span=9, adjust=False).mean().iloc[-1]
+        ema_trend = df_slice['close'].ewm(span=34, adjust=False).mean().iloc[-1]
+        ema_macro = df_slice['close'].ewm(span=89, adjust=False).mean().iloc[-1]
+        ema_gravity = df_slice['close'].ewm(span=200, adjust=False).mean().iloc[-1]
 
-        # 3. DECODE MEMÓRIA (v8.0)
-        last_polar_regime = 0
-        bars_in_neutral = 0
+        # 2. DECODE MEMÓRIA v4.0
         if prev_score == 0:
-            last_polar_regime = prev_conf // 1000
-            bars_in_neutral = prev_conf % 1000
+            last_polar = prev_conf // 100000000
+            last_dur = (prev_conf % 100000000) // 100
+            bars_neutral = prev_conf % 100
         else:
-            last_polar_regime = prev_score
-            bars_in_neutral = 0
+            last_polar, last_dur, bars_neutral = prev_score, prev_conf, 0
 
-        # 4. Detecção de Extremos (Cravamento de Topo/Fundo LOCAL v8.0)
-        abs_high_40 = df_slice['high'].iloc[-41:-1].max()
-        abs_low_40 = df_slice['low'].iloc[-41:-1].min()
-        is_abs_top = (curr['high'] >= abs_high_40 - (atr * 0.05))
-        is_abs_bottom = (curr['low'] <= abs_low_40 + (atr * 0.05))
-
-        # 5. Soberania e Saúde
-        trend_health = self.calculate_regime_health(df_slice)
-        is_sovereign = (abs(curr['close'] - ema_trend) > atr * 2.2) or (abs(curr['close'] - ema_macro) > atr * 3.5)
-        is_tsunami = (trend_health > 55) and (prev_score != 0 and prev_conf > 12)
-
-        # 6. QDD PURIFICATION
-        tf_period = 16386 
-        if len(df_slice) >= 2:
-            try:
-                d_sec = int(df_slice['time'].iloc[-1]) - int(df_slice['time'].iloc[-2])
-                if d_sec <= 65: tf_period = 1 
-                elif d_sec <= 305: tf_period = 5 
-                elif d_sec <= 3605: tf_period = 16385 
-            except Exception: pass
-
-        qdd_state, qdd_direction = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[-64:], tf_period, atr)
-        is_quantum_event = (qdd_state >= 1)
-
-        # 7. GATILHO DE ACUMULAÇÃO/DISTRIBUIÇÃO (Aceleração Fractal)
-        # 2 velas fechando acima da máxima anterior ou abaixo da mínima anterior
-        is_accel_bull = (curr['close'] > prev1['high']) and (prev1['close'] > prev2['high'])
-        is_accel_bear = (curr['close'] < prev1['low']) and (prev1['close'] < prev2['low'])
-
-        # 8. FILTRO DE MASSA DINÂMICO
-        body = abs(curr['close'] - curr['open'])
-        is_green = (curr['close'] > curr['open'])
-        is_red = (curr['close'] < curr['open'])
-        is_atomic = body > (atr * 0.3) 
-
-        # 9. SINGULARIDADE ATÔMICA (Prioridade Máxima)
-        # Se estamos no fundo e QDD virou, entramos na primeira vela verde.
-        start_atomic_rebound_bull = is_abs_bottom and is_green and (is_atomic or is_accel_bull)
-        start_atomic_rebound_bear = is_abs_top and is_red and (is_atomic or is_accel_bear)
-
-        # --- QUANTUM PHASE TRANSITION (QPT) ---
+        # 3. Anomalia Quântica (PTI)
         pti = 0.0; qpt_rec = "STABLE"
         if q_math_data: pti, qpt_rec = self.qpt.evaluate_transition(df_slice, prev_score, q_math_data)
-
-        # 10. MÁQUINA DE ESTADO TQFM v11.0 (IGNITIVIDADE ABSOLUTA)
         
-        # 0. OVERRIDES TOTAIS
-        if qpt_rec == "IMMEDIATE_PHASE_FLIP" or start_atomic_rebound_bull or start_atomic_rebound_bear:
-            if start_atomic_rebound_bull or (qpt_rec == "IMMEDIATE_PHASE_FLIP" and qdd_direction == 1):
-                return 1, 0
-            if start_atomic_rebound_bear or (qpt_rec == "IMMEDIATE_PHASE_FLIP" and qdd_direction == 2):
-                return 2, 0
+        # 4. Pavio de Ignição & Extremos (20b)
+        local_high_20 = df_slice['high'].iloc[-21:-1].max()
+        local_low_20 = df_slice['low'].iloc[-21:-1].min()
+        
+        body = abs(curr['close'] - curr['open'])
+        is_brute_force = body > (atr * 1.5)
+        
+        is_breakout_bull = curr['close'] > local_high_20 and curr['close'] > ema_fast
+        is_breakout_bear = curr['close'] < local_low_20 and curr['close'] < ema_fast
+        
+        upper_wick = curr['high'] - max(curr['open'], curr['close'])
+        lower_wick = min(curr['open'], curr['close']) - curr['low']
+        wick_rejection_bull = (curr['low'] <= local_low_20) and (lower_wick > body * 1.5)
+        wick_rejection_bear = (curr['high'] >= local_high_20) and (upper_wick > body * 1.5)
 
-        if qpt_rec == "MANDATORY_NEUTRAL":
-            return 0, (last_polar_regime * 1000) + 1
+        # 5. DUAL-QDD PURIFICATION (v21.0 Adaptive)
+        _, qdd_ign = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'], 16386, atr, window=8, pti=pti)
+        _, qdd_ign_p1 = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[:-1], 16386, atr, window=8, pti=pti)
+        _, qdd_stab = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'], 16386, atr, window=34, pti=pti)
+        _, qdd_p1 = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[:-1], 16386, atr, window=34, pti=pti)
+        _, qdd_p2 = QuantumIndicators._get_qdd_regime_with_direction(df_slice['close'].iloc[:-2], 16386, atr, window=34, pti=pti)
 
-        pti_exit_threshold = 0.94 if is_tsunami else (0.82 if is_sovereign else 0.55)
+        # 6. Gravity Block com Bypass v21.0
+        has_bypass = (pti > 0.95) or (body > atr * 1.2) or is_breakout_bull or is_breakout_bear or is_brute_force
+        gravity_bull_block = (curr['close'] < ema_gravity) and not has_bypass and not wick_rejection_bull
+        gravity_bear_block = (curr['close'] > ema_gravity) and not has_bypass and not wick_rejection_bear
+
+        # 7. Máquina de Estado v21.0 (SINCRONIZAÇÃO DE FASE)
+        r_score, r_conf = 0, 0
+        effective_qdd = qdd_stab if prev_score != 0 else qdd_ign
+        
+        debug_data = {
+            "pti": pti, "qdd_dir": effective_qdd, "health": health,
+            "gravity_bull_block": gravity_bull_block, "gravity_bear_block": gravity_bear_block,
+            "ema_trend": ema_trend, "ema_macro": ema_macro, "last_polar": last_polar
+        }
+
+        # A. OVERRIDES DE SINGULARIDADE
+        if pti > 0.98 or qpt_rec == "IMMEDIATE_PHASE_FLIP":
+            target = 1 if qdd_ign == 1 else (2 if qdd_ign == 2 else 0)
+            if target != 0 and ((target == 1 and not gravity_bull_block) or (target == 2 and not gravity_bear_block)):
+                r_score = target; r_conf = (prev_conf + 1) if prev_score == target else 1
+            else:
+                r_score = 0
+                r_conf = (last_polar * 100000000) + (min(last_dur, 999999) * 100) + min(bars_neutral + 1, 99)
 
         # ESTADO BULL (1)
-        if prev_score == 1:
-            if is_sovereign:
-                if curr['close'] < ema_macro: return 0, 1001
-                return 1, min(prev_conf + 1, 50000)
-                
-            if curr['close'] < (ema_mid if is_tsunami else ema_fast):
-                should_exit = (pti > pti_exit_threshold) or (not bull_momentum and curr['close'] < ema_mid)
-                if should_exit and qdd_direction == 1: should_exit = False
-                if should_exit: return 0, 1001
-                
-            return 1, min(prev_conf + 1, 50000)
+        elif prev_score == 1:
+            # FORÇA BRUTA: Flip instantâneo se queda for violenta
+            flip_to_bear = (qdd_stab == 2 and qdd_p1 == 2 and qdd_p2 == 2) or (pti > 0.95) or (is_brute_force and curr['close'] < ema_fast)
+            # TREND GLUE: Health > 30% proíbe saída para 0
+            exit_denied = (health > 30) and (not flip_to_bear) and (curr['close'] > ema_macro)
+            
+            if exit_denied or (curr['close'] > ema_macro and qdd_stab == 1):
+                r_score, r_conf = 1, prev_conf + 1
+            else:
+                can_exit = flip_to_bear or (pti > 0.92) or (curr['close'] < ema_macro)
+                if can_exit: 
+                    if flip_to_bear and not gravity_bear_block: r_score, r_conf = 2, 1
+                    else: r_score, r_conf = 0, (1 * 100000000) + (min(prev_conf, 999999) * 100) + 1
+                else: r_score, r_conf = 1, prev_conf + 1
 
         # ESTADO BEAR (2)
-        if prev_score == 2:
-            if is_sovereign:
-                if curr['close'] > ema_macro: return 0, 2001
-                return 2, min(prev_conf + 1, 50000)
-                
-            if curr['close'] > (ema_mid if is_tsunami else ema_fast):
-                should_exit = (pti > pti_exit_threshold) or (not bear_momentum and curr['close'] > ema_mid)
-                if should_exit and qdd_direction == 2: should_exit = False
-                if should_exit: return 0, 2001
+        elif prev_score == 2:
+            flip_to_bull = (qdd_stab == 1 and qdd_p1 == 1 and qdd_p2 == 1) or (pti > 0.95) or (is_brute_force and curr['close'] > ema_fast)
+            exit_denied = (health > 30) and (not flip_to_bull) and (curr['close'] < ema_macro)
+            
+            if exit_denied or (curr['close'] < ema_macro and qdd_stab == 2):
+                r_score, r_conf = 2, prev_conf + 1
+            else:
+                can_exit = flip_to_bull or (pti > 0.92) or (curr['close'] > ema_macro)
+                if can_exit:
+                    if flip_to_bull and not gravity_bull_block: r_score, r_conf = 1, 1
+                    else: r_score, r_conf = 0, (2 * 100000000) + (min(prev_conf, 999999) * 100) + 1
+                else: r_score, r_conf = 2, prev_conf + 1
 
-            return 2, min(prev_conf + 1, 50000)
+        # ESTADO NEUTRO (0)
+        else:
+            # 1. FORÇA BRUTA / PAVIO / BREAKOUT (Ignora tudo)
+            if is_brute_force or is_breakout_bull or wick_rejection_bull:
+                if curr['close'] > ema_fast and not gravity_bull_block: r_score, r_conf = 1, 1
+            if r_score == 0 and (is_brute_force or is_breakout_bear or wick_rejection_bear):
+                if curr['close'] < ema_fast and not gravity_bear_block: r_score, r_conf = 2, 1
+            
+            # 2. RE-ENTRADA DE MEMÓRIA (< 60 velas)
+            if r_score == 0 and bars_neutral < 60:
+                pulse_bull = (qdd_ign == 1 and qdd_ign_p1 == 1)
+                pulse_bear = (qdd_ign == 2 and qdd_ign_p1 == 2)
+                if last_polar == 1 and (pulse_bull or curr['close'] > ema_trend):
+                    r_score, r_conf = 1, last_dur + bars_neutral + 1
+                elif last_polar == 2 and (pulse_bear or curr['close'] < ema_trend):
+                    r_score, r_conf = 2, last_dur + bars_neutral + 1
+            
+            # 3. ENTRADA QDD PADRÃO
+            if r_score == 0:
+                if qdd_ign == 1 and qdd_ign_p1 == 1 and curr['close'] > ema_fast and not gravity_bull_block: r_score, r_conf = 1, 1
+                elif qdd_ign == 2 and qdd_ign_p1 == 2 and curr['close'] < ema_fast and not gravity_bear_block: r_score, r_conf = 2, 1
+                else: r_score, r_conf = 0, (last_polar * 100000000) + (min(last_dur, 999999) * 100) + min(bars_neutral + 1, 99)
 
-        # ESTADO NEUTRO (0) - FOME DE TENDÊNCIA
-        
-        # 1. IGNITIVIDADE ABSOLUTA (Fast Entry)
-        # Se o QDD validou e o preço cruzou a EMA 9, entramos IMEDIATAMENTE.
-        if qdd_direction == 1 and curr['close'] > ema_fast: return 1, 0
-        if qdd_direction == 2 and curr['close'] < ema_fast: return 2, 0
-
-        # 2. ACELERAÇÃO POR QUEBRA DE EXTREMO
-        if is_accel_bull and qdd_direction == 1: return 1, 0
-        if is_accel_bear and qdd_direction == 2: return 2, 0
-
-        # 3. Ignição Estrutural (Noise Gate Residual)
-        sig_threshold = atr * 0.3 if (qdd_direction != last_polar_regime) else atr * 0.8
-        if (body > sig_threshold) and is_quantum_event and qdd_direction != 0: return qdd_direction, 0
-        
-        if is_quantum_event:
-            if qdd_direction == 1 and curr['close'] > ema_trend: return 1, 0
-            if qdd_direction == 2 and curr['close'] < ema_trend: return 2, 0
-
-        return 0, (last_polar_regime * 1000) + min(bars_in_neutral + 1, 999)
+        if debug: return r_score, r_conf, debug_data
+        return r_score, r_conf
 
     @staticmethod
     def calculate_regime_health(df):
         """
         Calcula a saúde da tendência (0-100%).
-        Baseado na divergência entre EMA 34 (Tendência) e EMA 89 (Macro).
+        CALIBRAÇÃO v21.0: Divisor 2.0 para maior agressividade na Supressão de Hiato.
         """
         if len(df) < 90: return 100
         ema_34 = df['close'].ewm(span=34, adjust=False).mean()
@@ -290,7 +282,7 @@ class QuantumIndicators:
         atr = high_low.rolling(14).mean().iloc[-1]
         
         gap = abs(ema_34.iloc[-1] - ema_89.iloc[-1])
-        health = min(100, (gap / (atr * 4.0)) * 100)
+        health = min(100, (gap / (atr * 2.0)) * 100)
         return int(health)
 
     def calculate_nexus_score(self, df, density, velocity, regime):
