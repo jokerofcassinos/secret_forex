@@ -229,31 +229,38 @@ public:
         }
         update_probability_density();
     }
+void recenter_wave_safe(double new_x0, double sigma) {
+    py::gil_scoped_release release;
 
-    void recenter_wave_safe(double new_x0, double sigma) {
-        py::gil_scoped_release release;
-        double com = 0.0, total_prob = 0.0;
-        for(int i = 0; i < Nx; ++i) {
-            double p = std::norm(psi[i]); 
-            com += i * dx * p; 
-            total_prob += p;
-        }
-        if(total_prob > 1e-15) com /= total_prob;
-        
-        // Protocolo v24.1: Trava relaxada (2.5 sigma) para permitir Atração de Massa
-        if(std::abs(new_x0 - com) > sigma * 2.5) {
-            double norm = 0.0;
-            for (int i = 0; i < Nx; ++i) {
-                double x = i * dx;
-                double envelope = std::exp(-0.5 * std::pow((x - new_x0) / sigma, 2));
-                psi[i] = Complex(envelope, 0.0);
-                norm += std::norm(psi[i]) * dx;
-            }
-            norm = std::sqrt(norm);
-            if(norm > 1e-15) { for (int i = 0; i < Nx; ++i) psi[i] /= norm; }
-            update_probability_density();
+    double norm = 0.0;
+    std::vector<Complex> new_psi(Nx, 0.0);
+    #pragma omp parallel for reduction(+:norm)
+    for (int i = 0; i < Nx; ++i) {
+        double x = i * dx;
+        double envelope = std::exp(-0.5 * std::pow((x - new_x0) / sigma, 2));
+        new_psi[i] = Complex(envelope, 0.0);
+        norm += std::norm(new_psi[i]) * dx;
+    }
+    norm = std::sqrt(norm);
+
+    double final_norm = 0.0;
+    if(norm > 1e-15) {
+        #pragma omp parallel for reduction(+:final_norm)
+        for (int i = 0; i < Nx; ++i) {
+            new_psi[i] /= norm;
+            // v26.0: Soft Blend Contínuo (Injeção de Energia Sem Quebrar Fase)
+            psi[i] = psi[i] * 0.8 + new_psi[i] * 0.2;
+            final_norm += std::norm(psi[i]) * dx;
         }
     }
+
+    final_norm = std::sqrt(final_norm);
+    if(final_norm > 1e-15) {
+        #pragma omp parallel for
+        for (int i = 0; i < Nx; ++i) psi[i] /= final_norm;
+    }
+    update_probability_density();
+}
 
     void update_probability_density() {
         #pragma omp parallel for

@@ -53,7 +53,6 @@ def test_quantum_clouds():
     print("Processando fluxo de ticks através da Malha Quântica C++...")
     tracker.initialize_wave(df['close'].iloc[0], sigma=(tracker.dx * 65))
     
-    last_density = None
     for i in range(1, len(df)):
         window = max(0, i - 20)
         df_slice = df.iloc[window:i+1]
@@ -63,12 +62,6 @@ def test_quantum_clouds():
         if res is not None:
             density, reset = res
             
-            # v25.4: TEMPORAL BLOOM (Persistência Quântica)
-            if last_density is not None:
-                density = 0.6 * density + 0.4 * last_density
-                density /= (np.sum(density) + 1e-9)
-            last_density = density
-
             # Telemetria v24.1
             if i % 50 == 0:
                 print(f"Tick {i} | Density Max: {np.max(density):.6f} | Price: {df['close'].iloc[i]:.2f}")
@@ -77,9 +70,9 @@ def test_quantum_clouds():
             interpolated_density = np.interp(global_y_axis, local_y_axis, np.nan_to_num(density), left=0, right=0)
             global_density_history.append(interpolated_density)
         
-    print("Renderizando Espectrografia de Atração (v24.1)...")
+    print("Renderizando Espectrografia de Atração (v26.1)...")
     
-    # v25.2: INTERPOLAÇÃO SUB-CANDLE (Upsampling Temporal para continuidade total)
+    # v26.1: VISCOSIDADE DE NÚCLEO (Upsampling Temporal Simples)
     upsample_factor = 4
     num_steps_orig = len(global_density_history)
     num_steps_up = num_steps_orig * upsample_factor
@@ -88,35 +81,49 @@ def test_quantum_clouds():
     
     print(f"Upsampling Temporal (4x) para Fluidez Total: {num_steps_up} colunas...")
     
+    # Derivação de Preço para Translação Geométrica (v27.0)
+    prices_array = df['close'].iloc[1:num_steps_orig+1].values
+    dx_global = (global_price_max - global_price_min) / global_bins
+    
     for t in range(num_steps_orig - 1):
         d1 = global_density_history[t]
         d2 = global_density_history[t+1]
         
+        # v27.0: Cálculo do Shift Topológico (Translação Diagonal)
+        p1 = prices_array[t]
+        p2 = prices_array[t+1]
+        dp_bins = int((p2 - p1) / dx_global)
+        
         for sub in range(upsample_factor):
             frac = sub / upsample_factor
             idx_up = t * upsample_factor + sub
-            upsampled_matrix[:, idx_up] = (1.0 - frac) * d1 + frac * d2
+            
+            # Rola a função de onda no eixo Y proporcionalmente ao tempo
+            shift_frac = int(dp_bins * frac)
+            d1_shifted = np.roll(d1, shift_frac)
+            
+            # Blend suave da forma de onda transladada com o destino
+            upsampled_matrix[:, idx_up] = (1.0 - frac) * d1_shifted + frac * d2
 
-    # Suavização Temporal EMA no grid upsampled
+    # Suavização Temporal EMA no grid upsampled (Rastro contínuo)
     smoothed_matrix = np.zeros_like(upsampled_matrix)
-    alpha = 0.20 # v25.3: Persistência extrema para Campo Unificado
+    alpha = 0.35 # Constante de decaimento ideal para o fluido
     for t in range(upsampled_matrix.shape[1]):
         if t == 0: smoothed_matrix[:, t] = upsampled_matrix[:, t]
         else: smoothed_matrix[:, t] = alpha * upsampled_matrix[:, t] + (1 - alpha) * smoothed_matrix[:, t-1]
     
-    # v25.3.1: MANUAL TEMPORAL SMEAR (Bypass Scipy)
-    # Aplicamos uma convolução gaussiana 1D em cada linha (preço) para conectar o tempo
-    kernel = np.array([0.05, 0.2, 0.5, 0.2, 0.05])
-    final_matrix = np.zeros_like(smoothed_matrix)
+    # v26.1: CORREÇÃO GAMMA NEON (Aniquila o ruído, foca no Núcleo Sólido)
+    print("Aplicando Correção Gamma Neon...")
+    gamma = 1.8 # Expande o contraste: valores baixos somem, valores altos brilham
+    final_matrix = np.power(smoothed_matrix, gamma)
     
-    print("Aplicando Smear Temporal via Convolução Quântica...")
-    for i in range(smoothed_matrix.shape[0]):
-        final_matrix[i, :] = np.convolve(smoothed_matrix[i, :], kernel, mode='same')
+    if np.max(final_matrix) > 0:
+        final_matrix /= np.max(final_matrix)
 
     plt.figure(figsize=(14, 8))
     
     extent = [0, num_steps_orig, global_price_min, global_price_max]
-    vmax_val = np.percentile(final_matrix, 99.5) if np.max(final_matrix) > 0 else 0.2
+    vmax_val = np.percentile(final_matrix, 99.8) if np.max(final_matrix) > 0 else 0.2
     
     plt.imshow(final_matrix, aspect='auto', origin='lower', cmap='inferno', 
                extent=extent, alpha=0.9, interpolation='gaussian', vmin=0, vmax=vmax_val)
@@ -124,7 +131,7 @@ def test_quantum_clouds():
     # Ajusta o eixo x do preço para o grid original
     plt.plot(np.arange(num_steps_orig), df['close'].iloc[1:num_steps_orig+1].values, color='cyan', linewidth=1.5, label='Ação do Preço Físico (GER40)')
     
-    plt.title('Aethelgard Q-MATH: Superfluidez Institucional v25.4 (Atração de Campo Fluido)', fontsize=14, fontweight='bold', color='white')
+    plt.title('Aethelgard Q-MATH: Superfluidez Institucional v27.0 (Interpolação Diagonal Perfeita)', fontsize=14, fontweight='bold', color='white')
     plt.xlabel('Dimensão Temporal (Ticks/Candles)', color='lightgrey')
     plt.ylabel('Nível de Preço ($x$)', color='lightgrey')
     

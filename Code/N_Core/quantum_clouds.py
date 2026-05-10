@@ -151,8 +151,10 @@ class QuantumCloudTracker:
         for _ in range(steps):
             self.solver.step_forward(dt, global_mass, hbar_dynamic, drift_k)
         
-        # v25.4: REMOVIDA RECENTRALIZAÇÃO HARD (Causa do 'efeito pipoca')
-        # A onda agora flui naturalmente seguindo o poço de gravidade e o momentum.
+        # v26.0: SOFT RECENTER (Injeção Contínua de Energia via Soft Blend no C++)
+        x0 = curr_price - self.price_min
+        sigma = self.dx * 65
+        self.solver.recenter_wave(x0, sigma)
         
         density = self.solver.get_probability_density()
         return density, False
