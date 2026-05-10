@@ -64,10 +64,17 @@ class QuantumPhaseTransition:
                             q_math_data: Dict) -> Tuple[float, str]:
         """
         Avalia se deve ocorrer uma transição de fase imediata.
+        Normaliza regimes (Ghost/Exhaustion) para compatibilidade v23.1.
         """
         ricci = q_math_data.get("ricci_curvature", 0.0)
         entropy = q_math_data.get("h_entropy", 0.0)
-        power_ratio = float(str(q_math_data.get("rmt_signal", "NOISE_x1.0")).split('x')[-1])
+        # Saneamento de RMT Signal
+        rmt_sig = str(q_math_data.get("rmt_signal", "NOISE_x1.0"))
+        power_ratio = 1.0
+        if 'x' in rmt_sig:
+            try: power_ratio = float(rmt_sig.split('x')[-1])
+            except: pass
+            
         ksi = q_math_data.get("ksi_val", 0.0)
         is_collapsed = q_math_data.get("is_collapsed", False)
         
@@ -75,17 +82,17 @@ class QuantumPhaseTransition:
         self.history_pti.append(pti)
         if len(self.history_pti) > 100: self.history_pti.pop(0)
         
+        # Normalização de Regime (v23.1)
+        norm_r = current_regime % 10 if current_regime > 10 else current_regime
+
         # Lógica de Recomendação (Early Warning)
         recommendation = "STABLE"
         
-        # Divergência de Momentum (Preço vs PTI)
-        # Se o preço faz nova máxima mas o PTI está explodindo (instabilidade),
-        # temos uma Transição de Fase iminente (Exaustão).
         if len(df_slice) > 20:
             price_trend = df_slice['close'].iloc[-1] > df_slice['close'].iloc[-10]
-            if current_regime == 1 and price_trend and pti > 0.70:
+            if norm_r == 1 and price_trend and pti > 0.70:
                 recommendation = "BULL_EXHAUSTION_WARNING"
-            elif current_regime == 2 and not price_trend and pti > 0.70:
+            elif norm_r == 2 and not price_trend and pti > 0.70:
                 recommendation = "BEAR_EXHAUSTION_WARNING"
 
         # Detecção de Ponto Crítico - SOBRESCREVE EXAUSTÃO SE FOR CRÍTICO

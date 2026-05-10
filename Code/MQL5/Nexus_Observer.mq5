@@ -232,7 +232,7 @@ void ParseAndDraw(string data)
 
     // [PURGA INTERNA REMOVIDA PARA EVITAR FLICKER]
 
-   // 1. ATUALIZAÇÃO DAS CAIXAS (Apenas Bordas - Monólito v22.1)
+   // 1. ATUALIZAÇÃO DAS CAIXAS (Protocolo v23.0 Anticipatory Lead)
    ObjectsDeleteAll(0, "NEXUS_ZONE_");
    
    string hReg[]; StringSplit(historyRegimes, ',', hReg);
@@ -255,32 +255,47 @@ void ParseAndDraw(string data)
             if(nr == r) end++;
             else if(nr == 0) { // Unificação de Hiato (Peek-ahead v22.1)
                 bool found = false;
-                // Busca até 5 velas no futuro por uma reentrada no mesmo regime
                 for(int look=1; look<=5 && (end+1+look) < totalR; look++) {
                     string v = hReg[totalR - 1 - (end+1+look)];
                     string s[]; StringSplit(v, '|', s);
                     if(ArraySize(s) > 0) {
                         int lr = (int)StringToInteger(s[0]);
                         if(lr == r) { found = true; break; }
-                        if(lr != 0) break; // Encontrou outro regime, para a busca
+                        if(lr != 0) break;
                     }
                 }
                 if(found) end++; else break;
             } else break;
          }
          
+         // [TEMPORAL PRUNING v23.0]
+         // Ignora caixas confirmadas (1, 2) com duração < 3, a menos que seja a barra atual (i=0)
+         int duration = end - start + 1;
+         bool isGhost = (r > 10);
+         if(!isGhost && duration < 3 && start != 0) {
+            i = end + 1; continue;
+         }
+         
+         // [BODY-CENTERED MANIFOLD v23.0]
+         // Delimita pela massa real (Open/Close), ignorando pavios anômalos
          double maxH = 0; double minL = 9999999;
          for(int k=start; k<=end; k++) {
-            maxH = MathMax(maxH, iHigh(_Symbol, _Period, k));
-            minL = MathMin(minL, iLow(_Symbol, _Period, k));
+            double bodyHigh = MathMax(iOpen(_Symbol, _Period, k), iClose(_Symbol, _Period, k));
+            double bodyLow  = MathMin(iOpen(_Symbol, _Period, k), iClose(_Symbol, _Period, k));
+            maxH = MathMax(maxH, bodyHigh);
+            minL = MathMin(minL, bodyLow);
          }
          
          string bName = "NEXUS_ZONE_" + IntegerToString(boxIdx);
-         color zClr = (r == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); 
+         int baseR = (r > 10) ? (r % 10) : r;
+         color zClr;
+         if(r == 21 || r == 22) zClr = RGB(255, 202, 40); // Amber Exhaustion
+         else zClr = (baseR == 1) ? RGB(38, 166, 154) : RGB(239, 83, 80); 
          
          if(ObjectCreate(0, bName, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, start), maxH, iTime(_Symbol, _Period, end), minL)) {
              ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
              ObjectSetInteger(0, bName, OBJPROP_WIDTH, 1);
+             ObjectSetInteger(0, bName, OBJPROP_STYLE, isGhost ? STYLE_DOT : STYLE_SOLID);
              ObjectSetInteger(0, bName, OBJPROP_FILL, false); 
              ObjectSetInteger(0, bName, OBJPROP_BACK, true); 
              ObjectSetInteger(0, bName, OBJPROP_ZORDER, 0);
@@ -336,7 +351,7 @@ void ParseAndDraw(string data)
       ObjectDelete(0, sBoxName);
    }
    
-   // 4. ATUALIZAÇÃO DA NUVEM QUÂNTICA (Revertido para cinemático)
+   // 4. ATUALIZAÇÃO DA NUVEM QUÂNTICA (v24.0 Deep Density Gradient)
    if(ArraySize(parts) > 10 && parts[10] != "") {
       string cloudParts[]; StringSplit(parts[10], ':', cloudParts);
       if(ArraySize(cloudParts) == 2) {
@@ -348,11 +363,10 @@ void ParseAndDraw(string data)
             string cVal[]; StringSplit(cloudBins[b], '|', cVal);
             if(ArraySize(cVal) == 2) { double den = StringToDouble(cVal[1]); if(den > maxDensity) maxDensity = den; }
          }
-         // LUXALGO STYLE HEATMAP: Extensão horizontal ampla e cores profundas
+
          int barCount = iBars(_Symbol, _Period);
-         datetime tStart = iTime(_Symbol, _Period, MathMin(100, barCount-1)); // Cobre 100 velas para o passado
-         datetime tEnd = TimeCurrent() + PeriodSeconds(_Period) * 20; // Projeta no futuro
-         double dx = dx_val;
+         datetime tStart = iTime(_Symbol, _Period, MathMin(80, barCount-1)); 
+         datetime tEnd = TimeCurrent() + PeriodSeconds(_Period) * 15; 
          double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
          
          for(int b=0; b<tCloud; b++) {
@@ -363,43 +377,41 @@ void ParseAndDraw(string data)
             string bName = "NEXUS_QC_" + IntegerToString(b);
             string tagName = "NEXUS_QCTAG_" + IntegerToString(b);
             
-            // Filtro de Ruído: Remove densidades irrelevantes para clareza
-            if(den < maxDensity * 0.15) { ObjectDelete(0, bName); ObjectDelete(0, tagName); continue; }
+            if(den < maxDensity * 0.12) { ObjectDelete(0, bName); ObjectDelete(0, tagName); continue; }
             
             double ratio = den / maxDensity;
-            // Curva de saturação mais agressiva: Fundo permanece "Ebony" e apenas os picos de liquidez brilham sutilmente
-            double satRatio = MathPow(ratio, 2.5); 
+            // Gradiente Ph.D. v24.0: Mais visibilidade nas bordas (pow 1.8)
+            double satRatio = MathPow(ratio, 1.8); 
             uchar rVal, gVal, bVal;
             
             if(pLevel > currentPrice) { 
-                // RESISTANCE: Ultra-subtle dark crimson (LuxAlgo style)
-                rVal = (uchar)(18 + (55 * satRatio)); 
-                gVal = (uchar)(5 + (10 * satRatio)); 
-                bVal = (uchar)(8 + (12 * satRatio)); 
+                rVal = (uchar)(15 + (70 * satRatio)); 
+                gVal = (uchar)(5 + (15 * satRatio)); 
+                bVal = (uchar)(10 + (20 * satRatio)); 
             } else { 
-                // SUPPORT: Ultra-subtle dark teal (LuxAlgo style)
-                rVal = (uchar)(3 + (8 * satRatio)); 
-                gVal = (uchar)(18 + (55 * satRatio)); 
-                bVal = (uchar)(15 + (50 * satRatio)); 
+                rVal = (uchar)(5 + (15 * satRatio)); 
+                gVal = (uchar)(20 + (70 * satRatio)); 
+                bVal = (uchar)(18 + (60 * satRatio)); 
             }
             
             if(ObjectFind(0, bName) < 0) ObjectCreate(0, bName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
             ObjectSetInteger(0, bName, OBJPROP_TIME, 0, tStart);
-            ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, pLevel + (dx * 0.55)); // Ligeiro overlap para suavizar
-            
+            ObjectSetDouble(0, bName, OBJPROP_PRICE, 0, pLevel + (dx_val * 0.55));
             ObjectSetInteger(0, bName, OBJPROP_TIME, 1, tEnd);
-            ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, pLevel - (dx * 0.55));
+            ObjectSetDouble(0, bName, OBJPROP_PRICE, 1, pLevel - (dx_val * 0.55));
             ObjectSetInteger(0, bName, OBJPROP_COLOR, RGB(rVal, gVal, bVal));
             ObjectSetInteger(0, bName, OBJPROP_FILL, true);
             ObjectSetInteger(0, bName, OBJPROP_BACK, true);
-            ObjectSetInteger(0, bName, OBJPROP_ZORDER, 1); // Acima do grid, abaixo de tudo
-            if(ratio > 0.95) {
+            ObjectSetInteger(0, bName, OBJPROP_ZORDER, 1);
+            
+            if(ratio > 0.96) {
                 if(ObjectFind(0, tagName) < 0) ObjectCreate(0, tagName, OBJ_ARROW_RIGHT_PRICE, 0, 0, 0);
                 ObjectSetInteger(0, tagName, OBJPROP_TIME, 0, tEnd);
                 ObjectSetDouble(0, tagName, OBJPROP_PRICE, 0, pLevel);
-                ObjectSetInteger(0, tagName, OBJPROP_COLOR, clrGold);
+                ObjectSetInteger(0, tagName, OBJPROP_COLOR, clrCyan);
             } else ObjectDelete(0, tagName);
          }
+         // Limpeza de resíduos in-place
          for(int k=tCloud; k<200; k++) ObjectDelete(0, "NEXUS_QC_"+IntegerToString(k));
       }
    }
@@ -496,10 +508,16 @@ void ParseAndDraw(string data)
             string qLineName = "NEXUS_QGC_" + IntegerToString(qgcBoxIdx);
             double widthPrice = massNorm * 25.0; // Amplificação dinâmica para BTC/GER40 (escala de preço real)
             
+            // DECAIMENTO HAWKING v25.0: A zona encurta horizontalmente conforme envelhece
+            int hawk_decay_bars = (int)(age * 1.5); 
+            datetime tStart_hawk = iTime(_Symbol, _Period, MathMin(age, iBars(_Symbol, _Period)-1));
+            // O tEnd se aproxima do tStart conforme a idade aumenta, sinalizando evaporação
+            datetime tEnd_hawk = TimeCurrent() + PeriodSeconds(_Period) * (30 - MathMin(25, age/2));
+
             if(ObjectFind(0, qLineName) < 0) ObjectCreate(0, qLineName, OBJ_RECTANGLE, 0, 0, 0, 0, 0);
-            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, iTime(_Symbol, _Period, MathMin(age, iBars(_Symbol, _Period)-1)));
+            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 0, tStart_hawk);
             ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 0, centerPrice + widthPrice);
-            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, TimeCurrent() + PeriodSeconds(_Period) * 30);
+            ObjectSetInteger(0, qLineName, OBJPROP_TIME, 1, tEnd_hawk);
             ObjectSetDouble(0, qLineName, OBJPROP_PRICE, 1, centerPrice - widthPrice);
             
             ObjectSetInteger(0, qLineName, OBJPROP_COLOR, RGB(35, 5, 8)); // Ultra-subtle gravity (LuxAlgo)
@@ -717,14 +735,17 @@ string GetStatusShort(string status) {
     string res = "Neutral Regime";
     if(StringFind(status, "TSUNAMI_BULL") >= 0) res = "Bull Tsunami";
     else if(StringFind(status, "TSUNAMI_BEAR") >= 0) res = "Bear Tsunami";
-    else if(StringFind(status, "BULL_PREVISAO") >= 0) res = "Bull Pre-Ignition";
-    else if(StringFind(status, "BEAR_PREVISAO") >= 0) res = "Bear Pre-Ignition";
-    if(StringFind(status, "ALERTA TOPOL") >= 0) res += " [!]";
+    else if(StringFind(status, "EXHAUSTION_BULL") >= 0) res = "Bull Exhaustion [!]";
+    else if(StringFind(status, "EXHAUSTION_BEAR") >= 0) res = "Bear Exhaustion [!]";
+    else if(StringFind(status, "GHOST_BULL") >= 0) res = "Bull Pre-Ignition";
+    else if(StringFind(status, "GHOST_BEAR") >= 0) res = "Bear Pre-Ignition";
+    if(StringFind(status, "ALERTA TOPOL") >= 0) res += " [!!]";
     if(StringFind(status, "TRAP") >= 0) res += " [TRAP]";
     return res;
 }
 color GetStatusColor(string status) {
     if(StringFind(status, "ALERTA TOPOL") >= 0) return RGB(255, 82, 82);
+    if(StringFind(status, "EXHAUSTION") >= 0) return RGB(255, 202, 40); // Amber
     if(StringFind(status, "TRAP") >= 0) return RGB(255, 202, 40);
     if(StringFind(status, "BULL") >= 0) return RGB(38, 166, 154);
     if(StringFind(status, "BEAR") >= 0) return RGB(239, 83, 80);

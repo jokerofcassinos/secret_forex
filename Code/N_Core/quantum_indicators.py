@@ -287,8 +287,23 @@ class QuantumIndicators:
         if r_score == prev_score and r_score != 0:
             r_conf = prev_conf + 1
 
+        # GHOST IGNITION (v23.0 - Anticipatory Lead)
+        # Se neutro mas criticalidade alta, sinaliza intenção visual
+        if r_score == 0 and pti > 0.88:
+            if qdd_ign == 1:
+                r_score = 11; r_conf = 1
+            elif qdd_ign == 2:
+                r_score = 12; r_conf = 1
+        
+        # EXHAUSTION DETECTION (v23.1 - Yellow Danger)
+        # Se regime ativo mas criticalidade extrema e preço curva contra, sinaliza perigo
+        if r_score == 1 and pti > 0.90 and curr['close'] < ema_fast:
+            r_score = 21
+        elif r_score == 2 and pti > 0.90 and curr['close'] > ema_fast:
+            r_score = 22
+
         if debug: return r_score, r_conf, debug_data
-        return r_score, r_conf
+        return r_score, r_conf, pti
 
     @staticmethod
     def calculate_regime_health(df):

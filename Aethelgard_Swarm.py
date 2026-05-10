@@ -144,6 +144,7 @@ class AethelgardSwarm:
         self.prev_c = 0
         self.is_sovereign = False
         self.qgc_data_str = ""
+        self.last_pti = 0.0 # Feedback Loop v25.0
         
         self.sub_context, self.sub_socket = create_subscriber(PORT_TICK_FEED, TOPIC_MARKET_BAR)
         self.req_context, self.req_socket = create_request_client(PORT_Q_MATH)
@@ -177,7 +178,8 @@ class AethelgardSwarm:
 
     def fetch_quantum_state(self, current_regime=0):
         try:
-            self.req_socket.send(f"GET_STATE|{current_regime}".encode('utf-8'))
+            # Envia o PTI do tick anterior para acoplamento de massa v25.0
+            self.req_socket.send(f"GET_STATE|{current_regime}|{self.last_pti}".encode('utf-8'))
             if self.req_socket.poll(2000) & zmq.POLLIN:
                 reply = self.req_socket.recv()
                 return pickle.loads(reply)
@@ -247,13 +249,15 @@ class AethelgardSwarm:
             
             slice_df = df.iloc[:i+1]
             curr_h = df.iloc[i]
-            r_score, conf = self.q_logic.advanced_regime_score(slice_df.tail(200), self.prev_s, self.prev_c)
+            r_score, conf, pti = self.q_logic.advanced_regime_score(slice_df.tail(200), self.prev_s, self.prev_c)
+            self.last_pti = pti # Feedback Loop v25.0
             
             # Bridge Padding Logic (v22.1)
-            if r_score != 0 and self.prev_s == 0:
+            norm_r = r_score % 10 if r_score > 10 else r_score
+            if norm_r != 0 and self.prev_s == 0:
                 last_p = self.prev_c // 100000000
                 gap_n = self.prev_c % 100
-                if last_p == r_score and 0 < gap_n < 5:
+                if last_p == norm_r and 0 < gap_n < 5:
                     for j in range(1, gap_n + 1):
                         if len(self.regimes_cache) >= j:
                             self.regimes_cache[-j] = f"{r_score}|{conf}"
@@ -403,7 +407,8 @@ class AethelgardSwarm:
                     q_state = self.fetch_quantum_state(current_regime=self.prev_s)
                     
                     window_calc = 200
-                    r_score, conf = self.q_logic.advanced_regime_score(df.tail(window_calc), self.prev_s, self.prev_c, q_math_data=q_state)
+                    r_score, conf, pti = self.q_logic.advanced_regime_score(df.tail(window_calc), self.prev_s, self.prev_c, q_math_data=q_state)
+                    self.last_pti = pti # Atualiza para o próximo ciclo (Superfluidez v25.0)
                     
                     if q_state and q_state.get("status") == "ACTIVE":
                         # 1. CÁLCULO DE MÉTRICAS BASE (FALLBACK MULTI-CAMADA)
@@ -430,7 +435,15 @@ class AethelgardSwarm:
                                     cloud_status = "DENSITY_LOCKED" if cloud_dens_val > 0.005 else "SCANNING"
                             except Exception: pass
                         health = self.q_logic.calculate_regime_health(df)
-                        status_txt = "TSUNAMI_BULL" if r_score == 1 else ("TSUNAMI_BEAR" if r_score == 2 else "SCANNING")
+                        
+                        if r_score == 1: status_txt = "TSUNAMI_BULL"
+                        elif r_score == 2: status_txt = "TSUNAMI_BEAR"
+                        elif r_score == 11: status_txt = "GHOST_BULL"
+                        elif r_score == 12: status_txt = "GHOST_BEAR"
+                        elif r_score == 21: status_txt = "EXHAUSTION_BULL"
+                        elif r_score == 22: status_txt = "EXHAUSTION_BEAR"
+                        else: status_txt = "SCANNING"
+                        
                         status_final = f"{status_txt} | CONF: {health}%"
                     else:
                         inst_avg = df['close'].mean()
@@ -440,10 +453,11 @@ class AethelgardSwarm:
 
                     if df.iloc[-1]['time'] > self.last_time:
                         # Bridge Padding Logic (v22.1)
-                        if r_score != 0 and self.prev_s == 0:
+                        norm_r = r_score % 10 if r_score > 10 else r_score
+                        if norm_r != 0 and self.prev_s == 0:
                             last_p = self.prev_c // 100000000
                             gap_n = self.prev_c % 100
-                            if last_p == r_score and 0 < gap_n < 5:
+                            if last_p == norm_r and 0 < gap_n < 5:
                                 # Preenche retrospectivamente o cache para garantir monólito visual
                                 for j in range(1, gap_n + 1):
                                     if len(self.regimes_cache) >= j:

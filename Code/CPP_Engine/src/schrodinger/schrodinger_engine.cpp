@@ -5,6 +5,7 @@
 #include <complex>
 #include <cmath>
 #include <iostream>
+#include <algorithm>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -19,6 +20,7 @@ private:
     std::vector<Complex> psi;
     std::vector<double> V;
     std::vector<double> prob_density;
+    std::vector<double> accumulated_density; // v25.1: Long Exposure
     std::vector<double> spatial_mass;
     std::vector<Complex> alpha;
     std::vector<Complex> beta;
@@ -28,11 +30,8 @@ private:
 
     void build_absorbing_profile() {
         absorb_profile.resize(Nx, 0.0);
-        // PML (Perfectly Matched Layers) Logic
-        // We use a complex coordinate stretching or a deep imaginary potential
         for(int i = 0; i < absorb_width; ++i) {
             double frac = (double)(absorb_width - i) / (double)absorb_width;
-            // Cubic profile for smoother PML absorption
             double strength = 100.0 * std::pow(frac, 3); 
             absorb_profile[i] = strength;
             absorb_profile[Nx - 1 - i] = strength;
@@ -42,16 +41,16 @@ private:
 public:
     QuantumCloudSolver(int N, double dx_val) : Nx(N), dx(dx_val) {
         psi.resize(Nx, 0.0); V.resize(Nx, 0.0); prob_density.resize(Nx, 0.0);
-        spatial_mass.resize(Nx, 1.0); // Default mass = 1.0
+        accumulated_density.resize(Nx, 0.0);
+        spatial_mass.resize(Nx, 1.0);
         alpha.resize(Nx, 0.0); beta.resize(Nx, 0.0); gamma_arr.resize(Nx, 0.0);
-        absorb_width = std::max(5, Nx / 10);
+        absorb_width = std::max(5, Nx / 20);
         build_absorbing_profile();
     }
 
     void initialize_gaussian(double x0, double sigma, double k0) {
         py::gil_scoped_release release;
         double norm = 0.0;
-        
         #pragma omp parallel for reduction(+:norm)
         for (int i = 0; i < Nx; ++i) {
             double x = i * dx;
@@ -60,14 +59,11 @@ public:
             norm += std::norm(psi[i]) * dx;
         }
         norm = std::sqrt(norm);
-        
         if(norm > 1e-15) { 
             #pragma omp parallel for
             for (int i = 0; i < Nx; ++i) psi[i] /= norm; 
         }
-        
-        #pragma omp parallel for
-        for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
+        update_probability_density();
     }
 
     void update_potential(const std::vector<double>& new_V) {
@@ -80,18 +76,25 @@ public:
         spatial_mass = new_mass;
     }
 
-    void step_forward(double dt, double global_mass_scale, double drift_k) {
+    void step_forward(double dt, double global_mass_scale, double hbar_val, double drift_k = 0.0) {
         py::gil_scoped_release release;
         Complex I(0.0, 1.0);
-        double hbar = 1.0;
+        double hbar = hbar_val;
         
-        double avg_mass = global_mass_scale;
-        double r_mag = dt / (4.0 * avg_mass * dx * dx);
+        std::vector<Complex> psi_backup = psi;
+        std::fill(accumulated_density.begin(), accumulated_density.end(), 0.0);
+
+        double min_mass = 100.0;
+        for(double m : spatial_mass) if(m < min_mass) min_mass = m;
+        double eff_mass = std::max(1e-6, min_mass * global_mass_scale);
+        
+        double r_mag = (hbar * dt) / (4.0 * eff_mass * dx * dx);
         double effective_dt = dt;
-        if(r_mag > 1.0) effective_dt = 0.25 * 4.0 * avg_mass * dx * dx;
-        int substeps = std::max(1, (int)std::ceil(dt / effective_dt));
+        if(r_mag > 0.5) effective_dt = (0.5 * 4.0 * eff_mass * dx * dx) / hbar;
+        int substeps = std::max(1, std::min(100, (int)std::ceil(dt / effective_dt)));
         effective_dt = dt / (double)substeps;
 
+        bool has_nan = false;
         for(int sub = 0; sub < substeps; ++sub) {
             std::vector<Complex> d(Nx, 0.0);
             #pragma omp parallel for
@@ -99,77 +102,146 @@ public:
                 double m_i = spatial_mass[i] * global_mass_scale;
                 Complex r = (I * hbar * effective_dt) / (4.0 * m_i * dx * dx);
                 
-                // DRIFT MOMENTUM TERM: Adds a first-order derivative approx (Advection)
-                // H = -hbar^2/2m * d2/dx2 + V + i*hbar * v_drift * d/dx
-                Complex drift_term = (drift_k * effective_dt) / (2.0 * dx);
+                // ADVECCÃO DE PLANCK v25.0: Correção de segunda ordem para fluxo contínuo
+                // Minimiza a dispersão artificial unindo pacotes de onda ('Comet Trail')
+                double v_scaled = drift_k * effective_dt / dx;
+                Complex planck_advection = (v_scaled * v_scaled) / 2.0;
                 
-                Complex v_complex(V[i], -absorb_profile[i]);
+                // Efeito Doppler Financeiro (v24.1): Drift_k deforma o potencial na direção do movimento
+                double doppler_shift = drift_k * (i - Nx/2) * dx * 0.1;
+                Complex v_complex(V[i] + doppler_shift, -absorb_profile[i]);
+                
+                Complex drift_term = (drift_k * effective_dt) / (2.0 * dx);
                 Complex v_term = (I * effective_dt * v_complex) / (2.0 * hbar);
                 
-                alpha[i] = -r - drift_term; 
-                beta[i] = 1.0 + 2.0 * r + v_term; 
-                gamma_arr[i] = -r + drift_term;
+                // Matriz Crank-Nicolson Estendida (v25.0)
+                alpha[i] = -r - drift_term + planck_advection; 
+                beta[i] = 1.0 + 2.0 * r + v_term - 2.0 * planck_advection; 
+                gamma_arr[i] = -r + drift_term + planck_advection;
                 
-                d[i] = (r + drift_term) * psi[i-1] + (1.0 - 2.0 * r - v_term) * psi[i] + (r - drift_term) * psi[i+1];
+                d[i] = (r + drift_term - planck_advection) * psi[i-1] + 
+                       (1.0 - 2.0 * r - v_term + 2.0 * planck_advection) * psi[i] + 
+                       (r - drift_term - planck_advection) * psi[i+1];
             }
             beta[0] = 1.0; d[0] = 0.0; gamma_arr[0] = 0.0;
             beta[Nx-1] = 1.0; d[Nx-1] = 0.0; alpha[Nx-1] = 0.0;
 
             std::vector<Complex> c_prime(Nx, 0.0), d_prime(Nx, 0.0);
             c_prime[0] = gamma_arr[0] / beta[0]; d_prime[0] = d[0] / beta[0];
-            
-            // Thomas Algorithm (Sequential)
             for (int i = 1; i < Nx; ++i) {
                 Complex denom = beta[i] - alpha[i] * c_prime[i-1];
-                if(std::abs(denom) < 1e-15) denom = Complex(1e-15, 0.0);
+                if(std::abs(denom) < 1e-18) denom = Complex(1e-18, 0.0);
+                Complex m_val = 1.0 / denom;
+                c_prime[i] = gamma_arr[i] * m_val;
+                d_prime[i] = (d[i] - alpha[i] * d_prime[i-1]) * m_val;
+            }
+            psi[Nx-1] = d_prime[Nx-1];
+            for (int i = Nx - 2; i >= 0; --i) {
+                psi[i] = d_prime[i] - c_prime[i] * psi[i+1];
+                if(!std::isfinite(psi[i].real()) || !std::isfinite(psi[i].imag())) {
+                    has_nan = true; break;
+                }
+            }
+            if(has_nan) break;
+
+            // v25.1: Acumulação de Densidade Temporal (Long Exposure)
+            // Captura o rastro da onda durante a evolução interna
+            #pragma omp parallel for
+            for (int i = 0; i < Nx; ++i) {
+                accumulated_density[i] += std::norm(psi[i]);
+            }
+        }
+        
+        if(has_nan) {
+            psi = psi_backup; 
+        } else {
+            double norm = 0.0;
+            for (int i = 0; i < Nx; ++i) norm += std::norm(psi[i]) * dx;
+            norm = std::sqrt(norm);
+            if(norm > 1e-15) {
+                for (int i = 0; i < Nx; ++i) psi[i] /= norm;
+            }
+        }
+        
+        // v25.1: Média da densidade acumulada para fluxo contínuo
+        if (!has_nan) {
+            #pragma omp parallel for
+            for (int i = 0; i < Nx; ++i) {
+                prob_density[i] = accumulated_density[i] / (double)substeps;
+            }
+        } else {
+            update_probability_density();
+        }
+    }
+
+    void shift_grid(int steps) {
+        py::gil_scoped_release release;
+        if (std::abs(steps) >= Nx) {
+            std::fill(psi.begin(), psi.end(), Complex(0.0, 0.0));
+            return;
+        }
+        if (steps > 0) {
+            std::move(psi.begin() + steps, psi.end(), psi.begin());
+            std::fill(psi.end() - steps, psi.end(), Complex(0.0, 0.0));
+            std::move(V.begin() + steps, V.end(), V.begin());
+            std::fill(V.end() - steps, V.end(), V.back());
+        } else if (steps < 0) {
+            int abs_steps = -steps;
+            std::move_backward(psi.begin(), psi.end() - abs_steps, psi.end());
+            std::fill(psi.begin(), psi.begin() + abs_steps, Complex(0.0, 0.0));
+            std::move_backward(V.begin(), V.end() - abs_steps, V.end());
+            std::fill(V.begin(), V.begin() + abs_steps, V.front());
+        }
+        update_probability_density();
+    }
+
+    void calculate_stationary_state(int iterations, double hbar_val) {
+        py::gil_scoped_release release;
+        double dt_im = 0.05; 
+        for(int it = 0; it < iterations; ++it) {
+            std::vector<Complex> d(Nx, 0.0);
+            #pragma omp parallel for
+            for (int i = 1; i < Nx - 1; ++i) {
+                double r = (hbar_val * dt_im) / (2.0 * spatial_mass[i] * dx * dx);
+                double v_term = (dt_im * V[i]) / hbar_val;
+                alpha[i] = -r; beta[i] = 1.0 + 2.0 * r + v_term; gamma_arr[i] = -r;
+                d[i] = r * psi[i-1] + (1.0 - 2.0 * r - v_term) * psi[i] + r * psi[i+1];
+            }
+            beta[0] = 1.0; d[0] = 0.0; gamma_arr[0] = 0.0;
+            beta[Nx-1] = 1.0; d[Nx-1] = 0.0; alpha[Nx-1] = 0.0;
+
+            std::vector<Complex> c_prime(Nx, 0.0), d_prime(Nx, 0.0);
+            c_prime[0] = gamma_arr[0] / beta[0]; d_prime[0] = d[0] / beta[0];
+            for (int i = 1; i < Nx; ++i) {
+                Complex denom = beta[i] - alpha[i] * c_prime[i-1];
+                if(std::abs(denom) < 1e-18) denom = Complex(1e-18, 0.0);
                 Complex m_val = 1.0 / denom;
                 c_prime[i] = gamma_arr[i] * m_val;
                 d_prime[i] = (d[i] - alpha[i] * d_prime[i-1]) * m_val;
             }
             psi[Nx-1] = d_prime[Nx-1];
             for (int i = Nx - 2; i >= 0; --i) psi[i] = d_prime[i] - c_prime[i] * psi[i+1];
+
+            double norm = 0.0;
+            for (int i = 0; i < Nx; ++i) norm += std::norm(psi[i]) * dx;
+            norm = std::sqrt(norm);
+            if(norm > 1e-15) { for (int i = 0; i < Nx; ++i) psi[i] /= norm; }
         }
-        
-        double norm = 0.0;
-        #pragma omp parallel for reduction(+:norm)
-        for (int i = 0; i < Nx; ++i) norm += std::norm(psi[i]) * dx;
-        norm = std::sqrt(norm);
-        
-        if(norm > 1e-15) {
-            #pragma omp parallel for
-            for (int i = 0; i < Nx; ++i) psi[i] /= norm;
-        }
-        
-        #pragma omp parallel for
-        for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
+        update_probability_density();
     }
 
-    void recenter_wave(double new_x0, double sigma) {
+    void recenter_wave_safe(double new_x0, double sigma) {
         py::gil_scoped_release release;
         double com = 0.0, total_prob = 0.0;
-        
-        #pragma omp parallel for reduction(+:com, total_prob)
         for(int i = 0; i < Nx; ++i) {
-            double p = std::norm(psi[i]); com += i * dx * p; total_prob += p;
+            double p = std::norm(psi[i]); 
+            com += i * dx * p; 
+            total_prob += p;
         }
         if(total_prob > 1e-15) com /= total_prob;
         
-        if(std::abs(new_x0 - com) > sigma * 10.0) {
-            // we must acquire GIL if calling another Python-exposed function? 
-            // No, initialize_gaussian handles its own internal things.
-            // But wait, initialize_gaussian releases GIL internally, so we shouldn't nest GIL release inside a GIL release without care.
-            // However, we just call the C++ function here. The nested release in pybind11 is generally fine or can be avoided.
-        }
-    }
-    
-    // We refactor recenter_wave to avoid double gil release issues
-    void recenter_wave_safe(double new_x0, double sigma) {
-        double com = 0.0, total_prob = 0.0;
-        for(int i = 0; i < Nx; ++i) {
-            double p = std::norm(psi[i]); com += i * dx * p; total_prob += p;
-        }
-        if(total_prob > 1e-15) com /= total_prob;
-        if(std::abs(new_x0 - com) > sigma * 10.0) {
+        // Protocolo v24.1: Trava relaxada (2.5 sigma) para permitir Atração de Massa
+        if(std::abs(new_x0 - com) > sigma * 2.5) {
             double norm = 0.0;
             for (int i = 0; i < Nx; ++i) {
                 double x = i * dx;
@@ -179,13 +251,16 @@ public:
             }
             norm = std::sqrt(norm);
             if(norm > 1e-15) { for (int i = 0; i < Nx; ++i) psi[i] /= norm; }
-            for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
+            update_probability_density();
         }
     }
 
     void update_probability_density() {
         #pragma omp parallel for
-        for (int i = 0; i < Nx; ++i) prob_density[i] = std::norm(psi[i]);
+        for (int i = 0; i < Nx; ++i) {
+            double n = std::norm(psi[i]);
+            prob_density[i] = (std::isfinite(n) && n > 0.0) ? n : 0.0;
+        }
     }
 
     py::array_t<double> get_probability_density() {
@@ -203,81 +278,48 @@ public:
         double max_p = 0.0;
         int peak_idx = 0;
         double total_mass = 0.0;
-
         for (int i = 0; i < Nx; ++i) {
             double p = prob_density[i];
             total_mass += p;
-            if (p > max_p) {
-                max_p = p;
-                peak_idx = i;
-            }
+            if (p > max_p) { max_p = p; peak_idx = i; }
         }
-        
         double strength = (total_mass > 1e-15) ? (max_p / total_mass) : 0.0;
-        double rs = strength * 50.0; 
-        
         py::dict res;
         res["singularity_strength"] = strength;
-        res["schwarzschild_radius"] = rs;
+        res["schwarzschild_radius"] = strength * 50.0; 
         res["peak_price"] = price_min + (peak_idx * (price_max - price_min) / Nx);
         res["is_collapsed"] = (strength > 0.04);
-
         return res;
     }
 
     double calculate_tunneling_probability(double barrier_energy, double particle_energy, double volume_mass) {
         if (particle_energy > barrier_energy) return 1.0; 
-        
-        // --- CALIBRAÇÃO ABSOLUTA: Constante de Planck Dinâmica ---
-        // A constante de Planck não pode ser fixa (1.0) em mercados onde a energia escala em milhares.
-        // Transformamos a massa bruta e as energias em razões escalares para evitar underflow extremo.
         double delta_E = std::max(0.1, barrier_energy - particle_energy);
-        double effective_mass = std::max(0.01, std::log1p(volume_mass)); // Massa logarítmica
-        
-        // Fator de escala dinâmico (Planck Financeiro). 
-        // Impede que o expoente ultrapasse limites de ponto flutuante (exp(-700) = 0)
+        double effective_mass = std::max(0.01, std::log1p(volume_mass));
         double hbar_dynamic = std::max(1.0, std::sqrt(delta_E * effective_mass) / 5.0); 
-        
-        double L = 1.0; 
-        double exponent = -2.0 * L * std::sqrt(2.0 * effective_mass * delta_E) / hbar_dynamic;
-        
-        // Limita o expoente para evitar underflow absoluto na CPU
+        double exponent = -2.0 * std::sqrt(2.0 * effective_mass * delta_E) / hbar_dynamic;
         if (exponent < -50.0) exponent = -50.0;
-        
         return std::exp(exponent);
     }
 
-    /**
-     * @brief Calcula a Amplitude de Transição da Matriz-S (S-Matrix Scattering).
-     * Mede a aniquilação de Vácuos de Dirac (antigos FVGs) como espalhamento bosônico.
-     * Retorna a probabilidade da transição de estado (0.0 a 1.0).
-     */
     double calculate_s_matrix_scattering(double in_state_energy, double out_state_energy, double vacuum_density) {
-        // Amplitude de Transição S_fi = <out|S|in>
-        // Aproximação Born para espalhamento em potencial central (Vácuo de Dirac)
         double delta_E = std::abs(out_state_energy - in_state_energy);
-        
-        // Se a diferença de energia for muito alta, a probabilidade de espalhamento cai (decoerência)
-        // A densidade do vácuo atua como a constante de acoplamento (coupling constant)
         double coupling = std::max(0.001, vacuum_density);
-        
         double amplitude = coupling / (delta_E + coupling);
-        
-        // A probabilidade de aniquilação é a amplitude ao quadrado (Regra de Born)
-        double annihilation_prob = std::pow(amplitude, 2);
-        
-        return std::min(1.0, annihilation_prob);
+        return std::min(1.0, std::pow(amplitude, 2));
     }
 };
 
 PYBIND11_MODULE(schrodinger_engine, m) {
-    m.doc() = "Quantum Cloud Solver v5.0 - Holographic Principle & S-Matrix Scattering";
+    m.doc() = "Quantum Cloud Solver v24.1 - Institutional Attraction";
     py::class_<QuantumCloudSolver>(m, "QuantumCloudSolver")
         .def(py::init<int, double>())
         .def("initialize_gaussian", &QuantumCloudSolver::initialize_gaussian, py::arg("x0"), py::arg("sigma"), py::arg("k0"))
         .def("update_potential", &QuantumCloudSolver::update_potential, py::arg("new_V"))
         .def("update_spatial_mass", &QuantumCloudSolver::update_spatial_mass, py::arg("new_mass"))
-        .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("global_mass_scale"), py::arg("drift_k")=0.0)
+        .def("step_forward", &QuantumCloudSolver::step_forward, py::arg("dt"), py::arg("global_mass_scale"), py::arg("hbar_val"), py::arg("drift_k")=0.0)
+        .def("shift_grid", &QuantumCloudSolver::shift_grid, py::arg("steps"))
+        .def("calculate_stationary_state", &QuantumCloudSolver::calculate_stationary_state, py::arg("iterations"), py::arg("hbar_val"))
         .def("recenter_wave", &QuantumCloudSolver::recenter_wave_safe, py::arg("new_x0"), py::arg("sigma"))
         .def("get_probability_density", &QuantumCloudSolver::get_probability_density, py::return_value_policy::reference_internal)
         .def("get_center_of_mass", &QuantumCloudSolver::get_center_of_mass)

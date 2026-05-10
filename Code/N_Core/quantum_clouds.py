@@ -18,9 +18,8 @@ except ImportError as e:
 
 class QuantumCloudTracker:
     """
-    N-Core Agent: Quantum Cloud Tracker v3.0 (Gaussian Gravity Wells)
-    FIX P0-05/P0-06: Absorbing boundaries + adaptive dt + wave recentering.
-    HIGH-FIDELITY: Uses Gaussian smoothed potential for sharp wave collapse.
+    N-Core Agent: Quantum Cloud Tracker v3.4 (Gaussian Gravity Wells)
+    v24.1: Institutional Attraction & Doppler Effect.
     """
     def __init__(self, price_min, price_max, bins=512):
         self.price_min = price_min
@@ -44,155 +43,119 @@ class QuantumCloudTracker:
     def initialize_wave(self, current_price, sigma=None, k0=0.0):
         if not self.is_active: return
         if sigma is None:
-            sigma = self.dx * 12
+            sigma = self.dx * 35 # Expandido v24.1
+        sigma = max(self.dx * 5.0, sigma)
         x0 = current_price - self.price_min
+        x0 = max(self.dx * 5.0, min(x0, (self.bins - 5) * self.dx))
         self.solver.initialize_gaussian(x0, sigma, k0)
 
     def generate_potential_from_volume_profile(self, df_slice):
-        """
-        HIGH-FIDELITY v7: Ultra-Deep Gravity Wells.
-        Forced compression for SEC singularity triggers.
-        """
-        V_base = 200.0  
-        
+        V_base = 100.0  
         vol_col = 'tick_volume' if 'tick_volume' in df_slice.columns else 'volume'
-        if vol_col not in df_slice.columns:
-            return [V_base] * self.bins
-            
+        if vol_col not in df_slice.columns: return [V_base] * self.bins
         vol_array = df_slice[vol_col].astype(np.float64).values
         vol_mean = np.mean(vol_array) if len(vol_array) > 0 else 1000.0
-        # Increased scale for deeper wells
-        vol_scale = 150.0 / (vol_mean + 1e-9)
-            
+        vol_scale = 80.0 / (vol_mean + 1e-9) 
+        
         highs = df_slice['high'].values
         lows = df_slice['low'].values
         n_candles = len(df_slice)
-        
-        # SOVEREIGN Hawking Decay: Exponential decay of old volume wells
-        # M(t) = M0 * exp(-lambda * delta_t)
-        decay_lambda = 0.02 # Reduzido de 0.05 para maior persistência temporal
+        decay_lambda = 0.02 
         decay_factor = np.exp(-decay_lambda * np.arange(n_candles)[::-1])
-        
         strength_map = np.zeros(self.bins, dtype=np.float64)
-        
         for i in range(n_candles):
             mid_p = (highs[i] + lows[i]) / 2.0
             range_p = max(self.dx * 3.0, highs[i] - lows[i]) 
             idx_mid = self.price_to_index(mid_p)
-            
-            # Adaptive width based on candle range
             width_bins = int(range_p / self.dx * 2.0) + 1
             i_start = max(0, idx_mid - width_bins)
             i_end = min(self.bins, idx_mid + width_bins)
-            
             x = np.arange(i_start, i_end)
             dist = (x - idx_mid) * self.dx
-            
-            # Strength influenced by Hawking Decay
             strength = (vol_array[i] * vol_scale) * decay_factor[i]
             well_shape = strength * np.exp(-2.0 * (dist / (range_p + 1e-9))**2)
             strength_map[i_start:i_end] += well_shape
-            
-        # 4. POTENTIAL CONSTRUCTION (AdS/CFT Boundary)
         V = np.maximum(5.0, V_base - strength_map)
-        
-        # QUANTUM DITHERING: Inject stochastic noise to prevent thermal death plateaus
-        # Helps the solver explore local minima and avoid "stuck" states
-        noise = np.random.normal(0, 1.5, self.bins)
-        V = np.array(V) + noise
-        
         V_smoothed = np.convolve(V, np.ones(3)/3, mode='same')
         return list(V_smoothed)
 
-    def step(self, df_slice, dt=0.2, steps=1):
+    def step(self, df_slice, dt=0.2, steps=1, pti=0.0):
         if not self.is_active: return None
         
-        # Dynamic Re-centering (Safe margin)
+        tr = (df_slice['high'] - df_slice['low']).rolling(14).mean().iloc[-1]
+        if np.isnan(tr) or tr < self.dx: tr = self.dx * 10.0
+        
+        # v25.3: QUANTUM BLOOM (hbar=12.0) para fusão de fatias
+        hbar_dynamic = max(12.0, min(30.0, tr / (self.dx * 1.0)))
+
+        # 1. SMOOTH GRID SHIFTING
         curr_price = df_slice['close'].iloc[-1]
-        needs_reset = False
-        if curr_price < self.price_min + (self.price_max - self.price_min) * 0.1 or \
-           curr_price > self.price_max - (self.price_max - self.price_min) * 0.1:
-            center = curr_price
-            half_range = (self.price_max - self.price_min) / 2.0
-            self.price_min = center - half_range
-            self.price_max = center + half_range
-            self.dx = (self.price_max - self.price_min) / self.bins
-            self.solver = schrodinger_engine.QuantumCloudSolver(self.bins, self.dx)
-            self.initialize_wave(curr_price)
-            needs_reset = True
+        margin = (self.price_max - self.price_min) * 0.20
+        
+        if curr_price < self.price_min + margin:
+            shift_dist = (self.price_max - self.price_min) * 0.3
+            steps_shift = int(shift_dist / self.dx)
+            self.price_min -= steps_shift * self.dx
+            self.price_max = self.price_min + (self.bins * self.dx)
+            self.solver.shift_grid(-steps_shift)
+        elif curr_price > self.price_max - margin:
+            shift_dist = (self.price_max - self.price_min) * 0.3
+            steps_shift = int(shift_dist / self.dx)
+            self.price_min += steps_shift * self.dx
+            self.price_max = self.price_min + (self.bins * self.dx)
+            self.solver.shift_grid(steps_shift)
 
         com_price = self.index_to_price(self.solver.get_center_of_mass())
         price_dist = abs(curr_price - com_price)
         
-        last_close = df_slice['close'].iloc[-2] if len(df_slice) > 1 else df_slice['close'].iloc[-1]
-        tr = max(df_slice['high'].iloc[-1] - df_slice['low'].iloc[-1], abs(df_slice['high'].iloc[-1] - last_close), abs(df_slice['low'].iloc[-1] - last_close))
-        
-        # HEAVY MASS (DAMPING): Prevent high-frequency vertical noise
+        # 2. MASS GUARD
         base_mass = 200.0 / (tr + 1e-5)
-        if price_dist > tr * 2.0:
-            mass = base_mass * 0.1 # Dynamic sync
-        else:
-            mass = base_mass
-            
-        mass = max(1.0, min(5000.0, mass))
+        mass = base_mass * 0.1 if price_dist > tr * 2.0 else base_mass
+        mass = max(5.0, min(2000.0, mass))
 
-        # 1. GENERATE POTENTIAL (Gravity Wells)
         V = self.generate_potential_from_volume_profile(df_slice)
         
-        # 2. GENERATE SPATIAL MASS (Superfluidity Shift)
         vol_col = 'tick_volume' if 'tick_volume' in df_slice.columns else 'volume'
         vol_profile = df_slice[vol_col].values if vol_col in df_slice.columns else np.ones(len(df_slice))
-        
-        # SUPERFLUIDITY: If ATR is high, we lower the mass to allow the wave to follow the trend
-        # If consolidation, we increase mass to "freeze" the levels.
-        # Fluidity factor = ATR / AvgVolume
         atr_rel = tr / (df_slice['high'].max() - df_slice['low'].min() + 1e-9)
         mass_scale_factor = 1.0 / (1.0 + atr_rel * 50.0) 
-        
         global_mass = mass * mass_scale_factor
         
+        # ACOPLAMENTO MASSA-PREÇO v25.0 (SUPERFLUIDEZ)
+        # Se PTI elevado (exaustão), a nuvem derrete para seguir o preço instantaneamente
+        if pti > 0.85:
+            global_mass *= 0.05
+            
         spatial_mass = np.ones(self.bins, dtype=np.float64)
+        visc_cap = 5.0 / (len(df_slice) + 1e-9)
+        
         for i in range(len(df_slice)):
             mid_p = (df_slice['high'].iloc[i] + df_slice['low'].iloc[i]) / 2.0
             idx = self.price_to_index(mid_p)
-            local_viscosity = (df_slice[vol_col].iloc[i] / (np.mean(vol_profile) + 1e-9)) * 1.5
+            local_viscosity = (df_slice[vol_col].iloc[i] / (np.mean(vol_profile) + 1e-9)) * visc_cap
             x = np.arange(self.bins)
             dist = (x - idx) * self.dx
             spatial_mass += local_viscosity * np.exp(-3.0 * (dist / (tr + 1e-9))**2)
             
-        spatial_mass = np.clip(spatial_mass, 0.2, 10.0) # Lower clip for super-fluid zones
+        spatial_mass = np.clip(spatial_mass, 0.5, 5.0) 
         
-        # 3. ANTIMATTER REPULSION (Dirac Vacuum Annihilation)
-        if len(df_slice) > 5:
-            last_tr = df_slice['high'].iloc[-1] - df_slice['low'].iloc[-1]
-            prev_tr = df_slice['high'].iloc[-2] - df_slice['low'].iloc[-2]
-            if last_tr > prev_tr * 2.5: 
-                repulsion_idx = self.price_to_index(df_slice['close'].iloc[-2])
-                x = np.arange(self.bins)
-                dist = (x - repulsion_idx) * self.dx
-                V_repel = 1000.0 * np.exp(-10.0 * (dist / (self.dx * 5))**2)
-                V = list(np.array(V) + V_repel)
-
         self.solver.update_potential(V)
         self.solver.update_spatial_mass(list(spatial_mass))
         
-        # 4. DRIFT MOMENTUM (Advection)
-        # Calculate price velocity to push the wave packet (preserving phase info)
+        # 3. DRIFT MOMENTUM
         price_velocity = (df_slice['close'].iloc[-1] - df_slice['close'].iloc[-2]) if len(df_slice) > 1 else 0.0
-        # Normalize drift_k to avoid instability
-        drift_k = np.clip(price_velocity / (self.dx * 10.0), -0.5, 0.5)
+        drift_k = np.clip(price_velocity / (self.dx * 5.0), -0.3, 0.3)
+        drift_k *= 1.2 # v25.1: Compensação de advecção para Trail contínuo
         
-        # 5. EVOLUTION STEP (Schrodinger Omega)
+        # 4. EVOLUTION STEP
         for _ in range(steps):
-            self.solver.step_forward(dt, global_mass, drift_k)
+            self.solver.step_forward(dt, global_mass, hbar_dynamic, drift_k)
         
-        x0 = curr_price - self.price_min
-        # Dynamic sigma for wave width
-        sigma = self.dx * 12
-        self.solver.recenter_wave(x0, sigma)
+        # v25.4: REMOVIDA RECENTRALIZAÇÃO HARD (Causa do 'efeito pipoca')
+        # A onda agora flui naturalmente seguindo o poço de gravidade e o momentum.
         
         density = self.solver.get_probability_density()
-        return density, needs_reset
+        return density, False
         
     def get_gravity_well_price(self, density):
         if density is None: return None
@@ -221,4 +184,4 @@ class QuantumCloudTracker:
         return "STABLE"
 
 if __name__ == "__main__":
-    print("Quantum Clouds v3.0 [HIGH-FIDELITY] loaded.")
+    print("Quantum Clouds v3.4 [ATTRACTION] loaded.")

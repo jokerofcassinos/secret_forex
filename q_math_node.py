@@ -173,7 +173,9 @@ class QMathNode:
                 sec_metrics = None
                 try:
                     # V3.5: Evolução Temporal Ultra-Acelerada (dt=1.2, steps=15)
-                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=1.2, steps=15)
+                    # v25.0: Acoplamento de Massa via PTI (Feedback Loop)
+                    pti_val = getattr(self, "current_pti_context", 0.0)
+                    density_schrod, _ = self.cloud_tracker.step(df.tail(200), dt=1.2, steps=15, pti=pti_val)
                     prob_density = density_schrod
                     sec_metrics = self.cloud_tracker.get_singularity_metrics()
                     if density_schrod is not None:
@@ -464,19 +466,22 @@ class QMathNode:
         print(f"⚛️ Q-MATH :: Servidor de Respostas (REP) Iniciado na porta {PORT_Q_MATH}.")
         while self.is_running:
             try:
-                # Aguarda pedido do AGI CORE (pode conter o regime atual)
+                # Aguarda pedido do AGI CORE (pode conter o regime atual e PTI para feedback)
                 message = self.rep_socket.recv()
                 
-                # Protocolo: "GET_STATE|r_score"
+                # Protocolo: "GET_STATE|r_score|pti"
                 try:
                     msg_str = message.decode('utf-8')
-                    if "|" in msg_str:
-                        _, r_score = msg_str.split("|")
-                        self.current_regime_context = int(r_score)
+                    parts = msg_str.split("|")
+                    if len(parts) >= 2:
+                        self.current_regime_context = int(parts[1])
+                    if len(parts) >= 3:
+                        self.current_pti_context = float(parts[2])
                     else:
-                        self.current_regime_context = 0
+                        self.current_pti_context = 0.0
                 except:
                     self.current_regime_context = 0
+                    self.current_pti_context = 0.0
                 
                 with self.state_lock:
                     # Empacota o estado atual e envia de volta imediatamente

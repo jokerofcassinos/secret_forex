@@ -67,12 +67,16 @@ class MT5NeuralBridge:
 
     def thermodynamic_sl_tp(self, r_score, current_price, atr, plasma_zones, schrodinger_density, cloud_tracker, precog_res=None):
         """
-        Co-Pilot Management v4.2 (Singularity Horizon Injection):
+        Co-Pilot Management v4.3 (Ghost Resilience):
         Usa o CATASTROPHIC_SL no MT5 e gerencia o VIRTUAL_SL internamente via Pre-Cognition C++.
+        Trata regimes Ghost (11/12) como regimes base (1/2).
         """
         symbol_info = mt5.symbol_info(self.symbol)
         if symbol_info is None: return
         digits = symbol_info.digits
+        
+        # Normalização de Regime (Ghost Ignition)
+        norm_r = r_score % 10 if r_score > 10 else r_score
 
         positions = mt5.positions_get(symbol=self.symbol)
         if positions is None or len(positions) == 0:
@@ -111,7 +115,7 @@ class MT5NeuralBridge:
                 
                 self.virtual_sls[ticket] = logical_sl
                 
-                if r_score == 1: # TREND BULL
+                if norm_r == 1: # TREND BULL
                     new_tp = round(open_price + (atr * 6.0), digits)
                     catastrophic_sl = round(logical_sl - (atr * 3.0), digits)
                     if current_sl == 0.0 or catastrophic_sl > current_sl:
@@ -120,7 +124,7 @@ class MT5NeuralBridge:
                     if current_tp == 0.0:
                         request["tp"] = new_tp
                         modified = True
-                elif r_score == 2: # COUNTER TREND
+                elif norm_r == 2: # COUNTER TREND
                     emergency_sl = round(pos_price - (atr * 2.0), digits)
                     self.virtual_sls[ticket] = min(logical_sl, emergency_sl)
                     catastrophic_sl = round(self.virtual_sls[ticket] - (atr * 2.0), digits)
@@ -137,7 +141,7 @@ class MT5NeuralBridge:
                 
                 self.virtual_sls[ticket] = logical_sl
 
-                if r_score == 2: # TREND BEAR
+                if norm_r == 2: # TREND BEAR
                     new_tp = round(open_price - (atr * 6.0), digits)
                     catastrophic_sl = round(logical_sl + (atr * 3.0), digits)
                     if current_sl == 0.0 or catastrophic_sl < current_sl:
@@ -146,7 +150,7 @@ class MT5NeuralBridge:
                     if current_tp == 0.0:
                         request["tp"] = new_tp
                         modified = True
-                elif r_score == 1: # COUNTER TREND
+                elif norm_r == 1: # COUNTER TREND
                     emergency_sl = round(pos_price + (atr * 2.0), digits)
                     self.virtual_sls[ticket] = max(logical_sl, emergency_sl)
                     catastrophic_sl = round(self.virtual_sls[ticket] + (atr * 2.0), digits)
