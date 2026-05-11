@@ -1,7 +1,7 @@
 """
-Q-MATH NODE (ZMQ SUB / REP Node - v69.0)
-Função: Singularity Convergence (v69.0).
-Nuvem RELATIVA que orbita o zero matemático para paridade 1:1 absoluta.
+Q-MATH NODE (ZMQ SUB / REP Node - v5.1)
+Função: Relative Quantum Surface (v51.0).
+Nuvem DINÂMICA que segue o preço para paridade 1:1 absoluta.
 """
 import time
 import threading
@@ -34,7 +34,7 @@ import cyt_engine
 
 class QMathNode:
     def __init__(self):
-        print("⚛️ Q-MATH :: Sincronizando subsistemas [ABSOLUTE INERTIAL v53.2]...")
+        print("⚛️ Q-MATH :: Sincronizando subsistemas...")
         self.sub_context, self.sub_socket = create_subscriber(PORT_TICK_FEED, TOPIC_MARKET_BAR)
         self.rep_context, self.rep_socket = create_reply_server(PORT_Q_MATH)
         self.is_running = False
@@ -61,7 +61,9 @@ class QMathNode:
         }
         
         self.last_raw_density = None
-        self.last_sync_price = None
+        self.cloud_trail = [] # Lista de (p_center, snapshot_hex)
+        self.last_physics_time = None
+        self.last_price = None
         self.state_lock = threading.Lock()
         print(f"✅ Q-MATH :: Subsistemas Prontos. Aguardando Fluxo em {PORT_TICK_FEED}...")
 
@@ -78,49 +80,57 @@ class QMathNode:
                 self.active_tf = tf; self.last_processed_symbol = payload_sym; self.current_symbol = payload_sym
                 self.cloud_tracker = None; self.lbm_tracker = None; self.plasma_tracker = None
                 self.rmt_tracker = None; self.qrw_tracker = None; self.rht_tracker = None; self.qcd_tracker = None; self.precog_node = None
+                self.last_price = None
 
             current_close = df['close'].iloc[-1]
-            # [v66.0] Spectral Nebula Engine - Absolute Reference Manifold
-            half_range = 1200.0 
-            p_min = current_close - half_range
-            p_max = current_close + half_range
+            atr = df['high'].tail(20).max() - df['low'].tail(20).min()
+            # Range dinâmico baseado na volatilidade
+            half_range = max(atr * 3.5, 400) if "BTC" not in payload_sym else max(atr * 2.5, 1200)
 
             if self.cloud_tracker is None:
-                # [V68.0] Singularity Glow Engine - Absolute Reference Manifold
-                self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=512)
-                self.cloud_tracker.initialize_wave(current_close, sigma=(self.cloud_tracker.dx * 110.0))
-                self.last_sync_price = current_close
+                self.cloud_tracker = QuantumCloudTracker(price_min=current_close - half_range, price_max=current_close + half_range, bins=512)
+                self.cloud_tracker.initialize_wave(current_close, sigma=(self.cloud_tracker.dx * 65.0))
                 self.cloud_trail = []
                 self.last_physics_time = None
-                print(f"⚛️ Q-MATH :: Singularity Glow Engine v68.0 Iniciado em {payload_sym}.")
+                self.last_price = current_close
+                print(f"⚛️ Q-MATH :: Relative Surface Engine v53.0 Iniciado em {payload_sym}.")
                 
-                # [SINGULARITY WARM-UP] v69.0 Spectral Grain (21pt Blur)
-                warmup_size = min(40, len(df) - 11)
+                # [SINGULARITY WARM-UP] Reconstrução Retrospectiva do Campo
+                warmup_size = min(40, len(df) - 21)
                 if warmup_size > 0:
-                    print(f"🚀 Q-MATH :: Materializando Vapor Espectral ({warmup_size} snapshots)...")
-                    kernel = np.ones(21) / 21.0
+                    print(f"🚀 Q-MATH :: Materializando Rastro Quântico ({warmup_size} snapshots)...")
+                    w_last_price = df['close'].iloc[len(df) - warmup_size - 1]
                     for i in range(len(df) - warmup_size, len(df)):
-                        sub_df = df.iloc[:i+1].copy()
+                        sub_df = df.iloc[:i+1]
                         c_close = sub_df['close'].iloc[-1]
                         
-                        # [v69.0] Hot Core Physics: dt=2.0, steps=15
-                        dt_phys = 2.0
+                        # Relativistic Shift in Warm-up
+                        p_diff = c_close - w_last_price
+                        b_shift = int(round(p_diff / self.cloud_tracker.dx))
+                        if b_shift != 0:
+                            self.cloud_tracker.solver.shift_grid(b_shift)
+                            self.cloud_tracker.price_min += b_shift * self.cloud_tracker.dx
+                            self.cloud_tracker.price_max += b_shift * self.cloud_tracker.dx
+                        w_last_price = c_close
+
+                        c_atr = sub_df['high'].tail(20).max() - sub_df['low'].tail(20).min()
+                        c_half = max(c_atr * 3.5, 400) if "BTC" not in payload_sym else max(c_atr * 2.5, 1200)
                         
-                        # Absolute Space Physics (v69.0)
-                        density, _ = self.cloud_tracker.step(sub_df.tail(20), dt=dt_phys, steps=15)
+                        # Sync visual range
+                        self.cloud_tracker.price_min = c_close - c_half
+                        self.cloud_tracker.price_max = c_close + c_half
+                        self.cloud_tracker.dx = (self.cloud_tracker.price_max - self.cloud_tracker.price_min) / self.cloud_tracker.bins
+                        
+                        density, _ = self.cloud_tracker.step(sub_df.tail(20), dt=1.2, steps=10)
                         if density is not None:
-                            density = np.convolve(density, kernel, mode='same')
-                            
-                            # Gamma 1.6 Balanced Core (v69.0)
-                            gamma_den = np.power(density, 1.6)
-                            # Normalization (v69.0)
-                            v_max = np.max(gamma_den) * 0.9
-                            gamma_den = np.clip(gamma_den / (v_max + 1e-9), 0, 1.0)
-                            
+                            if self.last_raw_density is not None: density = 0.35 * density + 0.65 * self.last_raw_density
+                            self.last_raw_density = density.copy()
+                            gamma_den = np.power(density, 1.8)
+                            vmax = np.percentile(gamma_den, 99.8) if np.max(gamma_den) > 0 else 1.0
+                            gamma_den = np.clip(gamma_den / (vmax + 1e-9), 0, 1.0)
                             s_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
-                            # Payload v69: p_min|p_max|hex
-                            self.cloud_trail.insert(0, f"{p_min:.2f}|{p_max:.2f}|{s_hex}")
-                    print(f"✅ Q-MATH :: Campo Espectral v69.0 Materializado.")
+                            self.cloud_trail.insert(0, f"{c_close:.2f}|{c_half:.2f}|{s_hex}")
+                    print(f"✅ Q-MATH :: Campo Materializado. {len(self.cloud_trail)} snapshots em cache.")
 
             if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-100, df['high'].max()+100, 200, tau=1.0)
             if self.plasma_tracker is None: self.plasma_tracker = PlasmaMarketTracker()
@@ -142,24 +152,37 @@ class QMathNode:
                     curr_time = df.iloc[-1]['time']
                     pti = getattr(self, "current_pti_context", 0.0)
                     
-                    # [V69.0] Spectral Synthesis - Absolute Price Space
-                    dt_phys = 2.0
+                    # [V53.0] INERTIAL SYNCHRONIZATION
+                    price_diff = current_close - self.last_price
+                    bin_shift = int(round(price_diff / self.cloud_tracker.dx))
                     
-                    # Dynamics in Absolute Space v69.0
-                    density, _ = self.cloud_tracker.step(df.tail(20), dt=dt_phys, steps=15, pti=pti)
+                    if bin_shift != 0:
+                        # Shift the internal C++ wavefunction
+                        self.cloud_tracker.solver.shift_grid(bin_shift)
+                        # Sync Python-side range bounds
+                        self.cloud_tracker.price_min += bin_shift * self.cloud_tracker.dx
+                        self.cloud_tracker.price_max += bin_shift * self.cloud_tracker.dx
+                    
+                    self.last_price = current_close
+
+                    # Strict price centering for visualization
+                    self.cloud_tracker.price_min = current_close - half_range
+                    self.cloud_tracker.price_max = current_close + half_range
+                    self.cloud_tracker.dx = (self.cloud_tracker.price_max - self.cloud_tracker.price_min) / self.cloud_tracker.bins
+                    
+                    density, _ = self.cloud_tracker.step(df.tail(20), dt=1.2, steps=10, pti=pti)
                     if density is not None:
-                        # 21-point Whispy Grain (v69.0)
-                        kernel = np.ones(21) / 21.0
-                        density = np.convolve(density, kernel, mode='same')
+                        if self.last_raw_density is not None: density = 0.35 * density + 0.65 * self.last_raw_density
+                        self.last_raw_density = density.copy()
                         
-                        # Gamma 1.6 + Peak Scaling (v69.0)
-                        gamma_den = np.power(density, 1.6)
-                        v_max = np.max(gamma_den) * 0.9
-                        gamma_den = np.clip(gamma_den / (v_max + 1e-9), 0, 1.0)
+                        gamma_den = np.power(density, 1.8)
+                        vmax = np.percentile(gamma_den, 99.8) if np.max(gamma_den) > 0 else 1.0
+                        gamma_den = np.clip(gamma_den / (vmax + 1e-9), 0, 1.0)
                         
                         snapshot_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
-                        # Payload v69: p_min|p_max|hex
-                        slice_data = f"{p_min:.2f}|{p_max:.2f}|{snapshot_hex}"
+                        # Payload: p_center|half_range|hex
+                        # p_center MUST be exactly the price the wave is anchored on
+                        slice_data = f"{current_close:.2f}|{half_range:.2f}|{snapshot_hex}"
                         
                         if self.last_physics_time is None or curr_time > self.last_physics_time:
                             self.cloud_trail.insert(0, slice_data)

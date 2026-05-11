@@ -3,29 +3,27 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "307.00"
+#property version   "305.00"
 #property strict
 
 #include <Canvas\Canvas.mqh>
 
-// Instância Master do Renderizador (v69.0 - Singularity Convergence)
+// Instância Master do Renderizador (v52.0 - Riemann Fluid Surface)
 CCanvas m_canvas;
 string m_canvas_name = "NEXUS_QUANTUM_CANVAS";
 
 // Buffer de Campo Contínuo [Snapshots][Bins]
 double m_field[42][512]; 
-double m_field_meta[42][4]; // [p_min][p_max][Time][Price_Actual] (v66.0 Absolute)
+double m_field_meta[42][4]; // [p_center][h_range][Time][Price_Actual]
 
 // Memória de Estado
 string last_payload = "";
 int m_chart_w = 0;
 int m_chart_h = 0;
 
-// --- PROTÓTIPO MESTRE ---
+// --- PROTÓTIPOS ---
 void ParseAndDraw(string data);
 uint GetInfernoColor(double density);
-void BlendPixel(int x, int y, uint clr);
-void DrawVolumetricBloomBrush(int x, int y, uint clr);
 
 //+------------------------------------------------------------------+
 int OnInit() { 
@@ -37,7 +35,6 @@ int OnInit() {
     m_chart_h = (int)ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS);
     
     if(!m_canvas.CreateBitmapLabel(m_canvas_name, 0, 0, m_chart_w, m_chart_h, COLOR_FORMAT_ARGB_NORMALIZE)) return(INIT_FAILED);
-    ObjectSetInteger(0, m_canvas_name, OBJPROP_BACK, true); // v66.0: Ensure candles are visible
     m_canvas.Erase(0x00000000);
     m_canvas.Update();
     
@@ -69,59 +66,12 @@ void UpdateDashboard()
    }
 }
 
-void BlendPixel(int x, int y, uint clr)
-{
-   if(x < 0 || x >= m_chart_w || y < 0 || y >= m_chart_h) return;
-   uint back = m_canvas.PixelGet(x, y);
-   
-   uchar a1 = (uchar)((back >> 24) & 0xFF);
-   uchar r1 = (uchar)((back >> 16) & 0xFF);
-   uchar g1 = (uchar)((back >> 8) & 0xFF);
-   uchar b1 = (uchar)(back & 0xFF);
-   
-   uchar a2 = (uchar)((clr >> 24) & 0xFF);
-   uchar r2 = (uchar)((clr >> 16) & 0xFF);
-   uchar g2 = (uchar)((clr >> 8) & 0xFF);
-   uchar b2 = (uchar)(clr & 0xFF);
-   
-   // v63.0 Ethereal Additive Blending: Stacks light like a real nebula
-   uint r = (uint)MathMin(255, r1 + (r2 * a2 / 255));
-   uint g = (uint)MathMin(255, g1 + (g2 * a2 / 255));
-   uint b = (uint)MathMin(255, b1 + (b2 * a2 / 255));
-   uint a = (uint)MathMin(255, a1 + a2);
-   
-   m_canvas.PixelSet(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-}
-
-void DrawVolumetricBloomBrush(int x, int y, uint clr)
-{
-   // [v69.0] Singularity Splatting Engine (35x35 radius, 120 grains)
-   uint base_clr = clr & 0x00FFFFFF;
-   uint alpha_base = 12; 
-   
-   for(int i=0; i<120; i++) {
-      int dx = (MathRand() % 35) - 17;
-      int dy = (MathRand() % 35) - 17;
-      int jitter_v = (MathRand() % 3) - 1; // Vertical Jitter to break bands
-      
-      double dist_sq = dx*dx + dy*dy;
-      if(dist_sq > 306) continue; // Circle constraint ~17.5px radius
-      
-      // Exponential Alpha Decay (v69.0)
-      uchar alpha_grain = (uchar)(alpha_base * MathExp(-dist_sq / 50.0));
-      if(alpha_grain < 1) continue;
-      
-      BlendPixel(x + dx, y + dy + jitter_v, ((uint)alpha_grain << 24) | base_clr);
-   }
-}
-
 void ParseAndDraw(string data)
 {
    if(ObjectFind(0, m_canvas_name) < 0) {
       m_chart_w = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS);
       m_chart_h = (int)ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS);
       m_canvas.CreateBitmapLabel(m_canvas_name, 0, 0, m_chart_w, m_chart_h, COLOR_FORMAT_ARGB_NORMALIZE);
-      ObjectSetInteger(0, m_canvas_name, OBJPROP_BACK, true);
    }
 
    int curW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS);
@@ -129,7 +79,6 @@ void ParseAndDraw(string data)
    if(curW != m_chart_w || curH != m_chart_h) {
       m_chart_w = curW; m_chart_h = curH;
       m_canvas.Resize(m_chart_w, m_chart_h);
-      ObjectSetInteger(0, m_canvas_name, OBJPROP_BACK, true);
    }
 
    m_canvas.Erase(0x00000000); 
@@ -173,82 +122,81 @@ void ParseAndDraw(string data)
       }
    }
 
-   // 2. ABSOLUTE SPECTRAL VAPOR SYNTHESIS (v69.0)
+   // 2. RIEMANN FLUID SURFACE (v52.0)
    string cloud_str = parts[10];
    if(cloud_str != "") {
       string cloudHistory[]; StringSplit(cloud_str, '^', cloudHistory);
       int histSize = ArraySize(cloudHistory);
       
+      // Decode Snapshots
       for(int h=0; h<histSize && h<42; h++) {
          string snapParts[]; StringSplit(cloudHistory[h], '|', snapParts);
          if(ArraySize(snapParts) < 3) continue;
          
-         double p_min = StringToDouble(snapParts[0]);
-         double p_max = StringToDouble(snapParts[1]);
-         string hex   = snapParts[2];
-         int hexLen   = StringLen(hex);
+         double p_center = StringToDouble(snapParts[0]);
+         double h_range  = StringToDouble(snapParts[1]);
+         string hex      = snapParts[2];
+         int hexLen      = StringLen(hex);
          
          for(int b=0; b<512; b++) {
             if(b*2 + 2 <= hexLen) {
                m_field[h][b] = (double)StringToInteger(StringSubstr(hex, b*2, 2)) / 99.0;
             } else m_field[h][b] = 0;
          }
-         m_field_meta[h][0] = p_min;
-         m_field_meta[h][1] = p_max;
+         m_field_meta[h][0] = p_center;
+         m_field_meta[h][1] = h_range;
          m_field_meta[h][2] = (double)iTime(_Symbol, _Period, h);
          m_field_meta[h][3] = iClose(_Symbol, _Period, h);
       }
       
+      // Renderização Riemann (Superfluidez Horizontal + Vertical)
       int bars_to_render = MathMin(histSize-1, 40);
       for(int h=0; h<bars_to_render; h++) {
          datetime t1 = (datetime)m_field_meta[h][2];
          datetime t2 = (datetime)m_field_meta[h+1][2];
          
-         int x1, py1, x2, py2;
-         ChartTimePriceToXY(0, 0, t1, iClose(_Symbol, _Period, h), x1, py1);
-         ChartTimePriceToXY(0, 0, t2, iClose(_Symbol, _Period, h+1), x2, py2);
+         int x1, y_dummy1, x2, y_dummy2;
+         // Pre-calculate X coordinates for the candles
+         ChartTimePriceToXY(0, 0, t1, m_field_meta[h][3], x1, y_dummy1);
+         ChartTimePriceToXY(0, 0, t2, m_field_meta[h+1][3], x2, y_dummy2);
+         
+         // Pre-calculate Y extent for both candles to interpolate between them
+         int y_top1, y_bot1, y_top2, y_bot2;
+         ChartTimePriceToXY(0, 0, t1, m_field_meta[h][0] + m_field_meta[h][1], x1, y_top1);
+         ChartTimePriceToXY(0, 0, t1, m_field_meta[h][0] - m_field_meta[h][1], x1, y_bot1);
+         ChartTimePriceToXY(0, 0, t2, m_field_meta[h+1][0] + m_field_meta[h+1][1], x2, y_top2);
+         ChartTimePriceToXY(0, 0, t2, m_field_meta[h+1][0] - m_field_meta[h+1][1], x2, y_bot2);
          
          int startX = x2; int endX = x1;
          if(startX > endX) { int tmp=startX; startX=endX; endX=tmp; }
          
-         // [v69.0] 30 Sub-steps of interpolation per candle for seamless volumetric flow
-         int steps = 30;
-         for(int s=0; s<=steps; s++) {
-            double lerp_t = (double)s / (double)steps;
-            int x = (int)(startX + lerp_t * (endX - startX));
+         // Loop over every pixel column (X) to ensure 0 gaps
+         for(int x = startX; x <= endX; x++) {
             if(x < 0 || x >= m_chart_w) continue;
             
-            // Map Bins directly to Absolute Price Space
-            double p_min_lerp = m_field_meta[h+1][0] + lerp_t * (m_field_meta[h][0] - m_field_meta[h+1][0]);
-            double p_max_lerp = m_field_meta[h+1][1] + lerp_t * (m_field_meta[h][1] - m_field_meta[h+1][1]);
-
-            int py_top, py_bot;
-            ChartTimePriceToXY(0, 0, (datetime)m_field_meta[h][2], p_max_lerp, x1, py_top);
-            ChartTimePriceToXY(0, 0, (datetime)m_field_meta[h][2], p_min_lerp, x1, py_bot);
-
-            int screen_y_start = MathMin(py_top, py_bot);
-            int screen_y_end   = MathMax(py_top, py_bot);
-            double height = (double)MathMax(1, screen_y_end - screen_y_start);
+            double lerp_t = (endX - startX > 0) ? (double)(x - startX) / (double)(endX - startX) : 1.0;
             
-            for(int y = screen_y_start; y <= screen_y_end; y+=2) { // v69: High-density spectral grains
+            // Interpolate Y extent
+            int py_top = (int)(y_top2 + lerp_t * (y_top1 - y_top2));
+            int py_bot = (int)(y_bot2 + lerp_t * (y_bot1 - y_bot2));
+            
+            int py_start = MathMin(py_top, py_bot);
+            int py_end   = MathMax(py_top, py_bot);
+            
+            // Fill vertical column for this X
+            for(int y = py_start; y <= py_end; y++) {
                if(y < 0 || y >= m_chart_h) continue;
                
-               double bin_exact = (1.0 - (double)(y - screen_y_start) / height) * 511.0;
-               int b_idx = (int)MathFloor(bin_exact);
-               int b_next = MathMin(511, b_idx + 1);
-               double b_frac = bin_exact - b_idx;
+               double bin_lerp = (double)(y - py_start) / (double)(py_end - py_start + 1e-9);
+               int b_idx = (int)((1.0 - bin_lerp) * 511.0);
+               if(b_idx < 0) b_idx = 0; if(b_idx > 511) b_idx = 511;
                
-               // [v69.0] Vertical Bin-to-Bin Interpolation (Eradicates Horizontal Bands)
-               double d1 = m_field[h+1][b_idx] + b_frac * (m_field[h+1][b_next] - m_field[h+1][b_idx]);
-               double d2 = m_field[h][b_idx] + b_frac * (m_field[h][b_next] - m_field[h][b_idx]);
-               double density = d1 + lerp_t * (d2 - d1);
+               // Bilinear Density
+               double density = m_field[h+1][b_idx] + lerp_t * (m_field[h][b_idx] - m_field[h+1][b_idx]);
                
-               // Inject Gaussian Noise (v69.0) - Organic Grain
-               density += ((double)(MathRand() % 100) / 5000.0) - 0.01;
-               
-               if(density > 0.005) { 
+               if(density > 0.015) {
                   uint qClr = GetInfernoColor(density * MathPow(0.98, h));
-                  DrawVolumetricBloomBrush(x, y, qClr);
+                  m_canvas.PixelSet(x, y, qClr);
                }
             }
          }
@@ -261,32 +209,25 @@ void ParseAndDraw(string data)
 
 uint GetInfernoColor(double d) 
 { 
-    if(d <= 0.001) return 0x00000000;
+    if(d <= 0.01) return 0x00000000;
     uchar r=0, g=0, b=0, a=0;
     
-    // [v68.0] HDR Spectral Palette - Singularity Glow Engine
-    // 0.0 -> 0.1: Navy (Dark) | 0.1 -> 0.3: Deep Magenta | 0.3 -> 0.6: Hot Pink/Red
-    // 0.6 -> 0.85: Radiant Orange/Yellow | 0.85 -> 1.0: Pure White Singularity
+    // [V53.0] BOOSTED NEON GLOW
+    a = (uchar)MathMin(255, 260 * MathPow(d, 0.85));
     
-    a = (uchar)MathMin(255, 255 * MathPow(d, 0.45)); // Slightly fatter alpha curve
-    
-    if(d < 0.1) {
-       double t = d / 0.1;
-       r = 0; g = 0; b = (uchar)(120 * t);
-    } else if(d < 0.3) {
-       double t = (d - 0.1) / 0.2;
-       r = (uchar)(130 * t); g = 0; b = (uchar)(120 + 40 * t);
+    // Inferno Gradient (Vivid Edition)
+    if(d < 0.2) {
+       r = (uchar)(80 * (d/0.2)); g = 15; b = (uchar)(180 * (d/0.2));
+    } else if(d < 0.4) {
+       r = (uchar)(80 + 110 * ((d-0.2)/0.2)); g = (uchar)(15 + 70 * ((d-0.2)/0.2)); b = (uchar)(180 + 30 * ((d-0.2)/0.2));
     } else if(d < 0.6) {
-       double t = (d - 0.3) / 0.3;
-       r = (uchar)(130 + 125 * t); g = (uchar)(20 * t); b = (uchar)(160 - 110 * t);
-    } else if(d < 0.85) {
-       double t = (d - 0.6) / 0.25;
-       r = 255; g = (uchar)(20 + 200 * t); b = (uchar)(50 * t);
+       r = (uchar)(190 + 65 * ((d-0.4)/0.2)); g = (uchar)(85 + 90 * ((d-0.4)/0.2)); b = (uchar)(210 - 70 * ((d-0.4)/0.2));
+    } else if(d < 0.8) {
+       r = 255; g = (uchar)(175 + 80 * ((d-0.6)/0.2)); b = (uchar)(140 - 140 * ((d-0.6)/0.2));
     } else {
-       double t = (d - 0.85) / 0.15;
-       r = 255; g = 255; b = (uchar)(100 + 155 * t);
+       r = 255; g = 255; b = (uchar)(50 + 205 * ((d-0.8)/0.2));
     }
-    return ((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
+    return ((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | (uint)b;
 }
 
 color RGB(uchar r, uchar g, uchar b) { return (color)((b << 16) | (g << 8) | r); }
