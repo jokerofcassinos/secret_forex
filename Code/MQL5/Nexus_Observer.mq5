@@ -77,17 +77,17 @@ void DrawVolumetricBloomBrush(CCanvas &canvas, int x, int y, uint clr, int grain
    uchar b_base = (uchar)(clr & 0xFF);
    
    for(int i=0; i<grains; i++) {
-      // [v37.9.2] Redução do espalhamento para criar foco central e diminuir blocos
-      int dx = (MathRand() % 30) - 15; 
-      int dy = (MathRand() % 30) - 15;
+      // [v37.9.3] Espalhamento calibrado para fundir as bordas e matar o aspecto "blocado"
+      int dx = (MathRand() % 40) - 20; 
+      int dy = (MathRand() % 40) - 20;
       int jitter_v = (MathRand() % 5) - 2; 
       
       double dist_sq = dx*dx + dy*dy;
-      if(dist_sq > 225) continue; 
+      if(dist_sq > 400) continue; 
       
-      double falloff = MathExp(-dist_sq / 75.0);
-      // Redução extrema do peso individual para permitir acúmulo suave (gás)
-      uchar grain_a = (uchar)MathMin(255, base_alpha * falloff * 0.15); 
+      double falloff = MathExp(-dist_sq / 100.0);
+      // Peso do grão balanceado para névoa etérea (0.10)
+      uchar grain_a = (uchar)MathMin(255, base_alpha * falloff * 0.10); 
       if(grain_a < 1) continue;
       
       int target_x = x + dx;
@@ -216,7 +216,7 @@ void ParseAndDraw(string data)
          int startX = x2; int endX = x1;
          if(startX > endX) { int tmp=startX; startX=endX; endX=tmp; }
          
-         int steps = (int)MathMax(1, MathAbs(endX - startX)); // [v38.0] Resolução total em X
+         int steps = (int)MathMax(1, MathAbs(endX - startX) / 2); // [v37.9.3] Reduzir densidade horizontal
          for(int s=0; s<=steps; s++) {
             double lerp_t = (double)s / (double)steps;
             int x = (int)(startX + lerp_t * (endX - startX));
@@ -234,7 +234,7 @@ void ParseAndDraw(string data)
             int screen_y_end   = MathMax(py_top_curr, py_bot_curr);
             double height = (double)MathMax(1, screen_y_end - screen_y_start);
             
-            for(int y = screen_y_start; y <= screen_y_end; y++) { // [v38.0] Passo 1 absoluto para suavidade
+            for(int y = screen_y_start; y <= screen_y_end; y+=3) { // [v37.9.3] Passo vertical maior
                if(y < 0 || y >= m_chart_h) continue;
                
                double bin_exact = (1.0 - (double)(y - screen_y_start) / height) * 511.0;
@@ -248,7 +248,7 @@ void ParseAndDraw(string data)
                
                if(MathAbs(val - 0.505) > 0.02) { 
                   uint qClr = GetLushColor(val, h);
-                  BlendSinglePixel(m_canvas, x, y, qClr); // Holograma contínuo
+                  DrawVolumetricBloomBrush(m_canvas, x, y, qClr, 25); // [v37.9.3] Grãos ajustados para névoa equilibrada
                }
             }
          }
@@ -265,10 +265,10 @@ uint GetLushColor(double val, int age)
     if(MathAbs(delta) < 0.02) return 0x00000000;
     
     uint r=0, g=0, b=0, a=0;
-    double intensity = MathPow(MathAbs(delta), 0.7); // Curva suavizada para mapeamento direto
-    double age_decay = MathPow(0.985, (double)age); 
+    double intensity = MathPow(MathAbs(delta), 0.75); // Curva que foca o núcleo
+    double age_decay = MathPow(0.98, (double)age); 
     
-    a = (uint)MathMin(255, 120 * intensity * age_decay); // Alpha max 120 para névoa semitransparente (já que não há mais falloff)
+    a = (uint)MathMin(255, 180 * intensity * age_decay); // Limita alpha base para evitar saturação branca
     
     if(delta > 0) { // BUY / ABSORPTION (CYAN NEON)
        r = 0;
@@ -284,4 +284,3 @@ uint GetLushColor(double val, int age)
 }
 
 color RGB(uchar r, uchar g, uchar b) { return (color)((b << 16) | (g << 8) | r); }
-
