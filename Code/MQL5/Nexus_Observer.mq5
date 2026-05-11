@@ -72,23 +72,22 @@ void UpdateDashboard()
 void DrawVolumetricBloomBrush(CCanvas &canvas, int x, int y, uint clr, int grains)
 {
    uchar base_alpha = (uchar)((clr >> 24) & 0xFF);
-   
-   // Extração blindada - não dependemos de >> 16 se a arquitetura for BGR
-   color mql_color = ARGBToColor(clr);
-   uchar r2 = (uchar)ColorToRGB(mql_color) & 0xFF; // extrai R
-   uchar g2 = (uchar)(ColorToRGB(mql_color) >> 8) & 0xFF; // extrai G
-   uchar b2 = (uchar)(ColorToRGB(mql_color) >> 16) & 0xFF; // extrai B
+   uchar r_base = (uchar)((clr >> 16) & 0xFF);
+   uchar g_base = (uchar)((clr >> 8) & 0xFF);
+   uchar b_base = (uchar)(clr & 0xFF);
    
    for(int i=0; i<grains; i++) {
-      int dx = (MathRand() % 50) - 25; 
-      int dy = (MathRand() % 50) - 25;
+      // [v37.9.2] Redução do espalhamento para criar foco central e diminuir blocos
+      int dx = (MathRand() % 30) - 15; 
+      int dy = (MathRand() % 30) - 15;
       int jitter_v = (MathRand() % 5) - 2; 
       
       double dist_sq = dx*dx + dy*dy;
-      if(dist_sq > 625) continue; 
+      if(dist_sq > 225) continue; 
       
-      double falloff = MathExp(-dist_sq / 150.0);
-      uchar grain_a = (uchar)(base_alpha * falloff * 0.12); 
+      double falloff = MathExp(-dist_sq / 75.0);
+      // Redução extrema do peso individual para permitir acúmulo suave (gás)
+      uchar grain_a = (uchar)MathMin(255, base_alpha * falloff * 0.15); 
       if(grain_a < 1) continue;
       
       int target_x = x + dx;
@@ -97,22 +96,25 @@ void DrawVolumetricBloomBrush(CCanvas &canvas, int x, int y, uint clr, int grain
       if(target_x < 0 || target_x >= m_chart_w || target_y < 0 || target_y >= m_chart_h) continue;
       
       uint back = canvas.PixelGet(target_x, target_y);
-      color back_color = ARGBToColor(back);
       
-      uchar a1 = (uchar)((back >> 24) & 0xFF);
-      uchar r1 = (uchar)ColorToRGB(back_color) & 0xFF;
-      uchar g1 = (uchar)(ColorToRGB(back_color) >> 8) & 0xFF;
-      uchar b1 = (uchar)(ColorToRGB(back_color) >> 16) & 0xFF;
+      uchar a1_pre = (uchar)((back >> 24) & 0xFF);
+      uchar r1_pre = (uchar)((back >> 16) & 0xFF);
+      uchar g1_pre = (uchar)((back >> 8) & 0xFF);
+      uchar b1_pre = (uchar)(back & 0xFF);
       
       double alpha_blend = (double)grain_a / 255.0;
+      uchar r2_pre = (uchar)(r_base * alpha_blend);
+      uchar g2_pre = (uchar)(g_base * alpha_blend);
+      uchar b2_pre = (uchar)(b_base * alpha_blend);
+      
       double alpha_inv = 1.0 - alpha_blend;
       
-      uchar r = (uchar)MathMin(255, (r2 * alpha_blend) + (r1 * alpha_inv));
-      uchar g = (uchar)MathMin(255, (g2 * alpha_blend) + (g1 * alpha_inv));
-      uchar b = (uchar)MathMin(255, (b2 * alpha_blend) + (b1 * alpha_inv));
-      uchar a = (uchar)MathMin(255, a1 + grain_a);
+      uint r_new = (uint)MathMin(255, r2_pre + r1_pre * alpha_inv);
+      uint g_new = (uint)MathMin(255, g2_pre + g1_pre * alpha_inv);
+      uint b_new = (uint)MathMin(255, b2_pre + b1_pre * alpha_inv);
+      uint a_new = (uint)MathMin(255, grain_a + a1_pre * alpha_inv); 
       
-      canvas.PixelSet(target_x, target_y, ColorToARGB((color)((b << 16) | (g << 8) | r), a));
+      canvas.PixelSet(target_x, target_y, (a_new << 24) | (r_new << 16) | (g_new << 8) | b_new);
    }
 }
 
@@ -214,7 +216,7 @@ void ParseAndDraw(string data)
          int startX = x2; int endX = x1;
          if(startX > endX) { int tmp=startX; startX=endX; endX=tmp; }
          
-         int steps = (int)MathMax(1, MathAbs(endX - startX)); // Maior densidade horizontal
+         int steps = (int)MathMax(1, MathAbs(endX - startX)); // [v38.0] Resolução total em X
          for(int s=0; s<=steps; s++) {
             double lerp_t = (double)s / (double)steps;
             int x = (int)(startX + lerp_t * (endX - startX));
@@ -232,7 +234,7 @@ void ParseAndDraw(string data)
             int screen_y_end   = MathMax(py_top_curr, py_bot_curr);
             double height = (double)MathMax(1, screen_y_end - screen_y_start);
             
-            for(int y = screen_y_start; y <= screen_y_end; y++) { // Passo unitário para suavidade total
+            for(int y = screen_y_start; y <= screen_y_end; y++) { // [v38.0] Passo 1 absoluto para suavidade
                if(y < 0 || y >= m_chart_h) continue;
                
                double bin_exact = (1.0 - (double)(y - screen_y_start) / height) * 511.0;
@@ -246,7 +248,7 @@ void ParseAndDraw(string data)
                
                if(MathAbs(val - 0.505) > 0.02) { 
                   uint qClr = GetLushColor(val, h);
-                  DrawVolumetricBloomBrush(m_canvas, x, y, qClr, 45); // Aumento de grãos para névoa
+                  BlendSinglePixel(m_canvas, x, y, qClr); // Holograma contínuo
                }
             }
          }
@@ -262,27 +264,24 @@ uint GetLushColor(double val, int age)
     double delta = (val - 0.505) * 2.0;
     if(MathAbs(delta) < 0.02) return 0x00000000;
     
-    double intensity = MathPow(MathAbs(delta), 0.7); 
-    double age_decay = MathPow(0.97, (double)age); 
-    uchar a = (uchar)MathMin(255, 100 * intensity * age_decay); 
+    uint r=0, g=0, b=0, a=0;
+    double intensity = MathPow(MathAbs(delta), 0.7); // Curva suavizada para mapeamento direto
+    double age_decay = MathPow(0.985, (double)age); 
     
-    color base_color;
+    a = (uint)MathMin(255, 120 * intensity * age_decay); // Alpha max 120 para névoa semitransparente (já que não há mais falloff)
+    
     if(delta > 0) { // BUY / ABSORPTION (CYAN NEON)
-       // Cyan puro no núcleo, enfraquecendo para teal
-       uchar r = 0;
-       uchar g = (uchar)(180 + 75 * intensity);
-       uchar b = 255;
-       base_color = (color)((b << 16) | (g << 8) | r); // MQL5 color is BGR internally
+       r = 0;
+       g = (uint)(180 + 75 * intensity);
+       b = 255; 
     } else { // SELL / DISTRIBUTION (MAGENTA NEON)
-       // Magenta puro no núcleo
-       uchar r = 255;
-       uchar g = 0;
-       uchar b = (uchar)(180 + 75 * intensity);
-       base_color = (color)((b << 16) | (g << 8) | r);
+       r = 255;
+       g = 0;
+       b = (uint)(180 + 75 * intensity);
     }
     
-    // ColorToARGB lida com a conversão de color (BGR) para uint (ARGB) perfeitamente
-    return ColorToARGB(base_color, a);
+    return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
 color RGB(uchar r, uchar g, uchar b) { return (color)((b << 16) | (g << 8) | r); }
+
