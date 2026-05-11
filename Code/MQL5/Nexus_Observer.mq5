@@ -3,23 +3,27 @@
 //|                                  Copyright 2026, NEXUS AGI CEO |
 //+------------------------------------------------------------------+
 #property copyright "NEXUS AGI CEO"
-#property version   "300.40"
+#property version   "305.00"
 #property strict
 
 #include <Canvas\Canvas.mqh>
 
-// Instância Master do Renderizador (v300.40 - High-Def Spectrography)
+// Instância Master do Renderizador (v52.0 - Riemann Fluid Surface)
 CCanvas m_canvas;
 string m_canvas_name = "NEXUS_QUANTUM_CANVAS";
 
-// Memória de Estado e Dimensões
+// Buffer de Campo Contínuo [Snapshots][Bins]
+double m_field[42][512]; 
+double m_field_meta[42][4]; // [p_center][h_range][Time][Price_Actual]
+
+// Memória de Estado
 string last_payload = "";
 int m_chart_w = 0;
 int m_chart_h = 0;
 
 // --- PROTÓTIPOS ---
 void ParseAndDraw(string data);
-uint GetHeatmapColor(double density_ratio, double age_ratio);
+uint GetInfernoColor(double density);
 
 //+------------------------------------------------------------------+
 int OnInit() { 
@@ -118,62 +122,81 @@ void ParseAndDraw(string data)
       }
    }
 
-   // 2. RENDERIZAÇÃO ESPECTROGRÁFICA (v34.0 - Pincel Vertical)
+   // 2. RIEMANN FLUID SURFACE (v52.0)
    string cloud_str = parts[10];
-   if(cloud_str != "" && StringFind(cloud_str, ":") > 0) {
-      string cloudParts[]; StringSplit(cloud_str, ':', cloudParts);
-      if(ArraySize(cloudParts) == 2) {
-         double dx_val = StringToDouble(cloudParts[0]);
-         string cloudHistory[]; StringSplit(cloudParts[1], '^', cloudHistory);
-         int histSize = ArraySize(cloudHistory);
+   if(cloud_str != "") {
+      string cloudHistory[]; StringSplit(cloud_str, '^', cloudHistory);
+      int histSize = ArraySize(cloudHistory);
+      
+      // Decode Snapshots
+      for(int h=0; h<histSize && h<42; h++) {
+         string snapParts[]; StringSplit(cloudHistory[h], '|', snapParts);
+         if(ArraySize(snapParts) < 3) continue;
          
-         double maxDensity = 0.0001;
-         for(int h=0; h<histSize; h++) {
-             string bins[]; StringSplit(cloudHistory[h], ',', bins);
-             for(int b=0; b<ArraySize(bins); b++) {
-                 string cv[]; StringSplit(bins[b], '|', cv);
-                 if(ArraySize(cv)==2) { double den=StringToDouble(cv[1]); if(den > maxDensity) maxDensity=den; }
-             }
+         double p_center = StringToDouble(snapParts[0]);
+         double h_range  = StringToDouble(snapParts[1]);
+         string hex      = snapParts[2];
+         int hexLen      = StringLen(hex);
+         
+         for(int b=0; b<512; b++) {
+            if(b*2 + 2 <= hexLen) {
+               m_field[h][b] = (double)StringToInteger(StringSubstr(hex, b*2, 2)) / 99.0;
+            } else m_field[h][b] = 0;
          }
-
-         // Loop por Snapshots (Passado para Presente)
-         for(int h=histSize-1; h>=0; h--) {
-            if(cloudHistory[h] == "") continue;
-            string bins[]; StringSplit(cloudHistory[h], ',', bins);
+         m_field_meta[h][0] = p_center;
+         m_field_meta[h][1] = h_range;
+         m_field_meta[h][2] = (double)iTime(_Symbol, _Period, h);
+         m_field_meta[h][3] = iClose(_Symbol, _Period, h);
+      }
+      
+      // Renderização Riemann (Superfluidez Horizontal + Vertical)
+      int bars_to_render = MathMin(histSize-1, 40);
+      for(int h=0; h<bars_to_render; h++) {
+         datetime t1 = (datetime)m_field_meta[h][2];
+         datetime t2 = (datetime)m_field_meta[h+1][2];
+         
+         int x1, y_dummy1, x2, y_dummy2;
+         // Pre-calculate X coordinates for the candles
+         ChartTimePriceToXY(0, 0, t1, m_field_meta[h][3], x1, y_dummy1);
+         ChartTimePriceToXY(0, 0, t2, m_field_meta[h+1][3], x2, y_dummy2);
+         
+         // Pre-calculate Y extent for both candles to interpolate between them
+         int y_top1, y_bot1, y_top2, y_bot2;
+         ChartTimePriceToXY(0, 0, t1, m_field_meta[h][0] + m_field_meta[h][1], x1, y_top1);
+         ChartTimePriceToXY(0, 0, t1, m_field_meta[h][0] - m_field_meta[h][1], x1, y_bot1);
+         ChartTimePriceToXY(0, 0, t2, m_field_meta[h+1][0] + m_field_meta[h+1][1], x2, y_top2);
+         ChartTimePriceToXY(0, 0, t2, m_field_meta[h+1][0] - m_field_meta[h+1][1], x2, y_bot2);
+         
+         int startX = x2; int endX = x1;
+         if(startX > endX) { int tmp=startX; startX=endX; endX=tmp; }
+         
+         // Loop over every pixel column (X) to ensure 0 gaps
+         for(int x = startX; x <= endX; x++) {
+            if(x < 0 || x >= m_chart_w) continue;
             
-            datetime t_base = iTime(_Symbol, _Period, h);
-            int periodSec = PeriodSeconds(_Period);
+            double lerp_t = (endX - startX > 0) ? (double)(x - startX) / (double)(endX - startX) : 1.0;
             
-            // Age ratio para desvanecimento
-            double age_ratio = 1.0 - ((double)h / (double)histSize);
+            // Interpolate Y extent
+            int py_top = (int)(y_top2 + lerp_t * (y_top1 - y_top2));
+            int py_bot = (int)(y_bot2 + lerp_t * (y_bot1 - y_bot2));
             
-            // Pincel Vertical: Desenha fatias finas entre candles
-            int subSlices = 15; // v34.0: Maior densidade horizontal
-            for(int s=0; s<subSlices; s++) {
-               double t_offset = (double)s / (double)subSlices;
-               datetime t_draw = t_base + (int)(t_offset * periodSec);
+            int py_start = MathMin(py_top, py_bot);
+            int py_end   = MathMax(py_top, py_bot);
+            
+            // Fill vertical column for this X
+            for(int y = py_start; y <= py_end; y++) {
+               if(y < 0 || y >= m_chart_h) continue;
                
-               // Coordenadas de Tempo para Pixel
-               int x1, y1;
-               if(!ChartTimePriceToXY(0, 0, t_draw, SymbolInfoDouble(_Symbol, SYMBOL_BID), x1, y1)) continue;
+               double bin_lerp = (double)(y - py_start) / (double)(py_end - py_start + 1e-9);
+               int b_idx = (int)((1.0 - bin_lerp) * 511.0);
+               if(b_idx < 0) b_idx = 0; if(b_idx > 511) b_idx = 511;
                
-               for(int b=0; b<ArraySize(bins); b++) {
-                  string cv[]; StringSplit(bins[b], '|', cv);
-                  if(ArraySize(cv) != 2) continue;
-                  double pLevel = StringToDouble(cv[0]);
-                  double den = StringToDouble(cv[1]);
-                  
-                  double density_ratio = den / maxDensity;
-                  if(density_ratio < 0.01) continue; 
-                  
-                  uint qClr = GetHeatmapColor(density_ratio, age_ratio);
-                  
-                  int px1, py1, px2, py2;
-                  // Overlap vertical de 4.0x para fusão espectrográfica total
-                  if(!ChartTimePriceToXY(0, 0, t_draw, pLevel + dx_val*2.0, px1, py1)) continue;
-                  ChartTimePriceToXY(0, 0, t_draw + (periodSec/subSlices)*1.2, pLevel - dx_val*2.0, px2, py2);
-                  
-                  m_canvas.FillRectangle(px1, py1, px2, py2, qClr);
+               // Bilinear Density
+               double density = m_field[h+1][b_idx] + lerp_t * (m_field[h][b_idx] - m_field[h+1][b_idx]);
+               
+               if(density > 0.015) {
+                  uint qClr = GetInfernoColor(density * MathPow(0.98, h));
+                  m_canvas.PixelSet(x, y, qClr);
                }
             }
          }
@@ -184,23 +207,25 @@ void ParseAndDraw(string data)
    ChartRedraw();
 }
 
-uint GetHeatmapColor(double density_ratio, double age_ratio) 
+uint GetInfernoColor(double d) 
 { 
+    if(d <= 0.01) return 0x00000000;
     uchar r=0, g=0, b=0, a=0;
-    a = (uchar)(180 * density_ratio * age_ratio);
-    if(a < 5) return 0x00000000;
-
-    if(density_ratio < 0.2) {
-        r = (uchar)(60 + 100 * (density_ratio/0.2)); b = (uchar)(120 + 50 * (density_ratio/0.2));
-    }
-    else if(density_ratio < 0.5) {
-        r = (uchar)(160 + 95 * ((density_ratio-0.2)/0.3)); g = (uchar)(0 + 80 * ((density_ratio-0.2)/0.3)); b = (uchar)(170 - 100 * ((density_ratio-0.2)/0.3));
-    }
-    else if(density_ratio < 0.8) {
-        r = 255; g = (uchar)(80 + 120 * ((density_ratio-0.5)/0.3)); b = 0;
-    }
-    else {
-        r = 255; g = (uchar)(200 + 55 * ((density_ratio-0.8)/0.2)); b = (uchar)(0 + 200 * ((density_ratio-0.8)/0.2));
+    
+    // [V53.0] BOOSTED NEON GLOW
+    a = (uchar)MathMin(255, 260 * MathPow(d, 0.85));
+    
+    // Inferno Gradient (Vivid Edition)
+    if(d < 0.2) {
+       r = (uchar)(80 * (d/0.2)); g = 15; b = (uchar)(180 * (d/0.2));
+    } else if(d < 0.4) {
+       r = (uchar)(80 + 110 * ((d-0.2)/0.2)); g = (uchar)(15 + 70 * ((d-0.2)/0.2)); b = (uchar)(180 + 30 * ((d-0.2)/0.2));
+    } else if(d < 0.6) {
+       r = (uchar)(190 + 65 * ((d-0.4)/0.2)); g = (uchar)(85 + 90 * ((d-0.4)/0.2)); b = (uchar)(210 - 70 * ((d-0.4)/0.2));
+    } else if(d < 0.8) {
+       r = 255; g = (uchar)(175 + 80 * ((d-0.6)/0.2)); b = (uchar)(140 - 140 * ((d-0.6)/0.2));
+    } else {
+       r = 255; g = 255; b = (uchar)(50 + 205 * ((d-0.8)/0.2));
     }
     return ((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | (uint)b;
 }

@@ -1,9 +1,7 @@
 """
-Q-MATH NODE (ZMQ SUB / REP Node - v2.1)
-
-Função: Assina (SUB) os dados de mercado do NEXUS ROUTER.
-Atualiza em background todos os trackers pesados de C++ (LBM, Schrödinger, RMT).
-Levanta um servidor (REP) para que o AGI_CORE consulte os dados calculados instantaneamente.
+Q-MATH NODE (ZMQ SUB / REP Node - v5.1)
+Função: Relative Quantum Surface (v51.0).
+Nuvem DINÂMICA que segue o preço para paridade 1:1 absoluta.
 """
 import time
 import threading
@@ -16,24 +14,14 @@ import concurrent.futures
 import numpy as np
 import pandas as pd
 
-# [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++
 if os.name == 'nt':
-    # [BOOTLOADER] Força reconhecimento dos binários Mingw64 e Engines C++ na ROOT
     root_path = os.path.dirname(__file__)
     if os.path.exists(root_path):
         os.add_dll_directory(root_path)
-        if root_path not in sys.path:
-            sys.path.insert(0, root_path)
-
-    # Mingw64 Fallback
-    if os.path.exists(r"D:\msys64\mingw64\bin"):
-        os.add_dll_directory(r"D:\msys64\mingw64\bin")
-
-
+    if root_path not in sys.path: sys.path.insert(0, root_path)
+    if os.path.exists(r"D:\msys64\mingw64\bin"): os.add_dll_directory(r"D:\msys64\mingw64\bin")
 
 from Code.N_Core.swarm_bus import create_subscriber, create_reply_server, PORT_TICK_FEED, PORT_Q_MATH, TOPIC_MARKET_BAR
-
-# Trackers C++ / Física Pesada
 from Code.N_Core.quantum_clouds import QuantumCloudTracker
 from Code.N_Core.fluid_dynamics import LBMFluidDynamics
 from Code.N_Core.plasma_market import PlasmaMarketTracker
@@ -42,21 +30,14 @@ from Code.N_Core.quantum_walk import QRWTracker
 from Code.N_Core.market_qcd import MarketQCDTracker
 from Code.N_Core.live_rht import LiveRHTTracker
 from Code.N_Core.quantum_projection import QuantumPreCognitionNode
-
 import cyt_engine
-
 
 class QMathNode:
     def __init__(self):
-        # Comunicação SUB (Ouve o mercado)
+        print("⚛️ Q-MATH :: Sincronizando subsistemas...")
         self.sub_context, self.sub_socket = create_subscriber(PORT_TICK_FEED, TOPIC_MARKET_BAR)
-        
-        # Comunicação REP (Responde ao AGI Core)
         self.rep_context, self.rep_socket = create_reply_server(PORT_Q_MATH)
-        
         self.is_running = False
-        
-        # Trackers Locais
         self.cloud_tracker = None
         self.lbm_tracker = None
         self.plasma_tracker = None
@@ -65,559 +46,210 @@ class QMathNode:
         self.qcd_tracker = None
         self.rht_tracker = None
         self.cyt = cyt_engine.CYTEngine()
-        self.ksi_engine = None
         self.precog_node = None
         
-        # Estado atual cacheado para responder rapidamente
+        self.current_symbol = "GER40.cash"
+        self.active_tf = None
+        self.last_processed_symbol = None
+        self.current_regime_context = 0
+        self.current_pti_context = 0.0
+
         self.current_state = {
             "status": "INITIALIZING",
-            "lbm_zones": [],
-            "cloud_zones": [],
-            "cloud_str": "0.0001:",
-            "rmt_signal": 0.0,
-            "qrw_density": [],
-            "qcd_signal": "CONFINED",
-            "rht_status": "PURIFYING",
-            "rht_history": [],
-            "ricci_curvature": 0.0
+            "cloud_str": "0.0:0.0:0.0:",
+            "lbm_signal": "LAMINAR_FLOW"
         }
         
-        # Persistência Quântica (v27.2)
         self.last_raw_density = None
-        self.last_cloud_str = "0.0001:"
-        self.cloud_trail = []
-        
-        # Trava para evitar conflito de leitura/escrita no estado interno
+        self.cloud_trail = [] # Lista de (p_center, snapshot_hex)
+        self.last_physics_time = None
+        self.last_price = None
         self.state_lock = threading.Lock()
+        print(f"✅ Q-MATH :: Subsistemas Prontos. Aguardando Fluxo em {PORT_TICK_FEED}...")
 
     def process_market_data(self, payload):
-        """Processa o pacote recebido e atualiza os motores C++ EM PARALELO"""
         try:
             df = payload.get("data")
+            if df is None or df.empty: return
+            
             tf = payload.get("timeframe")
-            payload_sym = payload.get("symbol", getattr(self, "current_symbol", None))
+            payload_sym = payload.get("symbol", self.current_symbol)
 
-            # Se mudou o timeframe ou símbolo, destroi a física antiga para resetar
-            if (tf is not None and getattr(self, "active_tf", None) != tf) or (getattr(self, "last_processed_symbol", None) != payload_sym):
-                print(f"\n⚛️ Q-MATH :: Salto Dimensional Detectado. Recriando física para {payload_sym} TF: {tf}")
-                self.active_tf = tf
-                self.last_processed_symbol = payload_sym
-                self.current_symbol = payload_sym # Sincroniza o símbolo
-                
-                self.cloud_tracker = None
-                self.lbm_tracker = None
-                self.plasma_tracker = None
-                self.rmt_tracker = None
-                self.qrw_tracker = None
-                self.rht_tracker = None
-
-            # Inicializações Lazy (só ocorrem quando chegam os primeiros dados)
-            if self.cloud_tracker is None:
-                # v34.0: Resolução Espectrográfica (512 Bins) para Pincel Vertical
-                p_current = df['close'].iloc[-1]
-                p_min = p_current - 400
-                p_max = p_current + 400
-                
-                self.cloud_tracker = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=512)
-                
-                self.cloud_trail = []
-                self.last_candle_time = None
-                
-                warmup_len = min(35, len(df))
-                start_idx = len(df) - warmup_len
-                print(f"⚛️ Q-MATH :: Executando Warm-Up Histórico v34.0 ({warmup_len} velas)...")
-                
-                self.cloud_tracker.initialize_wave(df['close'].iloc[start_idx], sigma=(self.cloud_tracker.dx * 65.0))
-                
-                for i in range(start_idx, len(df)):
-                    sub_df = df.iloc[max(0, i - 19):i+1]
-                    # v34.0: Evolução Estabilizada
-                    density_schrod, _ = self.cloud_tracker.step(sub_df, dt=0.5, steps=2, pti=0.0)
-                    
-                    if density_schrod is not None:
-                        # v27.0: Persistência Original (Suavidade Temporal)
-                        if self.last_raw_density is not None:
-                            density_schrod = 0.4 * density_schrod + 0.6 * self.last_raw_density
-                        self.last_raw_density = density_schrod.copy()
-
-                        # Gamma 1.2: Visibilidade de névoa densa
-                        density_gamma = np.power(density_schrod, 1.2)
-                        if np.max(density_gamma) > 0:
-                            density_gamma /= np.max(density_gamma)
-                            
-                        max_d = np.max(density_gamma)
-                        cloud_arr = []
-                        for idx_c, d in enumerate(density_gamma):
-                            if d > max_d * 0.01: # Threshold sensível para espectrografia completa
-                                p_level = self.cloud_tracker.index_to_price(idx_c)
-                                cloud_arr.append(f"{p_level:.2f}|{d:.4f}")
-                        
-                        if len(cloud_arr) > 0:
-                            current_slice_str = ",".join(cloud_arr)
-                            curr_time = sub_df.iloc[-1]['time']
-                            
-                            if self.last_candle_time is None or curr_time > self.last_candle_time:
-                                self.cloud_trail.insert(0, current_slice_str)
-                                if len(self.cloud_trail) > 30:
-                                    self.cloud_trail.pop()
-                                self.last_candle_time = curr_time
-                            else:
-                                if len(self.cloud_trail) > 0:
-                                    self.cloud_trail[0] = current_slice_str
-                                else:
-                                    self.cloud_trail.append(current_slice_str)
-
-            if self.lbm_tracker is None:
-                p_min = df['low'].min() - 100
-                p_max = df['high'].max() + 100
-                self.lbm_tracker = LBMFluidDynamics(price_min=p_min, price_max=p_max, bins=200, tau=1.0)
-
-            if self.plasma_tracker is None:
-                self.plasma_tracker = PlasmaMarketTracker()
-
-            if self.rmt_tracker is None:
-                self.rmt_tracker = RandomMatrixTracker(time_steps=100)
-                
-            if self.qrw_tracker is None:
-                try:
-                    import qrw_engine
-                    # Injeção Direta: Bypass de camada para evitar conflitos de nome
-                    self.qrw_engine_core = qrw_engine.QRWEngine(401)
-                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': self.qrw_engine_core})
-                except Exception as e:
-                    print(f"❌ Q-MATH :: Erro Crítico no Motor QRW: {e}")
-                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': None})
-                
-            if self.qcd_tracker is None:
-                self.qcd_tracker = MarketQCDTracker(lookback_window=20)
-                
-            if self.rht_tracker is None:
-                # O símbolo agora vem do payload do roteador, não dos attrs do df
-                self.rht_tracker = LiveRHTTracker(symbol=getattr(self, "current_symbol", "GER40.cash"), lookback=300)
-
-            if self.ksi_engine is None:
-                try:
-                    import ksi_engine
-                    self.ksi_engine = ksi_engine.KSIEngine(4, 50) # 4 oscillators, 50 steps
-                except Exception as e:
-                    print(f"❌ Q-MATH :: Erro Crítico no Motor KSI: {e}")
-                    self.ksi_engine = None
-
-            if self.precog_node is None:
-                self.precog_node = QuantumPreCognitionNode(symbol=getattr(self, "current_symbol", "GER40.cash"))
+            if (tf is not None and self.active_tf != tf) or (self.last_processed_symbol != payload_sym):
+                print(f"\n⚛️ Q-MATH :: Reset Dimensional para {payload_sym} ({tf})")
+                self.active_tf = tf; self.last_processed_symbol = payload_sym; self.current_symbol = payload_sym
+                self.cloud_tracker = None; self.lbm_tracker = None; self.plasma_tracker = None
+                self.rmt_tracker = None; self.qrw_tracker = None; self.rht_tracker = None; self.qcd_tracker = None; self.precog_node = None
+                self.last_price = None
 
             current_close = df['close'].iloc[-1]
-            
-            # Funções helper para execução paralela (GIL Released in C++)
-            def run_lbm(regime=0):
-                lbm_signal = "LAMINAR_FLOW"
-                lbm_v_current = None
-                try:
-                    # Passamos o slice_df completo para o novo motor v3.2
-                    lbm_density, lbm_velocity = self.lbm_tracker.process_tick_stream(df.tail(150), steps=5)
-                    if lbm_density is not None and lbm_velocity is not None:
-                        lbm_signal = self.lbm_tracker.detect_squeeze_rupture(df.tail(150), lbm_density, lbm_velocity, current_regime=regime)
-                        lbm_v_current = lbm_velocity
-                except Exception as e:
-                    print(f"[Q-Math] Erro LBM: {e}")
-                return {"lbm_signal": lbm_signal, "lbm_v_current": lbm_v_current}
+            atr = df['high'].tail(20).max() - df['low'].tail(20).min()
+            # Range dinâmico baseado na volatilidade
+            half_range = max(atr * 3.5, 400) if "BTC" not in payload_sym else max(atr * 2.5, 1200)
+
+            if self.cloud_tracker is None:
+                self.cloud_tracker = QuantumCloudTracker(price_min=current_close - half_range, price_max=current_close + half_range, bins=512)
+                self.cloud_tracker.initialize_wave(current_close, sigma=(self.cloud_tracker.dx * 65.0))
+                self.cloud_trail = []
+                self.last_physics_time = None
+                self.last_price = current_close
+                print(f"⚛️ Q-MATH :: Relative Surface Engine v53.0 Iniciado em {payload_sym}.")
+                
+                # [SINGULARITY WARM-UP] Reconstrução Retrospectiva do Campo
+                warmup_size = min(40, len(df) - 21)
+                if warmup_size > 0:
+                    print(f"🚀 Q-MATH :: Materializando Rastro Quântico ({warmup_size} snapshots)...")
+                    w_last_price = df['close'].iloc[len(df) - warmup_size - 1]
+                    for i in range(len(df) - warmup_size, len(df)):
+                        sub_df = df.iloc[:i+1]
+                        c_close = sub_df['close'].iloc[-1]
+                        
+                        # Relativistic Shift in Warm-up
+                        p_diff = c_close - w_last_price
+                        b_shift = int(round(p_diff / self.cloud_tracker.dx))
+                        if b_shift != 0:
+                            self.cloud_tracker.solver.shift_grid(b_shift)
+                            self.cloud_tracker.price_min += b_shift * self.cloud_tracker.dx
+                            self.cloud_tracker.price_max += b_shift * self.cloud_tracker.dx
+                        w_last_price = c_close
+
+                        c_atr = sub_df['high'].tail(20).max() - sub_df['low'].tail(20).min()
+                        c_half = max(c_atr * 3.5, 400) if "BTC" not in payload_sym else max(c_atr * 2.5, 1200)
+                        
+                        # Sync visual range
+                        self.cloud_tracker.price_min = c_close - c_half
+                        self.cloud_tracker.price_max = c_close + c_half
+                        self.cloud_tracker.dx = (self.cloud_tracker.price_max - self.cloud_tracker.price_min) / self.cloud_tracker.bins
+                        
+                        density, _ = self.cloud_tracker.step(sub_df.tail(20), dt=1.2, steps=10)
+                        if density is not None:
+                            if self.last_raw_density is not None: density = 0.35 * density + 0.65 * self.last_raw_density
+                            self.last_raw_density = density.copy()
+                            gamma_den = np.power(density, 1.8)
+                            vmax = np.percentile(gamma_den, 99.8) if np.max(gamma_den) > 0 else 1.0
+                            gamma_den = np.clip(gamma_den / (vmax + 1e-9), 0, 1.0)
+                            s_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
+                            self.cloud_trail.insert(0, f"{c_close:.2f}|{c_half:.2f}|{s_hex}")
+                    print(f"✅ Q-MATH :: Campo Materializado. {len(self.cloud_trail)} snapshots em cache.")
+
+            if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-100, df['high'].max()+100, 200, tau=1.0)
+            if self.plasma_tracker is None: self.plasma_tracker = PlasmaMarketTracker()
+            if self.rmt_tracker is None: self.rmt_tracker = RandomMatrixTracker(100)
+            if self.qrw_tracker is None:
+                try: 
+                    import qrw_engine
+                    self.qrw_engine_core = qrw_engine.QRWEngine(401)
+                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': self.qrw_engine_core})
+                except Exception as e: 
+                    print(f"⚠️ Q-MATH :: QRW Engine fail: {e}")
+                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': None})
+            if self.qcd_tracker is None: self.qcd_tracker = MarketQCDTracker(20)
+            if self.rht_tracker is None: self.rht_tracker = LiveRHTTracker(self.current_symbol, 300)
+            if self.precog_node is None: self.precog_node = QuantumPreCognitionNode(self.current_symbol)
 
             def run_schrodinger():
-                cloud_str = getattr(self, 'last_cloud_str', "0.0001:")
-                prob_density = getattr(self, 'last_prob_density', None)
-                sec_metrics = None
                 try:
                     curr_time = df.iloc[-1]['time']
-                    pti_val = getattr(self, "current_pti_context", 0.0)
+                    pti = getattr(self, "current_pti_context", 0.0)
                     
-                    # V3.5: Evolução Temporal Ultra-Acelerada (dt=1.2, steps=15)
-                    # Agora roda em CADA TICK para paridade total
-                    density_schrod, _ = self.cloud_tracker.step(df.tail(20), dt=1.2, steps=15, pti=pti_val)
+                    # [V53.0] INERTIAL SYNCHRONIZATION
+                    price_diff = current_close - self.last_price
+                    bin_shift = int(round(price_diff / self.cloud_tracker.dx))
                     
-                    if density_schrod is not None:
-                        import numpy as np
+                    if bin_shift != 0:
+                        # Shift the internal C++ wavefunction
+                        self.cloud_tracker.solver.shift_grid(bin_shift)
+                        # Sync Python-side range bounds
+                        self.cloud_tracker.price_min += bin_shift * self.cloud_tracker.dx
+                        self.cloud_tracker.price_max += bin_shift * self.cloud_tracker.dx
+                    
+                    self.last_price = current_close
+
+                    # Strict price centering for visualization
+                    self.cloud_tracker.price_min = current_close - half_range
+                    self.cloud_tracker.price_max = current_close + half_range
+                    self.cloud_tracker.dx = (self.cloud_tracker.price_max - self.cloud_tracker.price_min) / self.cloud_tracker.bins
+                    
+                    density, _ = self.cloud_tracker.step(df.tail(20), dt=1.2, steps=10, pti=pti)
+                    if density is not None:
+                        if self.last_raw_density is not None: density = 0.35 * density + 0.65 * self.last_raw_density
+                        self.last_raw_density = density.copy()
                         
-                        if not hasattr(self, 'cloud_trail'):
-                            self.cloud_trail = []
-                            self.last_raw_density = None
-                            
-                        # v30.0: Inércia Crítica (98% Histerese) para fluidez LuxAlgo
-                        if self.last_raw_density is not None:
-                            density_schrod = 0.02 * density_schrod + 0.98 * self.last_raw_density
-
-                        # Blur de Convolução 5pt (Preserva o núcleo, evita gigantismo)
-                        density_schrod = np.convolve(density_schrod, np.ones(5)/5, mode='same')
-
-                        density_schrod /= (np.sum(density_schrod) + 1e-9)
-                        self.last_raw_density = density_schrod.copy()
-                        self.last_prob_density = density_schrod
-
-                        # v3.5: Gamma 1.2 para alto contraste no núcleo
-                        density_gamma = np.power(density_schrod, 1.2)
-                        if np.max(density_gamma) > 0:
-                            density_gamma /= np.max(density_gamma)
-
-                        max_d = np.max(density_gamma)
-                        cloud_arr = []
-                        for i, d in enumerate(density_gamma):
-                            if d > max_d * 0.05: # v30.0: Threshold de visibilidade focalizada
-                                p = self.cloud_tracker.index_to_price(i)
-                                cloud_arr.append(f"{p:.2f}|{d:.4f}")                        
-                        if len(cloud_arr) > 0:
-                            current_slice_str = ",".join(cloud_arr)
-                            
-                            if not hasattr(self, 'last_physics_time') or curr_time > self.last_physics_time:
-                                self.cloud_trail.insert(0, current_slice_str)
-                                if len(self.cloud_trail) > 30: # Histórico de 30 velas para fluidez
-                                    self.cloud_trail.pop()
-                                self.last_physics_time = curr_time
-                            else:
-                                if len(self.cloud_trail) > 0:
-                                    self.cloud_trail[0] = current_slice_str
-                                else:
-                                    self.cloud_trail.append(current_slice_str)
-                                    
-                        self.last_cloud_str = f"{self.cloud_tracker.dx:.6f}:" + "^".join(self.cloud_trail)
-                        cloud_str = self.last_cloud_str
-                    else:
-                        # Se falhar o motor, envia pelo menos o rastro antigo ou default
-                        cloud_str = getattr(self, 'last_cloud_str', "0.0001:")
-                    
-                    sec_metrics = self.cloud_tracker.get_singularity_metrics()
-                except Exception as e:
-                    print(f"[Q-Math] Erro Schrödinger: {e}")
-                    cloud_str = getattr(self, 'last_cloud_str', "0.0001:")
-                return {"prob_density": prob_density, "sec_metrics": sec_metrics, "cloud_str": cloud_str}
-
-
-
-            def run_plasma():
-                z_pinch_signal = "NEUTRAL"
-                try:
-                    curr_candle = df.iloc[-1]; prev_candle = df.iloc[-2]
-                    plasma_zones = self.plasma_tracker.scan_for_plasma_zones(df.tail(200), lookback=200)
-                    z_idx, z_type = self.plasma_tracker.process_tick(curr_candle, prev_candle, plasma_zones)
-                    if z_idx > 1.0:
-                        z_pinch_signal = f"Z_PINCH_PLASMA_{z_type}"
-                except Exception as e:
-                    pass
-                return {"z_pinch_signal": z_pinch_signal}
-
-            def run_rmt(lbm_v=None):
-                rmt_signal = "NOISE"
-                is_pure = False
-                try:
-                    # RMT v2.0: Agora recebe a velocidade do fluido para filtrar ruído cinético
-                    _, power_ratio, is_pure = self.rmt_tracker.process_spectral_filter(df.tail(200), lbm_v)
-                    rmt_signal = f"PURE_SIGNAL_x{power_ratio:.1f}" if is_pure else f"NOISE_x{power_ratio:.1f}"
-                except Exception as e:
-                    pass
-                return {"rmt_signal": rmt_signal, "is_pure": is_pure}
-
-            def run_qrw():
-                qrw_signal = "NEUTRAL"
-                qrw_history_str = ""
-                try:
-                    # 1. NORMALIZAÇÃO DE COLUNAS (Resiliência)
-                    df.columns = [c.lower() for c in df.columns]
-                    
-                    # 2. ESCALA DINÂMICA COMPENSADA (v7.0)
-                    recent_atr = (df['high'] - df['low']).tail(20).mean()
-                    dynamic_scale = 1.0 / (recent_atr * 0.4 + 1e-9) if recent_atr > 0 else 0.01
-                    
-                    # 3. RECONSTRUÇÃO INCREMENTAL (State Persistence)
-                    h_df = df.tail(800)
-                    
-                    if self.qrw_tracker.engine is None:
-                        return {"qrw_signal": "OFFLINE", "qrw_history": ""}
-
-                    if len(self.qrw_tracker.last_history) == 0 or len(df) < len(self.qrw_tracker.last_history):
-                        self.qrw_tracker.engine.reset()
-                        self.qrw_tracker.last_history = []
-                        bars_to_process = h_df
-                    else:
-                        bars_to_process = df.tail(1) 
-                    
-                    # Prepara deltas e volumes
-                    deltas = bars_to_process['close'].diff().fillna(0).values if len(bars_to_process) > 1 else (bars_to_process['close'] - bars_to_process['open']).values
-                    volumes = bars_to_process['tick_volume'].values
-                    
-                    recent_atr = (df['high'] - df['low']).tail(7).mean()
-                    scale = 50.0 / (recent_atr + 1e-9)
-                    
-                    # Injeção de Resiliência: Inicialização Zero-Point
-                    curr_drift = 0.0
-                    curr_entropy = 1.0
-
-                    for i in range(len(bars_to_process)):
-                        d = deltas[i]
-                        v = volumes[i]
+                        gamma_den = np.power(density, 1.8)
+                        vmax = np.percentile(gamma_den, 99.8) if np.max(gamma_den) > 0 else 1.0
+                        gamma_den = np.clip(gamma_den / (vmax + 1e-9), 0, 1.0)
                         
-                        # Evolução Quântica Única
-                        self.qrw_tracker.engine.update_and_get_skew(
-                            np.array([d], dtype=float),
-                            np.array([v], dtype=float),
-                            scale
-                        )
+                        snapshot_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
+                        # Payload: p_center|half_range|hex
+                        # p_center MUST be exactly the price the wave is anchored on
+                        slice_data = f"{current_close:.2f}|{half_range:.2f}|{snapshot_hex}"
                         
-                        curr_drift = self.qrw_tracker.engine.get_skewness() 
-                        curr_entropy = 1.0 # Entropy is now intrinsic to the wave collapse
+                        if self.last_physics_time is None or curr_time > self.last_physics_time:
+                            self.cloud_trail.insert(0, slice_data)
+                            if len(self.cloud_trail) > 41: self.cloud_trail.pop()
+                            self.last_physics_time = curr_time
+                        else:
+                            if self.cloud_trail: self.cloud_trail[0] = slice_data
                         
-                        # Lógica de Sinal Impecável (v3.5)
-                        # 1: BUY_SINGULARITY, 2: SELL_SINGULARITY, 3: BUY_FLOW, 4: SELL_FLOW
-                        q_signal = 0
-                        if abs(curr_drift) > 0.005 and curr_entropy > 1.0:
-                            q_signal = 1 if curr_drift < 0 else 2 
-                        elif abs(curr_drift) > 0.0001:
-                            q_signal = 3 if curr_drift > 0 else 4
-                        
-                        # Armazena para persistência no HUD
-                        self.qrw_tracker.last_history.append(q_signal)
-                        if len(self.qrw_tracker.last_history) > 800:
-                            self.qrw_tracker.last_history.pop(0)
-                        
-                    qrw_history_str = ",".join(map(str, self.qrw_tracker.last_history))
-                    
-                    # Sinal Atual com Telemetria Consolidada
-                    curr_sig_code = self.qrw_tracker.last_history[-1] if self.qrw_tracker.last_history else 0
-                    diag_info = f"D:{curr_drift:+.3f} H:{curr_entropy:.2f}"
-                    
-                    if curr_sig_code == 2: qrw_signal = "QUANTUM_EXHAUSTION_SHORT"
-                    elif curr_sig_code == 1: qrw_signal = "QUANTUM_EXHAUSTION_LONG"
-                    elif curr_sig_code == 3: qrw_signal = "QUANTUM_ACCUMULATION_BULL"
-                    elif curr_sig_code == 4: qrw_signal = "QUANTUM_DISTRIBUTION_BEAR"
-                    # QRW Resilience complete.
-                        
-                except Exception as e:
-                    qrw_signal = f"ERR: {type(e).__name__}"
-                return {"qrw_signal": qrw_signal, "qrw_history": qrw_history_str}
+                        return {"cloud_str": "^".join(self.cloud_trail)}
+                    return {"cloud_str": "0.0:0.0:0.0:"}
+                except Exception as e: return {"cloud_str": f"ERROR:{str(e)}"}
 
-            def run_qcd():
-                qcd_signal = "CONFINED"
-                try:
-                    qcd_signal = self.qcd_tracker.detect_fission(df)
-                except Exception as e:
-                    print(f"[Q-Math] Erro Market QCD: {e}")
-                return {"qcd_signal": qcd_signal}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                f_sch = executor.submit(run_schrodinger)
+                results = f_sch.result()
 
-            def run_rht():
-                rht_status = "PURIFYING"
-                rht_history = ""
-                rht_flash = 0.0
-                rht_flash_history = ""
-                try:
-                    # O RHT v2.0 processa tensores multi-TF em escala termodinâmica
-                    rht_status, history_arr, rht_flash, rht_flash_history = self.rht_tracker.process_live_rht()
-                    rht_history = ",".join(history_arr)
-                except Exception as e:
-                    print(f"[Q-Math] Erro RHT: {e}")
-                return {"rht_status": rht_status, "rht_history": rht_history, "rht_flash": rht_flash, "rht_flash_history": rht_flash_history}
-
-            def run_cyt():
-                ricci_curvature = 0.0
-                cyt_danger = 0.0
-                try:
-                    import numpy as np
-                    # V3.6: Reduzido lookback para 34 barras para detecção ultra-sensível de reversão
-                    recent_df = df.tail(34).copy()
-                    N = len(recent_df)
-                    data_10d = np.zeros((10, N))
-                    data_10d[0, :] = recent_df['open'].values
-                    data_10d[1, :] = recent_df['high'].values
-                    data_10d[2, :] = recent_df['low'].values
-                    data_10d[3, :] = recent_df['close'].values
-                    data_10d[4, :] = recent_df['tick_volume'].values
-                    data_10d[5, :] = recent_df['close'].pct_change().bfill().values
-                    data_10d[6, :] = (recent_df['high'] - recent_df['low']).values
-                    data_10d[7, :] = recent_df['close'].rolling(5).mean().bfill().values
-                    data_10d[8, :] = recent_df['tick_volume'].rolling(5).mean().bfill().values
-                    data_10d[9, :] = (recent_df['close'] - recent_df['open']).values
-                    
-                    flow = self.cyt.analyze_manifold_flow(data_10d)
-                    def_array = flow["deformation"]
-                    det_array = flow["determinant"]
-                    danger_array = self.cyt.calculate_danger_zones(data_10d, 15, 2.5) # Reduzido window para 15
-                    
-                    if len(def_array) > 0:
-                        ricci_curvature = def_array[-1]
-                        cyt_danger = danger_array[-1]
-                        
-                        # Calculo de Entropia Holográfica (AdS/CFT)
-                        # Usamos o determinante métrico e o volume de tick local
-                        local_vol = np.sum(data_10d[4, -10:])
-                        local_spread = np.mean(data_10d[6, -10:])
-                        h_entropy = self.cyt.calculate_holographic_entropy(local_vol, 10.0, local_spread)
-                        
-                        # Detecção de Colapso de Variedade
-                        collapse_info = self.cyt.calculate_topological_collapse(data_10d)
-                        is_collapsed = collapse_info["is_collapsed"]
-                except Exception as e:
-                    print(f"[Q-Math] Erro CYT Ricci Flow: {e}")
-                    h_entropy = 0.0
-                    is_collapsed = False
-                return {"ricci_curvature": ricci_curvature, "cyt_danger": cyt_danger, "h_entropy": h_entropy, "is_collapsed": is_collapsed}
-
-            def run_ksi():
-                ksi_val = 0.0
-                if self.ksi_engine is not None and len(df) >= 100:
-                    try:
-                        import numpy as np
-                        recent_df = df.tail(100).copy()
-                        N = 50
-                        data_4d = np.zeros((4, N))
-                        data_4d[0, :] = recent_df['close'].rolling(3).mean().tail(N).values
-                        data_4d[1, :] = recent_df['close'].rolling(8).mean().tail(N).values
-                        data_4d[2, :] = recent_df['close'].rolling(14).mean().tail(N).values
-                        data_4d[3, :] = recent_df['close'].rolling(21).mean().tail(N).values
-                        
-                        self.ksi_engine.load_oscillator_data(data_4d)
-                        self.ksi_engine.compute_synchronization()
-                        ksi_val = self.ksi_engine.get_current_ksi()
-                    except Exception as e:
-                        pass
-                return {"ksi_val": ksi_val}
-
-            def run_precog():
-                # Calcula ATR
-                atr = df['high'].iloc[-20:].max() - df['low'].iloc[-20:].min()
-                if atr == 0: atr = 10.0
-                try:
-                    res = self.precog_node.project_containment_horizon(df, current_close, atr)
-                    return {"precog_sl_long": res.get("sl_bull_singular", 0.0), 
-                            "precog_sl_short": res.get("sl_bear_singular", 0.0)}
-                except Exception:
-                    return {"precog_sl_long": current_close - (atr*3), "precog_sl_short": current_close + (atr*3)}
-
-            # Orquestração Paralela de Física (LBM primeiro para prover velocidade ao RMT)
-            lbm_res = run_lbm(regime=getattr(self, "current_regime_context", 0))
-            lbm_v = lbm_res.get("lbm_v_current")
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                futures = [
-                    executor.submit(run_schrodinger),
-                    executor.submit(run_plasma),
-                    executor.submit(run_rmt, lbm_v),
-                    executor.submit(run_qrw),
-                    executor.submit(run_qcd),
-                    executor.submit(run_rht),
-                    executor.submit(run_cyt),
-                    executor.submit(run_ksi),
-                    executor.submit(run_precog)
-                ]
-                
-                results = {"lbm_signal": lbm_res["lbm_signal"]}
-                for future in concurrent.futures.as_completed(futures):
-                    results.update(future.result())
-
-            # Atualização atômica do estado que será lido pelo AGI_CORE
             with self.state_lock:
-                self.current_state["status"] = "ACTIVE"
-                self.current_state["latest_price"] = current_close
-                self.current_state["cloud_prob"] = results.get("prob_density", [])
-                self.current_state["sec_metrics"] = results.get("sec_metrics")
-                self.current_state["cloud_str"] = results.get("cloud_str", "0.0001:")
-                self.current_state["lbm_signal"] = results.get("lbm_signal", "LAMINAR_FLOW")
-                self.current_state["z_pinch_signal"] = results.get("z_pinch_signal", "NEUTRAL")
-                self.current_state["rmt_signal"] = results.get("rmt_signal", "NOISE")
-                self.current_state["qrw_signal"] = results.get("qrw_signal", "NEUTRAL")
-                self.current_state["qrw_history"] = results.get("qrw_history", "")
-                self.current_state["is_pure"] = results.get("is_pure", False)
-                self.current_state["qcd_signal"] = results.get("qcd_signal", "CONFINED")
-                self.current_state["rht_status"] = results.get("rht_status", "PURIFYING")
-                self.current_state["rht_history"] = results.get("rht_history", "")
-                self.current_state["rht_flash"] = results.get("rht_flash", 0.0)
-                self.current_state["rht_flash_history"] = results.get("rht_flash_history", "")
-                self.current_state["ricci_curvature"] = results.get("ricci_curvature", 0.0)
-                self.current_state["cyt_danger"] = results.get("cyt_danger", 0.0)
-                self.current_state["h_entropy"] = results.get("h_entropy", 0.0)
-                self.current_state["is_collapsed"] = results.get("is_collapsed", False)
-                self.current_state["ksi_val"] = results.get("ksi_val", 0.0)
-                self.current_state["precog_sl_long"] = results.get("precog_sl_long", current_close)
-                self.current_state["precog_sl_short"] = results.get("precog_sl_short", current_close)
-
-        except Exception as e:
-            print(f"❌ Q-MATH :: Erro no processamento interno: {e}")
+                self.current_state.update({
+                    "status": "ACTIVE", "latest_price": current_close,
+                    "cloud_str": results.get("cloud_str", "")
+                })
+        except Exception as e: print(f"❌ Q-MATH :: Error: {e}")
 
     def run_subscriber_loop(self):
-        """Thread que escuta o mercado em loop"""
-        print("⚛️ Q-MATH :: Assinante de Mercado (SUB) Iniciado.")
+        last_heartbeat = time.time()
         while self.is_running:
-            latest_payload = None
+            latest = None
+            if time.time() - last_heartbeat > 10:
+                print(f"💓 Q-MATH :: Coração Batendo. Aguardando sinal em {PORT_TICK_FEED}...")
+                last_heartbeat = time.time()
+                
             while True:
                 try:
                     msg = self.sub_socket.recv_multipart(flags=zmq.NOBLOCK)
-                    topic = msg[0].decode('utf-8')
-                    if topic == TOPIC_MARKET_BAR:
-                        latest_payload = pickle.loads(msg[1])
-                except zmq.Again:
-                    break
-                except Exception as e:
-                    print(f"❌ Q-MATH :: Erro de rede SUB: {e}")
-                    break
-
-            if latest_payload is not None:
-                self.process_market_data(latest_payload)
-            else:
-                time.sleep(0.01) # Sleep minúsculo para não queimar CPU enquanto espera
+                    if msg[0].decode('utf-8') == TOPIC_MARKET_BAR: 
+                        latest = pickle.loads(msg[1])
+                        last_heartbeat = time.time() # Reset heartbeat on data
+                except zmq.Again: break
+                except Exception: break
+            if latest: self.process_market_data(latest)
+            else: time.sleep(0.01)
 
     def run_reply_server(self):
-        """Thread principal que atende os pedidos de estado do AGI_CORE"""
-        print(f"⚛️ Q-MATH :: Servidor de Respostas (REP) Iniciado na porta {PORT_Q_MATH}.")
+        poller = zmq.Poller()
+        poller.register(self.rep_socket, zmq.POLLIN)
         while self.is_running:
             try:
-                # Aguarda pedido do AGI CORE (pode conter o regime atual e PTI para feedback)
-                message = self.rep_socket.recv()
-                
-                # Protocolo: "GET_STATE|r_score|pti"
-                try:
-                    msg_str = message.decode('utf-8')
-                    parts = msg_str.split("|")
-                    if len(parts) >= 2:
-                        self.current_regime_context = int(parts[1])
-                    if len(parts) >= 3:
-                        self.current_pti_context = float(parts[2])
-                    else:
-                        self.current_pti_context = 0.0
-                except:
-                    self.current_regime_context = 0
-                    self.current_pti_context = 0.0
-                
-                with self.state_lock:
-                    # Empacota o estado atual e envia de volta imediatamente
-                    reply = pickle.dumps(self.current_state)
-                
-                self.rep_socket.send(reply)
-            except Exception as e:
-                print(f"❌ Q-MATH :: Erro no REP Server: {e}")
+                socks = dict(poller.poll(1000))
+                if self.rep_socket in socks:
+                    msg = self.rep_socket.recv().decode('utf-8').split("|")
+                    if len(msg) >= 2: self.current_regime_context = int(msg[1])
+                    if len(msg) >= 3: self.current_pti_context = float(msg[2])
+                    with self.state_lock: reply = pickle.dumps(self.current_state)
+                    self.rep_socket.send(reply)
+            except Exception as e: 
+                print(f"❌ Q-MATH :: Reply Server Error: {e}")
                 time.sleep(0.1)
 
     def startup(self):
         self.is_running = True
-        
-        # [PROTOCOL NEXUS] Inicialização mandatória para trackers que consultam o terminal diretamente (RHT)
-        if not mt5.initialize():
-            print("❌ Q-MATH :: Falha ao inicializar API MT5. RHT operará em modo degradado.")
-        else:
-            print("⚛️ Q-MATH :: API MT5 Sincronizada para trackers multi-fractais.")
-
-        # Inicia a Thread SUB (Ouvinte)
+        print("🚀 Q-MATH :: Booting Relative Surface Engine...")
+        if not mt5.initialize(): print("❌ Q-MATH :: MT5 Error.")
         threading.Thread(target=self.run_subscriber_loop, daemon=True).start()
-        
-        # O REP server roda na thread principal
         self.run_reply_server()
 
     def shutdown(self):
-        self.is_running = False
-        self.sub_socket.close()
-        self.rep_socket.close()
-        self.sub_context.term()
-        self.rep_context.term()
-        mt5.shutdown()
-        print("⚛️ Q-MATH :: Desligado.")
+        self.is_running = False; self.sub_socket.close(); self.rep_socket.close(); mt5.shutdown()
 
 if __name__ == "__main__":
-    node = QMathNode()
-    try:
-        node.startup()
-    except KeyboardInterrupt:
-        node.shutdown()
+    node = QMathNode(); node.startup()

@@ -79,7 +79,8 @@ def run_tcp_server():
 
     while True:
         try:
-            client_socket, _ = server_socket.accept()
+            client_socket, addr = server_socket.accept()
+            # print(f"📡 SWARM :: Conexão recebida de {addr}")
             request = client_socket.recv(1024) 
             try:
                 req_str = request.decode('utf-8')
@@ -91,9 +92,9 @@ def run_tcp_server():
                         new_symbol = params.split("symbol=")[1].split("&")[0]
                         if new_symbol != getattr(run_tcp_server, "current_mt5_symbol", None):
                             run_tcp_server.current_mt5_symbol = new_symbol
-                            print(f"📡 SWARM :: Símbolo alterado para: {new_symbol}")
-            except Exception:
-                pass
+                            print(f"📡 SWARM :: Sintonizado via MT5! Ativo: {new_symbol} | TF: {current_mt5_tf}")
+            except Exception as e:
+                print(f"⚠️ SWARM :: Erro ao processar requisição TCP: {e}")
             
             response_body = nexus_data_str.encode('utf-8')
             http_response = (
