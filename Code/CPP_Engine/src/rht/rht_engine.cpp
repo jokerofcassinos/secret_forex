@@ -56,12 +56,13 @@ public:
      * Motor de Difusão e Entropia.
      * Calcula o fluxo de calor em toda a dimensão temporal.
      */
-    void compute_thermodynamics(double alpha = 0.15) {
+    void compute_thermodynamics(double alpha = 0.15, double gravity_factor = 1.2, double entropy_alpha = 0.3) {
         heat_flux.assign(time_steps, 0.0);
         entropy_field.assign(time_steps, 1.0);
         ignition_state.assign(time_steps, 0.0);
 
         double accumulated_heat = 0.0;
+        double accumulated_entropy = 1.0;
 
         for (int t = 0; t < time_steps; ++t) {
             double p_buy = 0.0;
@@ -73,47 +74,49 @@ public:
             for (int i = 0; i < num_timeframes; ++i) {
                 double v = tensor_matrix[i][t];
                 sum_abs += std::abs(v);
-                center_of_mass += v * std::pow(1.2, i); // Gravidade aumenta em TFs maiores
+                center_of_mass += v * std::pow(gravity_factor, i); // Gravidade parametrizada
                 
                 if (v > 0) p_buy += std::abs(v);
                 else p_sell += std::abs(v);
             }
 
             // 2. Entropia de Shannon Generalizada (Grau de Conflito)
-            double entropy = 1.0;
+            double raw_entropy = 1.0;
             if (sum_abs > 1e-7) {
                 double prob_b = p_buy / sum_abs;
                 double prob_s = p_sell / sum_abs;
-                entropy = 0.0;
-                if (prob_b > 0) entropy -= prob_b * std::log2(prob_b);
-                if (prob_s > 0) entropy -= prob_s * std::log2(prob_s);
+                raw_entropy = 0.0;
+                if (prob_b > 0) raw_entropy -= prob_b * std::log2(prob_b);
+                if (prob_s > 0) raw_entropy -= prob_s * std::log2(prob_s);
                 // Normaliza para [0, 1] no sistema binário
-                entropy = std::min(1.0, std::max(0.0, entropy));
+                raw_entropy = std::min(1.0, std::max(0.0, raw_entropy));
             }
+            
+            // Suavização da Entropia (Evita serrilhados/flickers)
+            accumulated_entropy = (accumulated_entropy * (1.0 - entropy_alpha)) + (raw_entropy * entropy_alpha);
 
             // 3. Equação de Difusão Térmica: Q_dot = Coerência * Densidade de Energia * (1 - Entropia)
             double instant_heat = 0.0;
             if (sum_abs > 1e-7) {
-                double coherence = std::abs(center_of_mass) / (sum_abs * std::pow(1.2, num_timeframes-1) + 1e-9);
+                double coherence = std::abs(center_of_mass) / (sum_abs * std::pow(gravity_factor, num_timeframes-1) + 1e-9);
                 double direction = (center_of_mass >= 0) ? 1.0 : -1.0;
                 
                 // O Calor aumenta exponencialmente com a Coerência Fractal
                 double energy = sum_abs / num_timeframes;
-                instant_heat = direction * std::pow(coherence, 2.0) * energy * (1.0 - entropy);
+                instant_heat = direction * std::pow(coherence, 2.0) * energy * (1.0 - accumulated_entropy);
             }
 
             // 4. Inércia Térmica (Lennard-Jones style smoothing)
             accumulated_heat = (accumulated_heat * (1.0 - alpha)) + (instant_heat * alpha);
             
             // 5. Estado de Ignição Absoluta (Condensado de Bose-Einstein)
-            // Se o calor supera limiares críticos com baixa entropia, ocorre o "Flash Point"
             double flash = 0.0;
-            if (entropy < 0.35 && std::abs(accumulated_heat) > 0.8) {
+            if (accumulated_entropy < 0.35 && std::abs(accumulated_heat) > 0.8) {
                 flash = (accumulated_heat > 0) ? 1.0 : -1.0;
             }
 
             heat_flux[t] = accumulated_heat;
-            entropy_field[t] = entropy;
+            entropy_field[t] = accumulated_entropy;
             ignition_state[t] = flash;
         }
     }
@@ -132,6 +135,6 @@ PYBIND11_MODULE(rht_engine, m) {
     py::class_<RHTEngine>(m, "RHTEngine")
         .def(py::init<int, int>())
         .def("load_tensor_data", &RHTEngine::load_tensor_data)
-        .def("compute_thermodynamics", &RHTEngine::compute_thermodynamics, py::arg("alpha") = 0.15)
+        .def("compute_thermodynamics", &RHTEngine::compute_thermodynamics, py::arg("alpha") = 0.15, py::arg("gravity_factor") = 1.2, py::arg("entropy_alpha") = 0.3)
         .def("get_thermodynamics", &RHTEngine::get_thermodynamics);
 }

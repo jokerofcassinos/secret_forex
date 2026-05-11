@@ -72,9 +72,10 @@ class LiveRHTTracker:
             # Momentum logarítmico para estabilidade termodinâmica
             log_returns = np.log(df_base[col] / df_base[col].shift(1)).fillna(0)
             
-            # Normalização Robusta: Evita divisão por zero e Infinitos
-            mean = log_returns.rolling(20).mean()
-            std = log_returns.rolling(20).std().replace(0, 1e-9).fillna(1e-9)
+            # [v38.1] Normalização Time-Absolute (48 horas reais) em vez de N barras.
+            # Impede a distorção gravitacional entre M5 e D1.
+            mean = log_returns.rolling('48h', min_periods=5).mean()
+            std = log_returns.rolling('48h', min_periods=5).std().replace(0, 1e-9).fillna(1e-9)
             z_score = (log_returns - mean) / std
             
             # Clipping de Outliers Quânticos (> 4 sigma)

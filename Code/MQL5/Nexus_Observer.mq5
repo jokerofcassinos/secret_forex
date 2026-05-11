@@ -255,8 +255,63 @@ void ParseAndDraw(string data)
       }
    }
    
+   // 3. TACTICAL HUD (ASI Ph.D. Telemetry)
+   DrawTacticalHUD(parts);
+   
    m_canvas.Update();
    ChartRedraw();
+}
+
+void DrawTacticalHUD(string &parts[])
+{
+   if(ArraySize(parts) < 30) return;
+   
+   // Fundo translúcido do painel
+   int x = 20, y = 20, w = 320, h = 140;
+   m_canvas.FillRectangle(x, y, x+w, y+h, ColorToARGB(clrBlack, 180));
+   m_canvas.Rectangle(x, y, x+w, y+h, ColorToARGB(clrDimGray, 200));
+   
+   // Título
+   m_canvas.FontSet("Consolas", 14, FW_BOLD);
+   m_canvas.TextOut(x + 15, y + 10, "NEXUS ASI-5 :: QUANTUM TELEMETRY", ColorToARGB(clrWhite, 255));
+   m_canvas.LineHorizontal(x + 10, x + w - 10, y + 35, ColorToARGB(clrDimGray, 150));
+   
+   // 1. Core Status
+   string core_status = parts[2];
+   m_canvas.FontSet("Consolas", 12, FW_NORMAL);
+   m_canvas.TextOut(x + 15, y + 45, "SYS CORE : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 45, core_status, ColorToARGB(clrCyan, 255));
+   
+   // 2. Regime Status (SMC Evolved)
+   string regime_str = "NEUTRAL";
+   uint regime_clr = ColorToARGB(clrDarkGray, 255);
+   string historyRegimes = parts[4]; 
+   string hReg[]; StringSplit(historyRegimes, ',', hReg);
+   if(ArraySize(hReg) > 0) {
+      string sub[]; StringSplit(hReg[ArraySize(hReg)-1], '|', sub);
+      if(ArraySize(sub) > 0) {
+         int r = (int)StringToInteger(sub[0]);
+         if(r == 1) { regime_str = "BULLISH (ABSORPTION)"; regime_clr = ColorToARGB(clrCyan, 255); }
+         else if(r == 2) { regime_str = "BEARISH (DISTRIBUTION)"; regime_clr = ColorToARGB(clrMagenta, 255); }
+      }
+   }
+   m_canvas.TextOut(x + 15, y + 70, "TOPOLOGY : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 70, regime_str, regime_clr);
+   
+   // 3. RHT Status (Thermodynamics)
+   string rht_status = parts[21];
+   uint rht_clr = ColorToARGB(clrYellow, 255); // Default warning/heating
+   if(StringFind(rht_status, "BULL") >= 0) rht_clr = ColorToARGB(clrCyan, 255);
+   if(StringFind(rht_status, "BEAR") >= 0) rht_clr = ColorToARGB(clrMagenta, 255);
+   if(StringFind(rht_status, "LAMINAR") >= 0) rht_clr = ColorToARGB(clrDimGray, 255);
+   
+   m_canvas.TextOut(x + 15, y + 95, "RHT DIFF : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 95, rht_status, rht_clr);
+   
+   // 4. QDD Fidelity
+   string qdd_fid = (ArraySize(parts) > 31) ? parts[31] : "0.00";
+   m_canvas.TextOut(x + 15, y + 120, "FIDELITY : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 120, qdd_fid + " SIGMA", ColorToARGB(clrWhite, 255));
 }
 
 uint GetLushColor(double val, int age) 
