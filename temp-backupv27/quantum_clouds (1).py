@@ -28,10 +28,6 @@ class QuantumCloudTracker:
         self.bins = bins
         self.dx = (price_max - price_min) / bins
         
-        # v35.0: Campos Persistentes de Liquidez e Delta
-        self.liquidity_field = np.zeros(self.bins, dtype=np.float64)
-        self.delta_field = np.zeros(self.bins, dtype=np.float64)
-        
         try:
             self.solver = schrodinger_engine.QuantumCloudSolver(self.bins, self.dx)
             self.is_active = True
@@ -58,55 +54,31 @@ class QuantumCloudTracker:
         V_base = 100.0  
         vol_col = 'tick_volume' if 'tick_volume' in df_slice.columns else 'volume'
         if vol_col not in df_slice.columns: return [V_base] * self.bins
+        vol_array = df_slice[vol_col].astype(np.float64).values
+        vol_mean = np.mean(vol_array) if len(vol_array) > 0 else 1000.0
+        vol_scale = 80.0 / (vol_mean + 1e-9) 
         
-        # v36.0: Alargamento de Sigma para Nuvem Institucional
-        new_candles = df_slice.tail(1)
-        for _, row in new_candles.iterrows():
-            mid_p = (row['high'] + row['low']) / 2.0
-            # Aumentado para criar nuvens mais largas (v36.0)
-            range_p = max(self.dx * 10.0, (row['high'] - row['low']) * 1.5)
+        highs = df_slice['high'].values
+        lows = df_slice['low'].values
+        n_candles = len(df_slice)
+        decay_lambda = 0.02 
+        decay_factor = np.exp(-decay_lambda * np.arange(n_candles)[::-1])
+        strength_map = np.zeros(self.bins, dtype=np.float64)
+        for i in range(n_candles):
+            mid_p = (highs[i] + lows[i]) / 2.0
+            range_p = max(self.dx * 3.0, highs[i] - lows[i]) 
             idx_mid = self.price_to_index(mid_p)
-            
-            delta_sign = 1.0 if row['close'] > mid_p else -1.0
-            volume = row[vol_col]
-            
-            width_bins = int(range_p / self.dx * 3.0) + 1
+            width_bins = int(range_p / self.dx * 2.0) + 1
             i_start = max(0, idx_mid - width_bins)
             i_end = min(self.bins, idx_mid + width_bins)
-            
             x = np.arange(i_start, i_end)
             dist = (x - idx_mid) * self.dx
-            # v37.0: Lush Nebula - Poços ultra-largos e profundos
-            well_shape = (volume / 80.0) * np.exp(-0.5 * (dist / (range_p + 1e-9))**2)
-            
-            self.liquidity_field[i_start:i_end] += well_shape * 2.0
-            self.delta_field[i_start:i_end] += well_shape * 2.0 * delta_sign
-
-        # v37.0: BURN RATE NEBULA (Consumo de 1% para persistência de névoa)
-        curr_high = df_slice['high'].iloc[-1]
-        curr_low = df_slice['low'].iloc[-1]
-        idx_low = self.price_to_index(curr_low)
-        idx_high = self.price_to_index(curr_high)
-        
-        self.liquidity_field[idx_low:idx_high+1] *= 0.99
-        self.delta_field[idx_low:idx_high+1] *= 0.99
-        
-        # Persistência de Longuíssimo Prazo
-        self.liquidity_field *= 0.9995
-        self.delta_field *= 0.9995
-        
-        V = np.maximum(5.0, V_base - self.liquidity_field * 35.0)
-        V_smoothed = np.convolve(V, np.ones(7)/7, mode='same') # Suavização maior
+            strength = (vol_array[i] * vol_scale) * decay_factor[i]
+            well_shape = strength * np.exp(-2.0 * (dist / (range_p + 1e-9))**2)
+            strength_map[i_start:i_end] += well_shape
+        V = np.maximum(5.0, V_base - strength_map)
+        V_smoothed = np.convolve(V, np.ones(3)/3, mode='same')
         return list(V_smoothed)
-
-    def calculate_shannon_entropy(self, df_slice):
-        # Mede a incerteza do regime via dispersão de retornos e volume
-        if len(df_slice) < 10: return 1.0
-        returns = np.diff(np.log(df_slice['close'].values + 1e-9))
-        hist, _ = np.histogram(returns, bins=20, density=True)
-        hist = hist[hist > 0]
-        entropy = -np.sum(hist * np.log(hist))
-        return np.clip(entropy / 2.5, 0.8, 3.0) # Sensibilidade aumentada
 
     def step(self, df_slice, dt=0.2, steps=1, pti=0.0):
         if not self.is_active: return None
@@ -114,12 +86,10 @@ class QuantumCloudTracker:
         tr = (df_slice['high'] - df_slice['low']).rolling(14).mean().iloc[-1]
         if np.isnan(tr) or tr < self.dx: tr = self.dx * 10.0
         
-        # v37.0: DIFUSÃO PROFUNDA (Hbar Base 30.0)
-        entropy_factor = self.calculate_shannon_entropy(df_slice)
-        hbar_base = max(30.0, min(100.0, tr / (self.dx * 0.5)))
-        hbar_dynamic = hbar_base * entropy_factor 
-        
-        # 1. SMOOTH GRID SHIFTING (Mantido)
+        # v32.0: QUANTUM FOG (hbar=8.0) para expansão suave
+        hbar_dynamic = max(8.0, min(25.0, tr / (self.dx * 2.0)))
+
+        # 1. SMOOTH GRID SHIFTING
         curr_price = df_slice['close'].iloc[-1]
         margin = (self.price_max - self.price_min) * 0.20
         
@@ -139,21 +109,29 @@ class QuantumCloudTracker:
         com_price = self.index_to_price(self.solver.get_center_of_mass())
         price_dist = abs(curr_price - com_price)
         
-        # 2. MASS GUARD (Viscosidade de Fluido)
-        base_mass = 100.0 / (tr + 1e-5) 
-        mass = base_mass * 0.02 if price_dist > tr * 3.0 else base_mass
-        mass = max(1.0, min(800.0, mass))
+        # 2. MASS GUARD
+        base_mass = 200.0 / (tr + 1e-5)
+        mass = base_mass * 0.1 if price_dist > tr * 2.0 else base_mass
+        mass = max(5.0, min(2000.0, mass))
 
-        V = self.generate_potential_from_volume_profile(df_slice)
+        # v31.1: Inicialização do Potencial Base (Volume Profile)
+        V_base = self.generate_potential_from_volume_profile(df_slice)
+        
+        # v33.0: GRAVIDADE SUAVE (k=0.5)
+        # Permite que a nuvem ganhe volume e brilho sem colapsar em um dot.
+        idx_curr = self.price_to_index(curr_price)
+        x_grid = np.arange(self.bins)
+        V_gravity = 0.5 * (x_grid - idx_curr)**2 
+        V = np.array(V_base) + V_gravity
         
         vol_col = 'tick_volume' if 'tick_volume' in df_slice.columns else 'volume'
         vol_profile = df_slice[vol_col].values if vol_col in df_slice.columns else np.ones(len(df_slice))
         atr_rel = tr / (df_slice['high'].max() - df_slice['low'].min() + 1e-9)
-        mass_scale_factor = 1.0 / (1.0 + atr_rel * 30.0) 
+        mass_scale_factor = 1.0 / (1.0 + atr_rel * 50.0) 
         global_mass = mass * mass_scale_factor
         
         spatial_mass = np.ones(self.bins, dtype=np.float64)
-        visc_cap = 2.0 / (len(df_slice) + 1e-9) 
+        visc_cap = 5.0 / (len(df_slice) + 1e-9)
         
         for i in range(len(df_slice)):
             mid_p = (df_slice['high'].iloc[i] + df_slice['low'].iloc[i]) / 2.0
@@ -161,29 +139,26 @@ class QuantumCloudTracker:
             local_viscosity = (df_slice[vol_col].iloc[i] / (np.mean(vol_profile) + 1e-9)) * visc_cap
             x = np.arange(self.bins)
             dist = (x - idx) * self.dx
-            spatial_mass += local_viscosity * np.exp(-1.5 * (dist / (tr + 1e-9))**2)
+            spatial_mass += local_viscosity * np.exp(-3.0 * (dist / (tr + 1e-9))**2)
             
-        spatial_mass = np.clip(spatial_mass, 0.1, 3.0) 
+        spatial_mass = np.clip(spatial_mass, 0.5, 5.0) 
         
         self.solver.update_potential(list(V))
         self.solver.update_spatial_mass(list(spatial_mass))
         
         # 3. DRIFT MOMENTUM
         price_velocity = (df_slice['close'].iloc[-1] - df_slice['close'].iloc[-2]) if len(df_slice) > 1 else 0.0
-        drift_k = np.clip(price_velocity / (self.dx * 3.0), -0.5, 0.5)
-        drift_k *= 1.8 
+        drift_k = np.clip(price_velocity / (self.dx * 5.0), -0.3, 0.3)
+        drift_k *= 1.2 
         
-        # 4. EVOLUTION STEP
+        # 4. EVOLUTION STEP (v32.0: Estabilidade LuxAlgo)
         for _ in range(steps):
             self.solver.step_forward(dt, global_mass, hbar_dynamic, drift_k)
         
-        # v37.0: RECENTER NEBULA (Sigma 180.0)
+        # v32.0: RECENTER PADRÃO OURO (Sigma 65.0)
         x0 = curr_price - self.price_min
-        sigma = self.dx * 180.0 
+        sigma = self.dx * 65.0 
         self.solver.recenter_wave(x0, sigma)
-        
-        density = self.solver.get_probability_density()
-        return density, False
         
         density = self.solver.get_probability_density()
         return density, False

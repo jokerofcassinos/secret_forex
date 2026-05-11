@@ -249,8 +249,7 @@ void recenter_wave_safe(double new_x0, double sigma) {
         for (int i = 0; i < Nx; ++i) {
             new_psi[i] /= norm;
             // v26.0: Soft Blend Contínuo (Injeção de Energia Sem Quebrar Fase)
-            // Blend reduzido para 0.05 para priorizar soberania da zona sobre o preço
-            psi[i] = psi[i] * 0.95 + new_psi[i] * 0.05;
+            psi[i] = psi[i] * 0.8 + new_psi[i] * 0.2;
             final_norm += std::norm(psi[i]) * dx;
         }
     }

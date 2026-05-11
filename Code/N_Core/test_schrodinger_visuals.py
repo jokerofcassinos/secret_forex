@@ -5,17 +5,19 @@ import seaborn as sns
 import os
 import sys
 
-# Ensure we can import the agent
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from Code.N_Core.quantum_clouds import QuantumCloudTracker
+# Definir Raiz do Projeto (ASI v3.2 Mapping)
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(ROOT_DIR, 'Code')) # Para imports internos se necessário
+
+from N_Core.quantum_clouds import QuantumCloudTracker
 
 def test_quantum_clouds():
     print("Iniciando simulação visual: Nuvens de Probabilidade de Schrödinger - Timeframe H2")
     
-    data_path = os.path.join("Data", "Historical", "BTCUSD_H2.parquet")
+    data_path = os.path.join(ROOT_DIR, "Data", "Historical", "BTCUSD_H2.parquet")
     if not os.path.exists(data_path):
         print(f"Erro: Base de dados {data_path} não encontrada. Tentando H1 ou sintético.")
-        data_path_h1 = os.path.join("Data", "Historical", "BTCUSD_H1.parquet")
+        data_path_h1 = os.path.join(ROOT_DIR, "Data", "Historical", "BTCUSD_H1.parquet")
         if os.path.exists(data_path_h1):
              print(f"Carregando {data_path_h1} e re-amostrando para H2...")
              df_h1 = pd.read_parquet(data_path_h1)
@@ -49,6 +51,7 @@ def test_quantum_clouds():
         return
 
     global_density_history = []
+    global_delta_history = [] # v35.2: Histórico de Polaridade
     
     print("Processando fluxo de ticks através da Malha Quântica C++...")
     tracker.initialize_wave(df['close'].iloc[0], sigma=(tracker.dx * 65))
@@ -62,34 +65,35 @@ def test_quantum_clouds():
         if res is not None:
             density, reset = res
             
-            # Telemetria v24.1
-            if i % 50 == 0:
-                print(f"Tick {i} | Density Max: {np.max(density):.6f} | Price: {df['close'].iloc[i]:.2f}")
-            
             local_y_axis = np.linspace(tracker.price_min, tracker.price_max, tracker.bins)
             interpolated_density = np.interp(global_y_axis, local_y_axis, np.nan_to_num(density), left=0, right=0)
+            
+            # v35.2: Interpolação do Campo de Delta
+            interpolated_delta = np.interp(global_y_axis, local_y_axis, np.nan_to_num(tracker.delta_field), left=0, right=0)
+            
             global_density_history.append(interpolated_density)
+            global_delta_history.append(interpolated_delta)
         
-    print("Renderizando Espectrografia de Atração (v26.1)...")
+    print("Renderizando Espectrografia de Polaridade (v35.3)...")
     
-    # v26.1: VISCOSIDADE DE NÚCLEO (Upsampling Temporal Simples)
     upsample_factor = 4
     num_steps_orig = len(global_density_history)
     num_steps_up = num_steps_orig * upsample_factor
+    global_bins = len(global_y_axis)
     
-    upsampled_matrix = np.zeros((global_bins, num_steps_up))
+    up_matrix_buy = np.zeros((global_bins, num_steps_up))
+    up_matrix_sell = np.zeros((global_bins, num_steps_up))
     
-    print(f"Upsampling Temporal (4x) para Fluidez Total: {num_steps_up} colunas...")
-    
-    # Derivação de Preço para Translação Geométrica (v27.0)
+    # Derivação de Preço para Translação Geométrica
     prices_array = df['close'].iloc[1:num_steps_orig+1].values
     dx_global = (global_price_max - global_price_min) / global_bins
     
     for t in range(num_steps_orig - 1):
         d1 = global_density_history[t]
         d2 = global_density_history[t+1]
+        dl1 = global_delta_history[t]
+        dl2 = global_delta_history[t+1]
         
-        # v27.0: Cálculo do Shift Topológico (Translação Diagonal)
         p1 = prices_array[t]
         p2 = prices_array[t+1]
         dp_bins = int((p2 - p1) / dx_global)
@@ -97,59 +101,80 @@ def test_quantum_clouds():
         for sub in range(upsample_factor):
             frac = sub / upsample_factor
             idx_up = t * upsample_factor + sub
-            
-            # Rola a função de onda no eixo Y proporcionalmente ao tempo
             shift_frac = int(dp_bins * frac)
-            d1_shifted = np.roll(d1, shift_frac)
             
-            # Blend suave da forma de onda transladada com o destino
-            upsampled_matrix[:, idx_up] = (1.0 - frac) * d1_shifted + frac * d2
+            # Blend de Densidade e Delta
+            d_mid = (1.0 - frac) * np.roll(d1, shift_frac) + frac * d2
+            dl_mid = (1.0 - frac) * np.roll(dl1, shift_frac) + frac * dl2
+            
+            # Separação por Polaridade
+            up_matrix_buy[:, idx_up] = d_mid * (dl_mid > 0) * np.abs(dl_mid)
+            up_matrix_sell[:, idx_up] = d_mid * (dl_mid < 0) * np.abs(dl_mid)
 
-    # Suavização Temporal EMA no grid upsampled (Rastro contínuo)
-    smoothed_matrix = np.zeros_like(upsampled_matrix)
-    alpha = 0.35 # Constante de decaimento ideal para o fluido
-    for t in range(upsampled_matrix.shape[1]):
-        if t == 0: smoothed_matrix[:, t] = upsampled_matrix[:, t]
-        else: smoothed_matrix[:, t] = alpha * upsampled_matrix[:, t] + (1 - alpha) * smoothed_matrix[:, t-1]
+    # Suavização Temporal e Espacial v37.2 (Lush Nebula - Manual Kernel)
+    alpha_ema = 0.6
     
-    # v26.1: CORREÇÃO GAMMA NEON (Aniquila o ruído, foca no Núcleo Sólido)
-    print("Aplicando Correção Gamma Neon...")
-    gamma = 1.8 # Expande o contraste: valores baixos somem, valores altos brilham
-    final_matrix = np.power(smoothed_matrix, gamma)
-    
-    if np.max(final_matrix) > 0:
-        final_matrix /= np.max(final_matrix)
+    def smooth_2d(matrix, passes=2):
+        temp = matrix.copy()
+        for _ in range(passes):
+            # Média com vizinhos (acima e abaixo) para efeito de névoa vertical
+            temp[1:-1, :] = (temp[:-2, :] + temp[1:-1, :] + temp[2:, :]) / 3.0
+            # Média com vizinhos (esquerda e direita) para fluidez temporal
+            temp[:, 1:-1] = (temp[:, :-2] + temp[:, 1:-1] + temp[:, 2:]) / 3.0
+        return temp
 
-    plt.figure(figsize=(14, 8))
+    print("Aplicando Filtro de Névoa 2D (v37.2)...")
+    up_matrix_buy = smooth_2d(up_matrix_buy, passes=3)
+    up_matrix_sell = smooth_2d(up_matrix_sell, passes=3)
+
+    for t in range(1, num_steps_up):
+        up_matrix_buy[:, t] = alpha_ema * up_matrix_buy[:, t] + (1 - alpha_ema) * up_matrix_buy[:, t-1]
+        up_matrix_sell[:, t] = alpha_ema * up_matrix_sell[:, t] + (1 - alpha_ema) * up_matrix_sell[:, t-1]
+    
+    # Normalização UNIFICADA e Gamma de Névoa (v37.2)
+    max_val = max(np.max(up_matrix_buy), np.max(up_matrix_sell), 1e-9)
+    up_matrix_buy = np.power(up_matrix_buy / max_val, 0.4) 
+    up_matrix_sell = np.power(up_matrix_sell / max_val, 0.4)
+
+    # Custom Colormaps: Lush Neon with Smooth Alpha (v37.2)
+    from matplotlib.colors import LinearSegmentedColormap
+    # Transparência graduada para efeito de névoa
+    cmap_buy = LinearSegmentedColormap.from_list('lush_buy', [(0,0,0,0), (0,0.4,0.8,0.3), (0,1,1,1)], N=256)
+    cmap_sell = LinearSegmentedColormap.from_list('lush_sell', [(0,0,0,0), (0.6,0,0.8,0.3), (1,0,1,1)], N=256)
+
+    plt.figure(figsize=(16, 9), facecolor='black')
+    ax = plt.gca()
+    ax.set_facecolor('black')
     
     extent = [0, num_steps_orig, global_price_min, global_price_max]
-    vmax_val = np.percentile(final_matrix, 99.8) if np.max(final_matrix) > 0 else 0.2
     
-    plt.imshow(final_matrix, aspect='auto', origin='lower', cmap='inferno', 
-               extent=extent, alpha=0.9, interpolation='gaussian', vmin=0, vmax=vmax_val)
+    # Plot layers com interpolação bicúbica para suavidade extrema
+    plt.imshow(up_matrix_buy, aspect='auto', origin='lower', cmap=cmap_buy, 
+               extent=extent, alpha=0.9, interpolation='bicubic', vmin=1e-12, vmax=0.85)
+    plt.imshow(up_matrix_sell, aspect='auto', origin='lower', cmap=cmap_sell, 
+               extent=extent, alpha=0.9, interpolation='bicubic', vmin=1e-12, vmax=0.85)
     
-    # Ajusta o eixo x do preço para o grid original
-    plt.plot(np.arange(num_steps_orig), df['close'].iloc[1:num_steps_orig+1].values, color='cyan', linewidth=1.5, label='Ação do Preço Físico (GER40)')
+    plt.plot(np.arange(num_steps_orig), df['close'].iloc[1:num_steps_orig+1].values, 
+             color='white', linewidth=1.2, alpha=0.6, label='Fluxo do Preço (GER40)')
     
-    plt.title('Aethelgard Q-MATH: Superfluidez Institucional v27.0 (Interpolação Diagonal Perfeita)', fontsize=14, fontweight='bold', color='white')
-    plt.xlabel('Dimensão Temporal (Ticks/Candles)', color='lightgrey')
-    plt.ylabel('Nível de Preço ($x$)', color='lightgrey')
+    plt.title('NEXUS-QUANT v35.3: Espectrografia de Delta & Burn Rate (Institutional Flow)', 
+              fontsize=16, fontweight='bold', color='white', pad=20)
+    plt.xlabel('Dimensão Temporal (Ticks/Candles)', color='white')
+    plt.ylabel('Nível de Preço (x)', color='white')
+    ax.tick_params(colors='white')
     
-    ax = plt.gca()
-    ax.set_facecolor('#121212')
-    plt.gcf().patch.set_facecolor('#121212')
-    ax.tick_params(colors='lightgrey')
-    
-    cbar = plt.colorbar(label=r'Amplitude Probabilística $|\Psi(x,t)|^2$')
-    cbar.ax.yaxis.label.set_color('lightgrey')
-    cbar.ax.tick_params(colors='lightgrey')
-    
-    plt.legend(loc='upper left', facecolor='black', edgecolor='white', labelcolor='white')
+    plt.grid(color='white', alpha=0.05)
+    plt.legend(facecolor='black', edgecolor='white', labelcolor='white')
     plt.tight_layout()
     
-    output_path = os.path.join("Docs", "05_Estrutura_Corporativa", "Setores", "Q_MATH", "Schrodinger_Cloud_Render.png")
-    plt.savefig(output_path, dpi=300, facecolor='#121212')
-    print(f"\n[SUCESSO] Renderização de Atração em: {output_path}")
+    # Garantir existência do diretório de saída (ASI v3.2 Safety)
+    output_dir = os.path.join(ROOT_DIR, "Docs", "05_Estrutura_Corporativa", "Setores", "Q_MATH")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        
+    output_path = os.path.join(output_dir, "Schrodinger_Cloud_Render.png")
+    plt.savefig(output_path, dpi=300, facecolor='black')
+    print(f"\n[SUCESSO] Renderização de Polaridade em: {output_path}")
 
 if __name__ == "__main__":
     test_quantum_clouds()

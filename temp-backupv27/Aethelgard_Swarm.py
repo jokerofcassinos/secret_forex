@@ -67,7 +67,6 @@ current_mt5_tf = None
 def run_tcp_server():
     """Servidor TCP puro e ultra-leve para responder instantaneamente ao MT5."""
     global nexus_data_str, current_mt5_tf
-    run_tcp_server.history_cloud_payload = ""
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
@@ -98,9 +97,6 @@ def run_tcp_server():
                 print(f"⚠️ SWARM :: Erro ao processar requisição TCP: {e}")
             
             response_body = nexus_data_str.encode('utf-8')
-            if "GET /history_cloud" in req_str:
-                response_body = getattr(run_tcp_server, "history_cloud_payload", "").encode('utf-8')
-            
             http_response = (
                 b"HTTP/1.1 200 OK\r\n"
                 b"Content-Type: text/plain\r\n"
@@ -154,56 +150,6 @@ class AethelgardSwarm:
         self.sub_context, self.sub_socket = create_subscriber(PORT_TICK_FEED, TOPIC_MARKET_BAR)
         self.req_context, self.req_socket = create_request_client(PORT_Q_MATH)
         self.ctrl_context, self.ctrl_socket = create_publisher(PORT_CONTROL)
-
-    def sync_history(self, symbol, timeframe, count=500):
-        """Temporal Manifold Reconstruction: Gera o histórico completo da Nuvem de Schrödinger."""
-        print(f"🌀 SWARM :: Iniciando Reconstrução de Variedade Temporal para {symbol} ({count} bars)...")
-        rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count + 50)
-        if rates is None or len(rates) < 50:
-            print("⚠️ SWARM :: Falha ao obter dados históricos para sync.")
-            return
-        
-        df = pd.DataFrame(rates)
-        from Code.N_Core.quantum_clouds import QuantumCloudTracker
-        
-        # [v72.2] Dynamic Manifold Bounds: Calculate global min/max for the entire lookback
-        hist_data = df.tail(count)
-        h_min = hist_data['low'].min()
-        h_max = hist_data['high'].max()
-        h_range = h_max - h_min
-        
-        # Apply 20% Margin to prevent clipping during volatility spikes
-        p_min = h_min - (h_range * 0.20)
-        p_max = h_max + (h_range * 0.20)
-        start_price = df['close'].iloc[len(df) - count]
-        
-        cloud_sync = QuantumCloudTracker(price_min=p_min, price_max=p_max, bins=512)
-        cloud_sync.initialize_wave(start_price, sigma=(cloud_sync.dx * 110.0))
-        
-        history_trail = []
-        kernel = np.ones(31) / 31.0
-        
-        # Reconstrói passo a passo (Ph.D. level integration)
-        for i in range(len(df) - count, len(df)):
-            sub_df = df.iloc[:i+1].copy()
-            # [v72.5] Temporal Burn-in: 50 steps for the first bar to stabilize the manifold
-            current_steps = 50 if i == (len(df) - count) else 15
-            
-            # Absolute Space Physics (v72.2 Dynamic Alignment)
-            density, _ = cloud_sync.step(sub_df.tail(20), dt=2.0, steps=current_steps)
-            if density is not None:
-                density = np.convolve(density, kernel, mode='same')
-                gamma_den = np.power(density, 2.0)
-                v_max = np.max(gamma_den) / 1.15
-                gamma_den = np.clip(gamma_den / (v_max + 1e-9), 0, 1.0)
-                
-                s_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
-                # Formato: time|p_min|p_max|hex
-                bar_time = int(df['time'].iloc[i])
-                history_trail.append(f"{bar_time}|{p_min:.2f}|{p_max:.2f}|{s_hex}")
-        
-        run_tcp_server.history_cloud_payload = "^".join(history_trail)
-        print(f"✅ SWARM :: Variedade Temporal Reconstruída. Bounds: [{p_min:.2f} - {p_max:.2f}] | Payload size: {len(run_tcp_server.history_cloud_payload)} bytes.")
 
     def startup(self):
         print(f"--- INICIANDO MOTOR SWARM v4.0 [SINGULARITY BOOT] ---")
@@ -442,10 +388,6 @@ class AethelgardSwarm:
                     
                     ctrl_payload = pickle.dumps({"action": "CHANGE_TF", "timeframe": self.active_tf, "symbol": self.symbol})
                     self.ctrl_socket.send_multipart([TOPIC_CONTROL.encode('utf-8'), ctrl_payload])
-                    
-                    # Temporal Manifold Reconstruction Trigger (Disabled for v71.0 Stability)
-                    # self.sync_history(self.symbol, self.active_tf, count=500)
-                    
                     time.sleep(0.5)
 
                 latest_df = None

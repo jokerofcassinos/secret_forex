@@ -1,6 +1,6 @@
 """
-Q-MATH NODE (ZMQ SUB / REP Node - v69.0)
-Função: Singularity Convergence (v69.0).
+Q-MATH NODE (ZMQ SUB / REP Node - v70.0)
+Função: Quantum Fluid Splatting Engine (v70.0).
 Nuvem RELATIVA que orbita o zero matemático para paridade 1:1 absoluta.
 """
 import time
@@ -34,7 +34,7 @@ import cyt_engine
 
 class QMathNode:
     def __init__(self):
-        print("⚛️ Q-MATH :: Sincronizando subsistemas [ABSOLUTE INERTIAL v53.2]...")
+        print("⚛️ Q-MATH :: Sincronizando subsistemas [QUANTUM FLUID v70.0]...")
         self.sub_context, self.sub_socket = create_subscriber(PORT_TICK_FEED, TOPIC_MARKET_BAR)
         self.rep_context, self.rep_socket = create_reply_server(PORT_Q_MATH)
         self.is_running = False
@@ -80,7 +80,7 @@ class QMathNode:
                 self.rmt_tracker = None; self.qrw_tracker = None; self.rht_tracker = None; self.qcd_tracker = None; self.precog_node = None
 
             current_close = df['close'].iloc[-1]
-            # [v66.0] Spectral Nebula Engine - Absolute Reference Manifold
+            # [v71.1] Global Re-anchoring: Absolute Reference Manifold recalculated every tick
             half_range = 1200.0 
             p_min = current_close - half_range
             p_max = current_close + half_range
@@ -92,35 +92,47 @@ class QMathNode:
                 self.last_sync_price = current_close
                 self.cloud_trail = []
                 self.last_physics_time = None
-                print(f"⚛️ Q-MATH :: Singularity Glow Engine v68.0 Iniciado em {payload_sym}.")
+                print(f"⚛️ Q-MATH :: Quantum Fluid Engine v71.1 Iniciado em {payload_sym}.")
                 
-                # [SINGULARITY WARM-UP] v69.0 Spectral Grain (21pt Blur)
-                warmup_size = min(40, len(df) - 11)
+                # [SINGULARITY WARM-UP] v71.1 Volumetric Plasma (31pt Blur)
+                warmup_size = min(100, len(df) - 11)
                 if warmup_size > 0:
-                    print(f"🚀 Q-MATH :: Materializando Vapor Espectral ({warmup_size} snapshots)...")
-                    kernel = np.ones(21) / 21.0
+                    print(f"🚀 Q-MATH :: Materializando Plasma Volumétrico ({warmup_size} snapshots)...")
+                    kernel = np.ones(31) / 31.0
                     for i in range(len(df) - warmup_size, len(df)):
                         sub_df = df.iloc[:i+1].copy()
                         c_close = sub_df['close'].iloc[-1]
                         
-                        # [v69.0] Hot Core Physics: dt=2.0, steps=15
+                        # Dynamic Re-anchoring during warmup
+                        w_p_min = c_close - half_range
+                        w_p_max = c_close + half_range
+                        self.cloud_tracker.price_min = w_p_min
+                        self.cloud_tracker.price_max = w_p_max
+                        
                         dt_phys = 2.0
                         
-                        # Absolute Space Physics (v69.0)
+                        # Absolute Space Physics (v71.1)
                         density, _ = self.cloud_tracker.step(sub_df.tail(20), dt=dt_phys, steps=15)
                         if density is not None:
                             density = np.convolve(density, kernel, mode='same')
                             
-                            # Gamma 1.6 Balanced Core (v69.0)
-                            gamma_den = np.power(density, 1.6)
-                            # Normalization (v69.0)
-                            v_max = np.max(gamma_den) * 0.9
-                            gamma_den = np.clip(gamma_den / (v_max + 1e-9), 0, 1.0)
+                            # Gamma 2.0 Deep Incandescence (v71.1)
+                            # v37.2: Lush Nebula Polarity Mapping
+                            # Usamos o Delta Field (Polaridade) escalado pela densidade para o hex
+                            delta_scaled = np.nan_to_num(self.cloud_tracker.delta_field) * density
                             
-                            s_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
-                            # Payload v69: p_min|p_max|hex
-                            self.cloud_trail.insert(0, f"{p_min:.2f}|{p_max:.2f}|{s_hex}")
-                    print(f"✅ Q-MATH :: Campo Espectral v69.0 Materializado.")
+                            # Normalização e Gamma
+                            max_val = np.max(np.abs(delta_scaled)) + 1e-9
+                            # Normalização simétrica em [-1, 1]
+                            norm_delta = np.clip(delta_scaled / max_val, -1.0, 1.0)
+                            # Aplica Gamma preservando o sinal
+                            gamma_delta = np.sign(norm_delta) * np.power(np.abs(norm_delta), 0.5)
+                            
+                            # Codificação Hex: 00-49 (Sell/Magenta), 50 (Neutral), 51-99 (Buy/Cyan)
+                            # Transformamos [-1, 1] em [0, 99] onde 50 é o zero
+                            s_hex = "".join([f"{int(50 + d*49):02d}" for d in gamma_delta])
+                            self.cloud_trail.insert(0, f"{w_p_min:.2f}|{w_p_max:.2f}|{s_hex}")
+                    print(f"✅ Q-MATH :: Campo Espectral v71.1 Materializado.")
 
             if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-100, df['high'].max()+100, 200, tau=1.0)
             if self.plasma_tracker is None: self.plasma_tracker = PlasmaMarketTracker()
@@ -141,24 +153,26 @@ class QMathNode:
                 try:
                     curr_time = df.iloc[-1]['time']
                     pti = getattr(self, "current_pti_context", 0.0)
-                    
-                    # [V69.0] Spectral Synthesis - Absolute Price Space
                     dt_phys = 2.0
                     
-                    # Dynamics in Absolute Space v69.0
+                    # Dynamics in Absolute Space v71.1
+                    self.cloud_tracker.price_min = p_min
+                    self.cloud_tracker.price_max = p_max
+                    
                     density, _ = self.cloud_tracker.step(df.tail(20), dt=dt_phys, steps=15, pti=pti)
                     if density is not None:
-                        # 21-point Whispy Grain (v69.0)
-                        kernel = np.ones(21) / 21.0
+                        # 31-point Gaseous Blur (v71.0)
+                        kernel = np.ones(31) / 31.0
                         density = np.convolve(density, kernel, mode='same')
                         
-                        # Gamma 1.6 + Peak Scaling (v69.0)
-                        gamma_den = np.power(density, 1.6)
-                        v_max = np.max(gamma_den) * 0.9
-                        gamma_den = np.clip(gamma_den / (v_max + 1e-9), 0, 1.0)
+                        # Gamma 2.0 + HDR Overdrive Scaling (v71.0)
+                        # v37.2: Lush Nebula Polarity Mapping (Real-Time)
+                        delta_scaled = np.nan_to_num(self.cloud_tracker.delta_field) * density
+                        max_val = np.max(np.abs(delta_scaled)) + 1e-9
+                        norm_delta = np.clip(delta_scaled / max_val, -1.0, 1.0)
+                        gamma_delta = np.sign(norm_delta) * np.power(np.abs(norm_delta), 0.5)
                         
-                        snapshot_hex = "".join([f"{int(d*99):02d}" for d in gamma_den])
-                        # Payload v69: p_min|p_max|hex
+                        snapshot_hex = "".join([f"{int(50 + d*49):02d}" for d in gamma_delta])
                         slice_data = f"{p_min:.2f}|{p_max:.2f}|{snapshot_hex}"
                         
                         if self.last_physics_time is None or curr_time > self.last_physics_time:
