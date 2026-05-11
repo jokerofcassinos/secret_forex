@@ -84,48 +84,48 @@ class LiveRHTTracker:
         tensor_matrix = np.array(tensor_matrix, dtype=np.float64)
         num_tf, t_steps = tensor_matrix.shape
         
-        # 5. Evolução Termodinâmica no C++
+        # 5. Evolução Termodinâmica no C++ (ASI v3.0)
         if self.rht_engine_instance is None:
             self.rht_engine_instance = rht_engine.RHTEngine(num_tf, t_steps)
             
         self.rht_engine_instance.load_tensor_data(tensor_matrix)
         
-        # Retorna Histórico de Calor para o HUD
-        # Sincronização de Memória Termodinâmica
-        self.rht_engine_instance.compute_resonance_history() # Reconstroi o histórico na C++
+        # Sincronização Termodinâmica Contínua
+        self.rht_engine_instance.compute_thermodynamics(0.15) 
         
-        # Coleta de Dados Táticos
-        hist = self.rht_engine_instance.get_histories()
-        heat_history = hist.get("heat", [])
-        entropy_history = hist.get("entropy", [])
-        direction_history = hist.get("direction", [])
+        # Coleta do Tensor Completo
+        hist = self.rht_engine_instance.get_thermodynamics()
+        heat_flux = hist.get("heat_flux", [])
+        entropy_field = hist.get("entropy", [])
+        ignition_state = hist.get("ignition", [])
         
-        # Analisa Estado Instantâneo (Flash Point)
-        heat, entropy, direction, flash = self.rht_engine_instance.analyze_current_state(threshold=threshold)
+        # Estado Atual (Flash Point)
+        heat = heat_flux[-1] if len(heat_flux) > 0 else 0.0
+        entropy = entropy_field[-1] if len(entropy_field) > 0 else 1.0
+        flash = ignition_state[-1] if len(ignition_state) > 0 else 0.0
         
         # Formata cache visual para o MT5
-        # 1 = Bull Ignition, 2 = Bear Ignition, 0 = Neutral
         rht_cache = []
-        for h in heat_history:
+        for h in heat_flux:
             if h > threshold: rht_cache.append("1")
             elif h < -threshold: rht_cache.append("2")
             else: rht_cache.append("0")
             
-        # Telemetria de Status
+        # Telemetria de Status Ph.D.
         status = "RHT_LAMINAR"
-        if flash == 1.0: status = "RHT_BULL_IGNITION"
-        elif flash == -1.0: status = "RHT_BEAR_IGNITION"
-        elif abs(heat) > threshold * 0.5: status = "RHT_HEATING"
+        if flash == 1.0: status = "RHT_BULL_CONDENSATE"
+        elif flash == -1.0: status = "RHT_BEAR_CONDENSATE"
+        elif abs(heat) > threshold * 0.5: status = "RHT_TURBULENCE"
         
-        # Gera histórico de flashes baseado no calor histórico (Consistência com Bars do MT5)
+        # Histórico Termodinâmico Espectral
         flash_hist = []
-        for h in heat_history:
+        for h, ent in zip(heat_flux, entropy_field):
             f_code = "0"
-            if h > threshold * 1.1: f_code = "1"
-            elif h < -threshold * 1.1: f_code = "2"
+            if h > threshold and ent < 0.4: f_code = "1"
+            elif h < -threshold and ent < 0.4: f_code = "2"
             flash_hist.append(f_code)
             
-        return status, rht_cache, flash, ",".join(flash_hist)
+        return status, rht_cache, flash, ",".join(flash_hist), heat_flux, entropy_field
 
 if __name__ == "__main__":
     # Teste rápido de ignição
