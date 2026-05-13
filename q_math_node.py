@@ -177,7 +177,7 @@ class QMathNode:
                         
                         if self.last_physics_time is None or curr_time > self.last_physics_time:
                             self.cloud_trail.insert(0, slice_data)
-                            if len(self.cloud_trail) > 41: self.cloud_trail.pop()
+                            if len(self.cloud_trail) > 801: self.cloud_trail.pop()
                             self.last_physics_time = curr_time
                         else:
                             if self.cloud_trail: self.cloud_trail[0] = slice_data

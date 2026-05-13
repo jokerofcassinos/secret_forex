@@ -23,9 +23,8 @@ int m_chart_h = 0;
 
 // --- PROTÓTIPO MESTRE ---
 void ParseAndDraw(string data);
-uint GetLushColor(double val, int age);
-void BlendPixel(CCanvas &canvas, int x, int y, uint clr);
-void DrawVolumetricBloomBrush(CCanvas &canvas, int x, int y, uint clr, int grains=35);
+uint GetLushColor(double val, double age);
+void BlendSmoothPixel(CCanvas &canvas, int x, int y, uint clr);
 
 //+------------------------------------------------------------------+
 int OnInit() { 
@@ -69,53 +68,33 @@ void UpdateDashboard()
    }
 }
 
-void DrawVolumetricBloomBrush(CCanvas &canvas, int x, int y, uint clr, int grains)
+void BlendSmoothPixel(CCanvas &canvas, int x, int y, uint clr)
 {
+   if(x < 0 || x >= m_chart_w || y < 0 || y >= m_chart_h) return;
+   
    uchar base_alpha = (uchar)((clr >> 24) & 0xFF);
+   if(base_alpha < 1) return;
+   
    uchar r_base = (uchar)((clr >> 16) & 0xFF);
    uchar g_base = (uchar)((clr >> 8) & 0xFF);
    uchar b_base = (uchar)(clr & 0xFF);
    
-   for(int i=0; i<grains; i++) {
-      // [v37.9.2] Redução do espalhamento para criar foco central e diminuir blocos
-      int dx = (MathRand() % 30) - 15; 
-      int dy = (MathRand() % 30) - 15;
-      int jitter_v = (MathRand() % 5) - 2; 
-      
-      double dist_sq = dx*dx + dy*dy;
-      if(dist_sq > 225) continue; 
-      
-      double falloff = MathExp(-dist_sq / 75.0);
-      // Redução extrema do peso individual para permitir acúmulo suave (gás)
-      uchar grain_a = (uchar)MathMin(255, base_alpha * falloff * 0.15); 
-      if(grain_a < 1) continue;
-      
-      int target_x = x + dx;
-      int target_y = y + dy + jitter_v;
-      
-      if(target_x < 0 || target_x >= m_chart_w || target_y < 0 || target_y >= m_chart_h) continue;
-      
-      uint back = canvas.PixelGet(target_x, target_y);
-      
-      uchar a1_pre = (uchar)((back >> 24) & 0xFF);
-      uchar r1_pre = (uchar)((back >> 16) & 0xFF);
-      uchar g1_pre = (uchar)((back >> 8) & 0xFF);
-      uchar b1_pre = (uchar)(back & 0xFF);
-      
-      double alpha_blend = (double)grain_a / 255.0;
-      uchar r2_pre = (uchar)(r_base * alpha_blend);
-      uchar g2_pre = (uchar)(g_base * alpha_blend);
-      uchar b2_pre = (uchar)(b_base * alpha_blend);
-      
-      double alpha_inv = 1.0 - alpha_blend;
-      
-      uint r_new = (uint)MathMin(255, r2_pre + r1_pre * alpha_inv);
-      uint g_new = (uint)MathMin(255, g2_pre + g1_pre * alpha_inv);
-      uint b_new = (uint)MathMin(255, b2_pre + b1_pre * alpha_inv);
-      uint a_new = (uint)MathMin(255, grain_a + a1_pre * alpha_inv); 
-      
-      canvas.PixelSet(target_x, target_y, (a_new << 24) | (r_new << 16) | (g_new << 8) | b_new);
-   }
+   uint back = canvas.PixelGet(x, y);
+   
+   uchar a1_pre = (uchar)((back >> 24) & 0xFF);
+   uchar r1_pre = (uchar)((back >> 16) & 0xFF);
+   uchar g1_pre = (uchar)((back >> 8) & 0xFF);
+   uchar b1_pre = (uchar)(back & 0xFF);
+   
+   // Blend aditivo para brilho liso (Bilinear)
+   double alpha_blend = (double)base_alpha / 255.0;
+   
+   uint r_new = (uint)MathMin(255, r_base * alpha_blend + r1_pre * (1.0 - alpha_blend * 0.5));
+   uint g_new = (uint)MathMin(255, g_base * alpha_blend + g1_pre * (1.0 - alpha_blend * 0.5));
+   uint b_new = (uint)MathMin(255, b_base * alpha_blend + b1_pre * (1.0 - alpha_blend * 0.5));
+   uint a_new = (uint)MathMin(255, base_alpha + a1_pre); 
+   
+   canvas.PixelSet(x, y, (a_new << 24) | (r_new << 16) | (g_new << 8) | b_new);
 }
 
 
@@ -216,15 +195,16 @@ void ParseAndDraw(string data)
          int startX = x2; int endX = x1;
          if(startX > endX) { int tmp=startX; startX=endX; endX=tmp; }
          
-         int steps = (int)MathMax(1, MathAbs(endX - startX)); // Maior densidade horizontal
-         for(int s=0; s<=steps; s++) {
-            double lerp_t = (double)s / (double)steps;
-            int x = (int)(startX + lerp_t * (endX - startX));
+         int steps = (int)MathMax(1, MathAbs(endX - startX)); 
+         for(int s=0; s<steps; s++) { // [v71.9] s<steps remove o overlap aditivo causador das listras verticais
+            double lerp_x = (steps > 0) ? (double)s / (double)steps : 0.0;
+            int x = (int)(startX + lerp_x * (endX - startX));
             if(x < 0 || x >= m_chart_w) continue;
             
-            datetime t_curr = (datetime)(m_field_meta[h+1][2] + lerp_t * (m_field_meta[h][2] - m_field_meta[h+1][2]));
-            double p_min_lerp = m_field_meta[h+1][0] + lerp_t * (m_field_meta[h][0] - m_field_meta[h+1][0]);
-            double p_max_lerp = m_field_meta[h+1][1] + lerp_t * (m_field_meta[h][1] - m_field_meta[h+1][1]);
+            datetime t_curr = (datetime)(m_field_meta[h+1][2] + lerp_x * (m_field_meta[h][2] - m_field_meta[h+1][2]));
+            
+            double p_min_lerp = (m_field_meta[h+1][0] + lerp_x * (m_field_meta[h][0] - m_field_meta[h+1][0]));
+            double p_max_lerp = (m_field_meta[h+1][1] + lerp_x * (m_field_meta[h][1] - m_field_meta[h+1][1]));
 
             int py_top_curr, py_bot_curr, dummyX;
             ChartTimePriceToXY(0, 0, t_curr, p_max_lerp, dummyX, py_top_curr);
@@ -234,7 +214,9 @@ void ParseAndDraw(string data)
             int screen_y_end   = MathMax(py_top_curr, py_bot_curr);
             double height = (double)MathMax(1, screen_y_end - screen_y_start);
             
-            for(int y = screen_y_start; y <= screen_y_end; y++) { // Passo unitário para suavidade total
+            double exact_age = (h + 1) - lerp_x; // Idade fracional exata para decaimento macio
+            
+            for(int y = screen_y_start; y <= screen_y_end; y++) { 
                if(y < 0 || y >= m_chart_h) continue;
                
                double bin_exact = (1.0 - (double)(y - screen_y_start) / height) * 511.0;
@@ -242,13 +224,14 @@ void ParseAndDraw(string data)
                int b_next = MathMin(511, b_idx + 1);
                double b_frac = bin_exact - b_idx;
                
-               double d1 = m_field[h+1][b_idx] + b_frac * (m_field[h+1][b_next] - m_field[h+1][b_idx]);
                double d2 = m_field[h][b_idx] + b_frac * (m_field[h][b_next] - m_field[h][b_idx]);
-               double val = d1 + lerp_t * (d2 - d1);
+               double d1 = m_field[h+1][b_idx] + b_frac * (m_field[h+1][b_next] - m_field[h+1][b_idx]);
+               
+               double val = d1 + lerp_x * (d2 - d1); // Bilinear 2D Interpolation Puro
                
                if(MathAbs(val - 0.505) > 0.02) { 
-                  uint qClr = GetLushColor(val, h);
-                  DrawVolumetricBloomBrush(m_canvas, x, y, qClr, 80); // [v37.9] Aumento brutal de fótons (45 -> 80)
+                  uint qClr = GetLushColor(val, exact_age);
+                  BlendSmoothPixel(m_canvas, x, y, qClr);
                }
             }
          }
@@ -314,14 +297,14 @@ void DrawTacticalHUD(string &parts[])
    m_canvas.TextOut(x + 100, y + 120, qdd_fid + " SIGMA", ColorToARGB(clrWhite, 255));
 }
 
-uint GetLushColor(double val, int age) 
+uint GetLushColor(double val, double age) 
 { 
     double delta = (val - 0.505) * 2.0;
     if(MathAbs(delta) < 0.02) return 0x00000000;
     
     uint r=0, g=0, b=0, a=0;
     double intensity = MathPow(MathAbs(delta), 0.6); 
-    double age_decay = MathPow(0.985, (double)age); // [v37.9] Decaimento muito mais longo (0.97 -> 0.985)
+    double age_decay = MathPow(0.985, age); // [v37.9] Decaimento muito mais longo (0.97 -> 0.985)
     
     // [v37.9] Multiplicador de alpha elevado para 255 para brilho total no núcleo
     a = (uint)MathMin(255, 255 * intensity * age_decay); 

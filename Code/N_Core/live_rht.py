@@ -35,7 +35,7 @@ class LiveRHTTracker:
         self.rht_engine_instance = None
         
     def process_live_rht(self, threshold=0.7):
-        """Puxa dados ao vivo, alinha tensores e processa no motor termodinâmico C++"""
+        """Puxa dados ao vivo, calcula Tensores de Momentum e Volatilidade (Lorentz c)"""
         dfs = {}
         
         # 1. Extração de Dados Multi-Fractais
@@ -63,47 +63,49 @@ class LiveRHTTracker:
         # Limpeza de Singularidades (NaN)
         df_base = df_base.ffill().bfill().tail(self.lookback)
 
-        # 4. Cálculo de Momentum Tensorial (Z-Score)
-        tensor_matrix = []
+        # 4. Cálculo do Tensor Duplo (Velocidade v, e Velocidade da Luz c)
+        v_matrix = []
+        c_matrix = []
         ordered_tfs = ['M5', 'M15', 'H1', 'H2', 'D1']
         
         for tf in ordered_tfs:
             col = f"{tf}_close"
-            # Momentum logarítmico para estabilidade termodinâmica
+            # Velocidade v (Log Returns puros)
             log_returns = np.log(df_base[col] / df_base[col].shift(1)).fillna(0)
             
-            # [v38.1] Normalização Time-Absolute (48 horas reais) em vez de N barras.
-            # Impede a distorção gravitacional entre M5 e D1.
-            mean = log_returns.rolling('48h', min_periods=5).mean()
+            # Velocidade da Luz da Liquidez c (Volatilidade 48h real)
             std = log_returns.rolling('48h', min_periods=5).std().replace(0, 1e-9).fillna(1e-9)
-            z_score = (log_returns - mean) / std
             
-            # Clipping de Outliers Quânticos (> 4 sigma)
-            z_score = np.clip(z_score, -4.0, 4.0)
-            tensor_matrix.append(z_score.fillna(0).values)
+            # Salvando tensores (em notação de array para C++)
+            v_matrix.append(log_returns.values)
+            c_matrix.append(std.values)
             
-        tensor_matrix = np.array(tensor_matrix, dtype=np.float64)
-        num_tf, t_steps = tensor_matrix.shape
+        v_matrix = np.array(v_matrix, dtype=np.float64)
+        c_matrix = np.array(c_matrix, dtype=np.float64)
         
-        # 5. Evolução Termodinâmica no C++ (ASI v3.0)
+        num_tf, t_steps = v_matrix.shape
+        
+        # 5. Evolução Termodinâmica no C++ (ASI v4.0 Cattaneo-Lorentz)
         if self.rht_engine_instance is None:
             self.rht_engine_instance = rht_engine.RHTEngine(num_tf, t_steps)
             
-        self.rht_engine_instance.load_tensor_data(tensor_matrix)
+        self.rht_engine_instance.load_tensor_data(v_matrix, c_matrix)
         
-        # Sincronização Termodinâmica Contínua
-        self.rht_engine_instance.compute_thermodynamics(0.15) 
+        # Sincronização Termodinâmica Contínua (tau=3.0)
+        self.rht_engine_instance.compute_thermodynamics(3.0, 1.2, 0.3) 
         
         # Coleta do Tensor Completo
         hist = self.rht_engine_instance.get_thermodynamics()
         heat_flux = hist.get("heat_flux", [])
         entropy_field = hist.get("entropy", [])
         ignition_state = hist.get("ignition", [])
+        lorentz_gamma = hist.get("lorentz_gamma", [])
         
         # Estado Atual (Flash Point)
         heat = heat_flux[-1] if len(heat_flux) > 0 else 0.0
         entropy = entropy_field[-1] if len(entropy_field) > 0 else 1.0
         flash = ignition_state[-1] if len(ignition_state) > 0 else 0.0
+        gamma = lorentz_gamma[-1] if len(lorentz_gamma) > 0 else 1.0
         
         # Formata cache visual para o MT5
         rht_cache = []
@@ -117,6 +119,8 @@ class LiveRHTTracker:
         if flash == 1.0: status = "RHT_BULL_CONDENSATE"
         elif flash == -1.0: status = "RHT_BEAR_CONDENSATE"
         elif abs(heat) > threshold * 0.5: status = "RHT_TURBULENCE"
+        
+        if gamma > 1.2: status += "_LORENTZ_DILATED"
         
         # Histórico Termodinâmico Espectral
         flash_hist = []
@@ -132,6 +136,8 @@ if __name__ == "__main__":
     # Teste rápido de ignição
     if mt5.initialize():
         tracker = LiveRHTTracker(symbol="GER40.cash")
-        status, cache = tracker.process_live_rht()
-        print(f"🔥 RHT STATUS: {status} | Cache Size: {len(cache)}")
+        status, cache, flash, hist, heat, entropy = tracker.process_live_rht()
+        print(f"🔥 RHT STATUS: {status} | Flash: {flash} | Heat: {heat[-1]:.4f} | Entropy: {entropy[-1]:.4f}")
         mt5.shutdown()
+    else:
+        print("MT5 Initialization failed")

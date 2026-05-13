@@ -443,8 +443,8 @@ class AethelgardSwarm:
                     ctrl_payload = pickle.dumps({"action": "CHANGE_TF", "timeframe": self.active_tf, "symbol": self.symbol})
                     self.ctrl_socket.send_multipart([TOPIC_CONTROL.encode('utf-8'), ctrl_payload])
                     
-                    # Temporal Manifold Reconstruction Trigger (Disabled for v71.0 Stability)
-                    # self.sync_history(self.symbol, self.active_tf, count=500)
+                    # Temporal Manifold Reconstruction Trigger (Reactivated for Zero-Lag HFT v71.1)
+                    self.sync_history(self.symbol, self.active_tf, count=801)
                     
                     time.sleep(0.5)
 
