@@ -26,6 +26,8 @@ void ParseAndDraw(string data);
 uint GetLushColor(double val, double age);
 void BlendSmoothPixel(CCanvas &canvas, int x, int y, uint clr);
 
+void DrawQGCZones(string &parts[]);
+
 //+------------------------------------------------------------------+
 int OnInit() { 
     EventSetTimer(1); 
@@ -239,10 +241,51 @@ void ParseAndDraw(string data)
    }
    
    // 3. TACTICAL HUD (ASI Ph.D. Telemetry)
+   DrawQGCZones(parts);
    DrawTacticalHUD(parts);
    
    m_canvas.Update();
    ChartRedraw();
+}
+
+void DrawQGCZones(string &parts[])
+{
+   if(ArraySize(parts) < 26) return;
+   
+   string qgc_str = parts[25];
+   if(qgc_str == "") return;
+   
+   string zones[];
+   StringSplit(qgc_str, ',', zones);
+   
+   for(int i=0; i<ArraySize(zones); i++) {
+      string sub[];
+      StringSplit(zones[i], '|', sub);
+      if(ArraySize(sub) < 4) continue; // age|price|mass|ratio
+      
+      int age_bars = (int)StringToInteger(sub[0]); // Relative bars
+      double price = StringToDouble(sub[1]);
+      double mass = StringToDouble(sub[2]);
+      double ratio = StringToDouble(sub[3]);
+      
+      int x1, y_start;
+      ChartTimePriceToXY(0, 0, iTime(_Symbol, _Period, age_bars), price, x1, y_start);
+      int x2, y_end;
+      ChartTimePriceToXY(0, 0, iTime(_Symbol, _Period, 0), price, x2, y_end);
+      
+      if(x1 < 0) x1 = 0;
+      if(x2 > m_chart_w) x2 = m_chart_w;
+      
+      // Decaimento visual: Fica mais fraco e fino dependendo da ratio
+      uint clr = ColorToARGB(clrYellow, (uchar)MathMin(255, 50 + ratio * 200)); 
+      int thickness = (int)MathMax(1, mass * ratio);
+      
+      for(int dx = x1; dx <= x2; dx++) {
+          for(int dy = y_start - thickness; dy <= y_start + thickness; dy++) {
+              BlendSmoothPixel(m_canvas, dx, dy, clr);
+          }
+      }
+   }
 }
 
 void DrawTacticalHUD(string &parts[])

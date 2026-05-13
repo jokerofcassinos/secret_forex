@@ -613,18 +613,19 @@ class AethelgardSwarm:
                     
                     # 6. CÁLCULO DE GRAVIDADE (QGC - REAL TIME SCAN)
                     self.qgc_node.scan_for_condensates(df)
-                    qgc_tel = self.qgc_node.get_gravity_telemetry(df['close'].iloc[-1])
+                    qgc_tel = self.qgc_node.get_gravity_telemetry(df['close'].iloc[-1], len(df) - 1)
                     
                     # 7. MAGNETOHYDRODYNAMICS (MHD - FIELD STRENGTH)
                     mhd_field = (df['close'].diff().rolling(14).std() / (df['tick_volume'].rolling(14).mean() + 1e-9)).iloc[-1]
                     mhd_strength = min(10.0, mhd_field * 100000)
                     
-                    # Formata as zonas QGC para o MT5: "age|price|mass"
+                    # Formata as zonas QGC para o MT5: "age|price|mass|ratio"
                     q_parts = []
                     for z in qgc_tel['active_zones']:
                         v_mass = max(2.0, z.get('mass', 2.0) * 1.5)
                         z_age = int(z.get('age', 0))
-                        q_parts.append(f"{z_age}|{z.get('price', 0.0):.2f}|{v_mass:.2f}")
+                        z_ratio = z.get('ratio', 1.0)
+                        q_parts.append(f"{z_age}|{z.get('price', 0.0):.2f}|{v_mass:.2f}|{z_ratio:.2f}")
                     
                     self.qgc_data_str = ",".join(q_parts)
 
