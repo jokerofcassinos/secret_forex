@@ -120,7 +120,7 @@ class AethelgardSwarm:
         self.q_logic = QuantumIndicators()
         self.rht_tracker = LiveRHTTracker(symbol, lookback=300)
         self.oracle = QuantumOracle(simulations=5000)
-        self.yield_governor = YieldGovernor(danger_window=30, danger_threshold=25.0)
+        self.yield_governor = YieldGovernor(danger_window=20)
         self.pre_cognition = QuantumPreCognitionNode(symbol=self.symbol)
         self.tensor_network = TensorNetworkNode()
         self.qte_engine = QuantumTunnelingNode()
@@ -538,6 +538,11 @@ class AethelgardSwarm:
                         self.prev_s, self.prev_c = r_score, conf
                         self.last_time = df.iloc[-1]['time']
 
+                    # 0. YIELD GOVERNOR (AdS/CFT)
+                    y_gov = self.yield_governor.monitor_topology(df.tail(20))
+                    ricci_c = y_gov.get("deformation", 0.0)
+                    coll_s = "1" if y_gov.get("is_collapsed", False) else "0"
+                    
                     lbm_s = q_state.get("lbm_signal", "LAMINAR_FLOW")
                     if lbm_s == "FLUID_RUPTURE_BULL": self.lbm_cache[-1] = "1"
                     elif lbm_s == "FLUID_RUPTURE_BEAR": self.lbm_cache[-1] = "2"
@@ -547,9 +552,7 @@ class AethelgardSwarm:
                     if "FISSION_EXPANSION_UP" in qcd_s: self.qcd_cache[-1] = "1"
                     elif "FISSION_EXPANSION_DOWN" in qcd_s: self.qcd_cache[-1] = "2"
                     
-                    ricci_c = q_state.get("ricci_curvature", 0.0)
                     h_ent = q_state.get("h_entropy", 0.0)
-                    coll_s = "1" if q_state.get("is_collapsed", False) else "0"
                     # Saneamento de Sinais Quânticos (Evita erros de serialização de objetos)
                     def sanitize_signal(val):
                         if hasattr(val, '__name__'): return str(val.__name__)

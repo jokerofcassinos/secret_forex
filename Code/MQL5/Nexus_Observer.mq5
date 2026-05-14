@@ -28,6 +28,7 @@ void BlendSmoothPixel(CCanvas &canvas, int x, int y, uint clr);
 
 void DrawQGCZones(string &parts[]);
 void DrawLBMZones(string &parts[]);
+void DrawCYTZones(string &parts[]);
 
 //+------------------------------------------------------------------+
 int OnInit() { 
@@ -486,6 +487,64 @@ void DrawLBMZones(string &parts[])
              }
          }
 
+         boxIdx++; i = end;
+      }
+   }
+}
+
+void DrawCYTZones(string &parts[])
+{
+   if(ArraySize(parts) < 19) return;
+   
+   string cytHistory = parts[18]; 
+   ObjectsDeleteAll(0, "NEXUS_CYT_");
+   string hCyt[]; StringSplit(cytHistory, ',', hCyt);
+   int totalC = ArraySize(hCyt);
+   int boxIdx = 0;
+   
+   for(int i=0; i < totalC && i < iBars(_Symbol, _Period); i++) {
+      string val = hCyt[totalC - 1 - i];
+      double r = StringToDouble(val);
+      
+      // Se houver perigo topológico (Curvatura de Ricci extrema)
+      if(r > 0) {
+         int start = i; int end = i;
+         while(end + 1 < totalC && end + 1 < iBars(_Symbol, _Period)) {
+            double nr = StringToDouble(hCyt[totalC - 1 - (end + 1)]);
+            if(nr > 0) end++; else break;
+         }
+         
+         double maxH = 0; double minL = 9999999;
+         for(int k=start; k<=end; k++) {
+            maxH = MathMax(maxH, iHigh(_Symbol, _Period, k));
+            minL = MathMin(minL, iLow(_Symbol, _Period, k));
+         }
+         
+         double atr = 0;
+         for(int a=1; a<=14 && a < iBars(_Symbol, _Period); a++) {
+            atr += (iHigh(_Symbol, _Period, a) - iLow(_Symbol, _Period, a));
+         }
+         atr /= 14.0;
+         maxH += atr * 0.2;
+         minL -= atr * 0.2;
+         
+         string bName = "NEXUS_CYT_" + IntegerToString(boxIdx);
+         color zClr = clrDarkRed;
+         
+         if(ObjectCreate(0, bName, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, start), maxH, iTime(_Symbol, _Period, end), minL)) {
+             ObjectSetInteger(0, bName, OBJPROP_COLOR, zClr);
+             ObjectSetInteger(0, bName, OBJPROP_FILL, true);
+             ObjectSetInteger(0, bName, OBJPROP_BACK, true);
+             ObjectSetInteger(0, bName, OBJPROP_STYLE, STYLE_SOLID);
+             
+             // Cria uma tooltip ou texto para indicar o valor da curvatura
+             string tName = "NEXUS_CYT_TXT_" + IntegerToString(boxIdx);
+             if(ObjectCreate(0, tName, OBJ_TEXT, 0, iTime(_Symbol, _Period, start), maxH)) {
+                 ObjectSetString(0, tName, OBJPROP_TEXT, "CYT DANGER: " + DoubleToString(r, 0));
+                 ObjectSetInteger(0, tName, OBJPROP_COLOR, clrWhite);
+                 ObjectSetInteger(0, tName, OBJPROP_BACK, false);
+             }
+         }
          boxIdx++; i = end;
       }
    }
