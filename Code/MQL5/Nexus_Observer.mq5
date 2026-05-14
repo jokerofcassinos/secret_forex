@@ -27,6 +27,7 @@ uint GetLushColor(double val, double age);
 void BlendSmoothPixel(CCanvas &canvas, int x, int y, uint clr);
 
 void DrawQGCZones(string &parts[]);
+void DrawLBMZones(string &parts[]);
 
 //+------------------------------------------------------------------+
 int OnInit() { 
@@ -242,6 +243,7 @@ void ParseAndDraw(string data)
    
    // 3. TACTICAL HUD (ASI Ph.D. Telemetry)
    DrawQGCZones(parts);
+   DrawLBMZones(parts);
    DrawTacticalHUD(parts);
    
    m_canvas.Update();
@@ -292,8 +294,8 @@ void DrawTacticalHUD(string &parts[])
 {
    if(ArraySize(parts) < 30) return;
    
-   // Fundo translúcido do painel
-   int x = 20, y = 20, w = 320, h = 140;
+   // Fundo translúcido do painel expandido para 200px -> agora 225px
+   int x = 20, y = 20, w = 340, h = 225;
    m_canvas.FillRectangle(x, y, x+w, y+h, ColorToARGB(clrBlack, 180));
    m_canvas.Rectangle(x, y, x+w, y+h, ColorToARGB(clrDimGray, 200));
    
@@ -326,7 +328,7 @@ void DrawTacticalHUD(string &parts[])
    
    // 3. RHT Status (Thermodynamics)
    string rht_status = parts[21];
-   uint rht_clr = ColorToARGB(clrYellow, 255); // Default warning/heating
+   uint rht_clr = ColorToARGB(clrYellow, 255); 
    if(StringFind(rht_status, "BULL") >= 0) rht_clr = ColorToARGB(clrCyan, 255);
    if(StringFind(rht_status, "BEAR") >= 0) rht_clr = ColorToARGB(clrMagenta, 255);
    if(StringFind(rht_status, "LAMINAR") >= 0) rht_clr = ColorToARGB(clrDimGray, 255);
@@ -338,6 +340,35 @@ void DrawTacticalHUD(string &parts[])
    string qdd_fid = (ArraySize(parts) > 31) ? parts[31] : "0.00";
    m_canvas.TextOut(x + 15, y + 120, "FIDELITY : ", ColorToARGB(clrLightGray, 255));
    m_canvas.TextOut(x + 100, y + 120, qdd_fid + " SIGMA", ColorToARGB(clrWhite, 255));
+
+   // 5. LBM FLOW
+   string lbm_status = (ArraySize(parts) > 11) ? parts[11] : "UNKNOWN";
+   uint lbm_clr = ColorToARGB(clrLightGray, 255);
+   if(StringFind(lbm_status, "BULL") >= 0) lbm_clr = ColorToARGB(clrDeepSkyBlue, 255);
+   else if(StringFind(lbm_status, "BEAR") >= 0) lbm_clr = ColorToARGB(clrDarkViolet, 255);
+   else if(StringFind(lbm_status, "SQUEEZE") >= 0) lbm_clr = ColorToARGB(clrGold, 255);
+   
+   m_canvas.TextOut(x + 15, y + 145, "LBM FLOW : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 145, lbm_status, lbm_clr);
+
+   // 6. QCD FISSION
+   string qcd_status = (ArraySize(parts) > 23) ? parts[23] : "UNKNOWN";
+   uint qcd_clr = ColorToARGB(clrLightGray, 255);
+   if(StringFind(qcd_status, "UP") >= 0) qcd_clr = ColorToARGB(clrDeepSkyBlue, 255);
+   else if(StringFind(qcd_status, "DOWN") >= 0) qcd_clr = ColorToARGB(clrDarkViolet, 255);
+   else if(StringFind(qcd_status, "CONFINED") >= 0) qcd_clr = ColorToARGB(clrOrange, 255);
+   
+   m_canvas.TextOut(x + 15, y + 170, "QCD FISSION: ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 170, qcd_status, qcd_clr);
+
+   // 7. RMT SPECTRAL ALCHEMIST
+   string rmt_status = (ArraySize(parts) > 13) ? parts[13] : "UNKNOWN";
+   uint rmt_clr = ColorToARGB(clrLightGray, 255);
+   if(StringFind(rmt_status, "ISOLATED") >= 0) rmt_clr = ColorToARGB(clrLime, 255);
+   else if(StringFind(rmt_status, "NOISE") >= 0) rmt_clr = ColorToARGB(clrTomato, 255);
+   
+   m_canvas.TextOut(x + 15, y + 195, "SIGNAL RMT : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 195, rmt_status, rmt_clr);
 }
 
 uint GetLushColor(double val, double age) 
@@ -367,3 +398,95 @@ uint GetLushColor(double val, double age)
 }
 
 color RGB(uchar r, uchar g, uchar b) { return (color)((b << 16) | (g << 8) | r); }
+
+void DrawLBMZones(string &parts[])
+{
+   if(ArraySize(parts) < 16) return;
+   
+   string lbmHistory = parts[15]; 
+   ObjectsDeleteAll(0, "NEXUS_LBM_");
+   string hLbm[]; StringSplit(lbmHistory, ',', hLbm);
+   int totalL = ArraySize(hLbm);
+   int boxIdx = 0;
+   
+   for(int i=0; i < totalL && i < iBars(_Symbol, _Period); i++) {
+      string val = hLbm[totalL - 1 - i];
+      int r = (int)StringToInteger(val);
+      
+      // 1 = FLUID_RUPTURE_BULL, 2 = FLUID_RUPTURE_BEAR, 3 = BOSONIC_SQUEEZE
+      if(r != 0) {
+         int start = i; int end = i;
+         while(end + 1 < totalL && end + 1 < iBars(_Symbol, _Period)) {
+            int nr = (int)StringToInteger(hLbm[totalL - 1 - (end + 1)]);
+            if(nr == r) end++; else break;
+         }
+         
+         double maxH = 0; double minL = 9999999;
+         for(int k=start; k<=end; k++) {
+            maxH = MathMax(maxH, iHigh(_Symbol, _Period, k));
+            minL = MathMin(minL, iLow(_Symbol, _Period, k));
+         }
+         
+         // Add some padding (Manual ATR to avoid MQL5 handle overhead)
+         double atr = 0;
+         for(int a=1; a<=14 && a < iBars(_Symbol, _Period); a++) {
+            atr += (iHigh(_Symbol, _Period, a) - iLow(_Symbol, _Period, a));
+         }
+         atr /= 14.0;
+         maxH += atr * 0.1;
+         minL -= atr * 0.1;
+         
+         color zClr = (r == 1) ? clrDeepSkyBlue : (r == 2 ? clrDarkViolet : clrGold);
+         
+         // Top Line (Fluido Teto)
+         string bTop = "NEXUS_LBM_T_" + IntegerToString(boxIdx);
+         if(ObjectCreate(0, bTop, OBJ_TREND, 0, iTime(_Symbol, _Period, start), maxH, iTime(_Symbol, _Period, end), maxH)) {
+             ObjectSetInteger(0, bTop, OBJPROP_COLOR, zClr);
+             ObjectSetInteger(0, bTop, OBJPROP_WIDTH, (r == 3) ? 3 : 2);
+             ObjectSetInteger(0, bTop, OBJPROP_RAY_RIGHT, false);
+             ObjectSetInteger(0, bTop, OBJPROP_STYLE, STYLE_SOLID);
+             ObjectSetInteger(0, bTop, OBJPROP_BACK, true);
+         }
+         
+         // Bottom Line (Fluido Piso)
+         string bBot = "NEXUS_LBM_B_" + IntegerToString(boxIdx);
+         if(ObjectCreate(0, bBot, OBJ_TREND, 0, iTime(_Symbol, _Period, start), minL, iTime(_Symbol, _Period, end), minL)) {
+             ObjectSetInteger(0, bBot, OBJPROP_COLOR, zClr);
+             ObjectSetInteger(0, bBot, OBJPROP_WIDTH, (r == 3) ? 3 : 2);
+             ObjectSetInteger(0, bBot, OBJPROP_RAY_RIGHT, false);
+             ObjectSetInteger(0, bBot, OBJPROP_STYLE, STYLE_SOLID);
+             ObjectSetInteger(0, bBot, OBJPROP_BACK, true);
+         }
+         
+         // Marcador de Singularidade no Centro do Canal
+         string bArr = "NEXUS_LBM_A_" + IntegerToString(boxIdx);
+         int mid_idx = start + (end - start) / 2;
+         datetime mid_time = iTime(_Symbol, _Period, mid_idx);
+         
+         if(r == 1) { // Bull Rupture (Seta Up abaixo do canal)
+             if(ObjectCreate(0, bArr, OBJ_ARROW, 0, mid_time, minL - atr*0.3)) {
+                 ObjectSetInteger(0, bArr, OBJPROP_ARROWCODE, 233); 
+                 ObjectSetInteger(0, bArr, OBJPROP_COLOR, zClr);
+                 ObjectSetInteger(0, bArr, OBJPROP_WIDTH, 2);
+                 ObjectSetInteger(0, bArr, OBJPROP_BACK, true);
+             }
+         } else if(r == 2) { // Bear Rupture (Seta Down acima do canal)
+             if(ObjectCreate(0, bArr, OBJ_ARROW, 0, mid_time, maxH + atr*0.3)) {
+                 ObjectSetInteger(0, bArr, OBJPROP_ARROWCODE, 234); 
+                 ObjectSetInteger(0, bArr, OBJPROP_COLOR, zClr);
+                 ObjectSetInteger(0, bArr, OBJPROP_WIDTH, 2);
+                 ObjectSetInteger(0, bArr, OBJPROP_BACK, true);
+             }
+         } else if (r == 3) { // Bosonic Squeeze (Diamante acima do canal)
+             if(ObjectCreate(0, bArr, OBJ_ARROW, 0, mid_time, maxH + atr*0.3)) {
+                 ObjectSetInteger(0, bArr, OBJPROP_ARROWCODE, 119); 
+                 ObjectSetInteger(0, bArr, OBJPROP_COLOR, zClr);
+                 ObjectSetInteger(0, bArr, OBJPROP_WIDTH, 1);
+                 ObjectSetInteger(0, bArr, OBJPROP_BACK, true);
+             }
+         }
+
+         boxIdx++; i = end;
+      }
+   }
+}

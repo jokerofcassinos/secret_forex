@@ -5,6 +5,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
 
 namespace py = pybind11;
 
@@ -13,16 +14,19 @@ private:
     int N; // Número de Features (Séries Temporais)
     int T; // Número de Observações no tempo
     std::vector<std::vector<double>> data_matrix;
-    std::vector<std::vector<double>> covariance_matrix;
+    std::vector<std::vector<double>> correlation_matrix;
+    std::vector<double> eigenvalues;
+    std::vector<std::vector<double>> eigenvectors;
     
 public:
     RMTEngine(int features, int time_steps) : N(features), T(time_steps) {
         if (N <= 0 || T <= 0) throw std::invalid_argument("Dimensões devem ser positivas.");
         data_matrix.resize(N, std::vector<double>(T, 0.0));
-        covariance_matrix.resize(N, std::vector<double>(N, 0.0));
+        correlation_matrix.resize(N, std::vector<double>(N, 0.0));
+        eigenvalues.resize(N, 0.0);
+        eigenvectors.resize(N, std::vector<double>(N, 0.0));
     }
 
-    // Carrega dados da matriz numpy 2D (Features x Time)
     void load_data(py::array_t<double> input_data) {
         py::buffer_info buf = input_data.request();
         if (buf.ndim != 2 || buf.shape[0] != N || buf.shape[1] != T) {
@@ -31,7 +35,6 @@ public:
 
         double *ptr = static_cast<double *>(buf.ptr);
         for (int i = 0; i < N; ++i) {
-            // Normalização Z-Score (Média 0, Desvio 1) por série para RMT
             double sum = 0.0, sq_sum = 0.0;
             for (int t = 0; t < T; ++t) {
                 double val = ptr[i * T + t];
@@ -51,8 +54,7 @@ public:
         }
     }
 
-    // Calcula a Matriz de Covariância C = (1/T) * X * X^T (Acelerado com OpenMP)
-    void compute_covariance() {
+    void compute_correlation() {
         #pragma omp parallel for collapse(2)
         for (int i = 0; i < N; ++i) {
             for (int j = 0; j < N; ++j) {
@@ -60,67 +62,117 @@ public:
                 for (int t = 0; t < T; ++t) {
                     cov += data_matrix[i][t] * data_matrix[j][t];
                 }
-                covariance_matrix[i][j] = cov / T;
+                correlation_matrix[i][j] = cov / T;
             }
         }
     }
 
-    // Método da Potência para extrair o Autovalor Dominante (Assinatura Institucional)
-    // Retorna [Eigenvalue, Signal_Power_Ratio]
-    std::vector<double> extract_dominant_eigenvalue(int max_iterations = 1000, double tol = 1e-9) {
-        compute_covariance();
+    // Jacobi Eigenvalue Algorithm for symmetric matrices
+    void jacobi_decomposition(int max_iter = 1000) {
+        std::vector<std::vector<double>> A = correlation_matrix;
         
-        std::vector<double> v(N, 1.0 / std::sqrt(N)); // Vetor inicial unitário
-        std::vector<double> v_new(N, 0.0);
-        double lambda = 0.0, prev_lambda = 0.0;
-
-        for (int iter = 0; iter < max_iterations; ++iter) {
-            // Multiplicação Matriz-Vetor: v_new = C * v
-            double norm = 0.0;
-            for (int i = 0; i < N; ++i) {
-                v_new[i] = 0.0;
-                for (int j = 0; j < N; ++j) {
-                    v_new[i] += covariance_matrix[i][j] * v[j];
-                }
-                norm += v_new[i] * v_new[i];
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                eigenvectors[i][j] = (i == j) ? 1.0 : 0.0;
             }
-            norm = std::sqrt(norm);
-            
-            // Normaliza v_new e calcula Quociente de Rayleigh (lambda)
-            lambda = 0.0;
-            for (int i = 0; i < N; ++i) {
-                v_new[i] /= norm;
-                double temp = 0.0;
-                for (int j = 0; j < N; ++j) {
-                    temp += covariance_matrix[i][j] * v_new[j];
-                }
-                lambda += v_new[i] * temp;
-            }
-
-            if (std::abs(lambda - prev_lambda) < tol) break;
-            prev_lambda = lambda;
-            v = v_new;
         }
 
-        // --- Marchenko-Pastur Limites Teóricos ---
-        // Q = T/N. Limite Superior do Ruído Aleatório
-        double Q = (double)T / (double)N;
-        double lambda_max_mp = 1.0 + (1.0 / Q) + 2.0 * std::sqrt(1.0 / Q);
+        int iters = 0;
+        double state = N; // Tolerance state
         
-        // Signal Power Ratio = Quão mais forte o Institucional está em relação ao ruído máximo
-        double signal_power = lambda / lambda_max_mp;
+        while (state > 0 && iters < max_iter) {
+            state = 0;
+            for (int p = 0; p < N - 1; p++) {
+                for (int q = p + 1; q < N; q++) {
+                    if (std::abs(A[p][q]) > 1e-9) {
+                        state = 1;
+                        double tau = (A[q][q] - A[p][p]) / (2.0 * A[p][q]);
+                        double t;
+                        if (tau >= 0) t = 1.0 / (tau + std::sqrt(1.0 + tau * tau));
+                        else t = -1.0 / (-tau + std::sqrt(1.0 + tau * tau));
+                        
+                        double c = 1.0 / std::sqrt(1 + t * t);
+                        double s = t * c;
+                        
+                        double app = A[p][p];
+                        double aqq = A[q][q];
+                        A[p][p] = c * c * app - 2.0 * s * c * A[p][q] + s * s * aqq;
+                        A[q][q] = s * s * app + 2.0 * s * c * A[p][q] + c * c * aqq;
+                        A[p][q] = 0.0;
+                        A[q][p] = 0.0;
+                        
+                        for (int j = 0; j < N; j++) {
+                            if (j != p && j != q) {
+                                double apj = A[p][j];
+                                double aqj = A[q][j];
+                                A[p][j] = c * apj - s * aqj;
+                                A[j][p] = A[p][j];
+                                A[q][j] = s * apj + c * aqj;
+                                A[j][q] = A[q][j];
+                            }
+                            double vip = eigenvectors[j][p];
+                            double viq = eigenvectors[j][q];
+                            eigenvectors[j][p] = c * vip - s * viq;
+                            eigenvectors[j][q] = s * vip + c * viq;
+                        }
+                    }
+                }
+            }
+            iters++;
+        }
+        
+        for (int i = 0; i < N; i++) {
+            eigenvalues[i] = A[i][i];
+        }
+    }
 
-        return {lambda, signal_power, lambda_max_mp};
+    py::dict perform_spectral_cleaning() {
+        compute_correlation();
+        jacobi_decomposition();
+        
+        double Q = (double)T / (double)N;
+        double sigma_sq = 1.0; 
+        double lambda_max_mp = sigma_sq * std::pow(1.0 + std::sqrt(1.0 / Q), 2.0);
+        
+        double dominant_eigenvalue = 0.0;
+        double noise_trace = 0.0;
+        double signal_trace = 0.0;
+        
+        std::vector<double> clean_eigenvalues = eigenvalues;
+        
+        for (int i = 0; i < N; ++i) {
+            if (eigenvalues[i] > dominant_eigenvalue) {
+                dominant_eigenvalue = eigenvalues[i];
+            }
+            
+            if (eigenvalues[i] <= lambda_max_mp) {
+                noise_trace += eigenvalues[i];
+                clean_eigenvalues[i] = 0.0; // Clipping
+            } else {
+                signal_trace += eigenvalues[i];
+            }
+        }
+        
+        double signal_power = dominant_eigenvalue / lambda_max_mp;
+        double signal_to_noise = (noise_trace > 0) ? (signal_trace / noise_trace) : signal_trace;
+
+        py::dict result;
+        result["dominant_eigenvalue"] = dominant_eigenvalue;
+        result["lambda_max_mp"] = lambda_max_mp;
+        result["signal_power"] = signal_power;
+        result["signal_to_noise"] = signal_to_noise;
+        result["eigenvalues"] = eigenvalues;
+        result["clean_eigenvalues"] = clean_eigenvalues;
+
+        return result;
     }
 };
 
 PYBIND11_MODULE(rmt_engine, m) {
-    m.doc() = "Random Matrix Theory (RMT) Eigen-Decomposition Engine";
+    m.doc() = "Random Matrix Theory Engine v5.0 - ASI-5 Spectral Alchemist (Jacobi & Marchenko-Pastur)";
     
     py::class_<RMTEngine>(m, "RMTEngine")
         .def(py::init<int, int>())
-        .def("load_data", &RMTEngine::load_data, "Load 2D Feature Matrix")
-        .def("extract_dominant_eigenvalue", &RMTEngine::extract_dominant_eigenvalue, 
-             py::arg("max_iterations") = 1000, py::arg("tol") = 1e-9, 
-             "Compute Principal Component Energy");
+        .def("load_data", &RMTEngine::load_data)
+        .def("perform_spectral_cleaning", &RMTEngine::perform_spectral_cleaning);
 }

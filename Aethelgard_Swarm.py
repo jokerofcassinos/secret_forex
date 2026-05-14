@@ -436,6 +436,8 @@ class AethelgardSwarm:
                     self.bridge.initialize()
                     self.rht_tracker.symbol = self.symbol
                     self.pre_cognition.symbol = self.symbol
+                    self.qgc_node = QuantumGlassNode() # Reset QGC on TF Change
+                    self.qgc_data_str = ""
                     
                     self.regimes_cache.clear(); self.sec_cache.clear(); self.dots_cache.clear()
                     self.qcd_cache.clear(); self.cyt_danger_cache.clear(); self.last_time = 0

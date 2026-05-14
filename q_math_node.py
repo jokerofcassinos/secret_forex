@@ -134,7 +134,7 @@ class QMathNode:
                             self.cloud_trail.insert(0, f"{w_p_min:.2f}|{w_p_max:.2f}|{s_hex}")
                     print(f"✅ Q-MATH :: Campo Espectral v71.1 Materializado.")
 
-            if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-100, df['high'].max()+100, 200, tau=1.0)
+            if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-300, df['high'].max()+300, 200, smagorinsky_cs=0.15)
             if self.plasma_tracker is None: self.plasma_tracker = PlasmaMarketTracker()
             if self.rmt_tracker is None: self.rmt_tracker = RandomMatrixTracker(100)
             if self.qrw_tracker is None:
@@ -185,15 +185,37 @@ class QMathNode:
                         return {"cloud_str": "^".join(self.cloud_trail)}
                     return {"cloud_str": "0.0:0.0:0.0:"}
                 except Exception as e: return {"cloud_str": f"ERROR:{str(e)}"}
+                
+            def run_lbm():
+                try:
+                    l_den, l_vel, l_press, l_rey = self.lbm_tracker.process_tick_stream(df.tail(5), steps=2)
+                    lbm_sig = self.lbm_tracker.detect_squeeze_rupture(df.tail(150), l_den, l_vel, l_press, l_rey, current_regime=self.current_regime_context)
+                    return {"lbm_signal": lbm_sig}
+                except Exception as e:
+                    return {"lbm_signal": "LAMINAR_FLOW"}
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            def run_rmt():
+                try:
+                    # Necessita o velocity array do LBM, mas se for assíncrono passamos None e ele ignora
+                    rmt_sig = self.rmt_tracker.process_spectral_filter(df.tail(150), None)
+                    return {"rmt_signal": rmt_sig}
+                except Exception as e:
+                    return {"rmt_signal": "NOISE_DOMINANT"}
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                 f_sch = executor.submit(run_schrodinger)
+                f_lbm = executor.submit(run_lbm)
+                f_rmt = executor.submit(run_rmt)
                 results = f_sch.result()
+                results.update(f_lbm.result())
+                results.update(f_rmt.result())
 
             with self.state_lock:
                 self.current_state.update({
                     "status": "ACTIVE", "latest_price": current_close,
-                    "cloud_str": results.get("cloud_str", "")
+                    "cloud_str": results.get("cloud_str", ""),
+                    "lbm_signal": results.get("lbm_signal", "LAMINAR_FLOW"),
+                    "rmt_signal": results.get("rmt_signal", "NOISE_DOMINANT")
                 })
         except Exception as e: print(f"❌ Q-MATH :: Error: {e}")
 

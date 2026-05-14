@@ -3,10 +3,22 @@ import pandas as pd
 import sys
 import os
 
-# [BOOTLOADER] Força reconhecimento dos binários Mingw64
-if os.name == 'nt' and os.path.exists(r"D:\msys64\mingw64\bin"):
-    os.add_dll_directory(r"D:\msys64\mingw64\bin")
+# [BOOTLOADER] Força reconhecimento dos binários Mingw64 e diretórios base
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+bin_path = os.path.join(root_path, "Code", "CPP_Engine", "bin")
 
+if os.name == 'nt':
+    if os.path.exists(r"D:\msys64\mingw64\bin"):
+        os.add_dll_directory(r"D:\msys64\mingw64\bin")
+    if os.path.exists(root_path):
+        os.add_dll_directory(root_path)
+    if os.path.exists(bin_path):
+        os.add_dll_directory(bin_path)
+
+if root_path not in sys.path:
+    sys.path.insert(0, root_path)
+if bin_path not in sys.path:
+    sys.path.insert(0, bin_path)
 
 try:
     import lbm_engine
@@ -15,20 +27,18 @@ except ImportError as e:
 
 class LBMFluidDynamics:
     """
-    N-Core Agent: LBM Fluid Dynamics v2.0
-    FIX P0-08: tau >= 1.0 for stability.
-    FIX P0-09: Momentum proportional to candle body strength.
-    FIX P1-09: Mass decay built into C++ engine.
+    N-Core Agent: LBM Fluid Dynamics v5.0 (ASI-5)
+    Utiliza Smagorinsky Subgrid Turbulence Model e Número de Reynolds dinâmico.
+    Aniquila thresholds estatísticos de Z-Score. Opera com Gradientes de Pressão.
     """
-    def __init__(self, price_min, price_max, bins=200, tau=1.2):
+    def __init__(self, price_min, price_max, bins=200, smagorinsky_cs=0.15):
         self.price_min = price_min
         self.price_max = price_max
         self.bins = bins
         self.dx = (price_max - price_min) / bins
         
         try:
-            # FIX P0-08: Default tau=1.0 for guaranteed stability
-            self.engine = lbm_engine.LBMEngine(self.bins, max(1.0, tau))
+            self.engine = lbm_engine.LBMEngine(self.bins, 1.0, smagorinsky_cs)
             self.is_active = True
         except NameError:
             self.is_active = False
@@ -41,7 +51,7 @@ class LBMFluidDynamics:
         return self.price_min + (idx * self.dx)
 
     def process_tick_stream(self, df_slice, steps=10):
-        if not self.is_active: return None, None
+        if not self.is_active: return None, None, None, None
         
         # Calculate ATR for momentum normalization
         tr = df_slice['high'] - df_slice['low']
@@ -55,11 +65,11 @@ class LBMFluidDynamics:
             c_price = candle['close']
             vol = candle.get('tick_volume', 100)
             
-            # IMPECÁVEL: Massa proporcional ao volume relativo
+            # Massa proporcional ao volume relativo
             mass_weight = np.clip(vol / avg_vol, 0.5, 3.0)
             
             body = candle['close'] - candle['open']
-            momentum = np.clip(body / (atr + 1e-9), -0.15, 0.15)
+            momentum = np.clip(body / (atr + 1e-9), -0.45, 0.45)
             
             mass = (vol * 0.001) * mass_weight
             idx = self.price_to_index(c_price)
@@ -70,22 +80,28 @@ class LBMFluidDynamics:
             
         density = np.array(self.engine.get_density())
         velocity = np.array(self.engine.get_velocity())
+        pressure = np.array(self.engine.get_pressure())
+        reynolds = np.array(self.engine.get_reynolds())
         
         # --- PROTOCOLO DE DESFRIBILAÇÃO NEXUS ---
         if np.any(np.isnan(density)) or np.any(np.isinf(density)) or (len(density) > 0 and np.max(density) > 1e8):
+            print("⚠️ LBM ENGINE: Instabilidade termodinâmica detectada. Reiniciando o motor de fluidos.")
             import lbm_engine
-            self.engine = lbm_engine.LBMEngine(self.bins, 1.2)
+            self.engine = lbm_engine.LBMEngine(self.bins, 1.0, 0.15)
             density = np.zeros(self.bins)
             velocity = np.zeros(self.bins)
+            pressure = np.zeros(self.bins)
+            reynolds = np.zeros(self.bins)
             
-        return density, velocity
+        return density, velocity, pressure, reynolds
 
-    def detect_squeeze_rupture(self, df_slice, density, velocity, current_regime=0):
+    def detect_squeeze_rupture(self, df_slice, density, velocity, pressure, reynolds, current_regime=0):
         """
-        NEXUS TQFM v4.2 :: POLARITY EXCLUSION & HYSTERESIS.
-        Filtra ruídos contraditórios usando o regime macro como âncora de polaridade.
+        NEXUS TQFM v5.0 :: LBM Smagorinsky Turbulency Detection.
+        Elimina Z-Scores. Avalia o número de Reynolds e Diferença de Pressão.
         """
         if len(df_slice) < 50: return "LAMINAR_FLOW"
+        if density is None or pressure is None: return "LAMINAR_FLOW"
         
         current_price = df_slice['close'].iloc[-1]
         curr_idx = self.price_to_index(current_price)
@@ -97,52 +113,45 @@ class LBMFluidDynamics:
         r_low = local_range['low'].min()
         atr = (df_slice['high'] - df_slice['low']).rolling(14).mean().iloc[-1]
         
-        # 2. Análise de Massa (Média Móvel de Densidade para Histerese)
+        # 2. Análise Termodinâmica Local
         start = max(0, curr_idx - 2)
         end = min(self.bins, curr_idx + 3)
-        local_density = np.max(density[start:end])
+        
+        local_pressure = np.max(pressure[start:end])
         local_velocity = np.mean(velocity[start:end])
+        local_reynolds = np.max(reynolds[start:end])
         
-        global_mean_rho = np.mean(density)
-        global_std_rho = np.std(density)
-        if global_std_rho < 1e-9: global_std_rho = 1e-9
-        z_rho = (local_density - global_mean_rho) / global_std_rho
+        mean_pressure = np.mean(pressure)
         
-        # 3. PROTOCOLO DE EXCLUSÃO MÚTUA ABSOLUTA (TQFM v4.3)
-        # Elevamos o threshold de 2.5 para 3.5 para ignorar ruído de varejo.
-        # Soberania Total: Proibição de sinais contra-regime em Tsunamis ativos.
-        is_extreme_climax = (z_rho > 7.5)
+        # 3. ASI-5 FÍSICA DE FLUIDOS
+        # Pressão Rompe Coesão: P_local >> P_media * Fator de Coesão
+        cohesion_factor = 2.0 
+        is_pressure_rupture = (local_pressure > mean_pressure * cohesion_factor)
         
-        # [BULL RUPTURE]
-        if z_rho > 3.5 and local_velocity > 0.05:
-            # BLOQUEIO: Se o regime é Bear Tsunami, ignoramos compras a menos que seja um Clímax de Fundo Violento.
-            if (current_regime != 2) or (current_price <= r_low + atr * 0.3 and is_extreme_climax):
-                if current_price > (r_high + r_low)/2 or local_velocity > 0.15:
-                    return "FLUID_RUPTURE_BULL"
+        # Turbulência ou Condensado? (Baseado em Reynolds)
+        # Re baixo = Viscoso/Laminar (Condensando energia)
+        # Re alto = Turbulência/Dispersão de Fônons
         
-        # [BEAR RUPTURE]
-        if z_rho > 3.5 and local_velocity < -0.05:
-            # BLOQUEIO: Se o regime é Bull Tsunami, ignoramos vendas (roxo) a menos que seja um Clímax de Topo Violento.
-            if (current_regime != 1) or (current_price >= r_high - atr * 0.3 and is_extreme_climax):
-                if current_price < (r_high + r_low)/2 or local_velocity < -0.15:
-                    return "FLUID_RUPTURE_BEAR"
-
-        # 4. CLÍMAX DE EXAUSTÃO (Cata-Topos e Cata-Fundos de Alta Precisão)
-        if z_rho > 6.0:
-            if current_price >= r_high - (atr * 0.15) and local_velocity < -0.05: return "FLUID_RUPTURE_BEAR"
-            if current_price <= r_low + (atr * 0.15) and local_velocity > 0.05: return "FLUID_RUPTURE_BULL"
-
-        # 5. BOSONIC SQUEEZE (Compressão de Massa sem Direção Clara)
-        if z_rho > 3.2 and abs(local_velocity) < 0.03:
-            return "BOSONIC_SQUEEZE"
+        if is_pressure_rupture:
+            # Alta Pressão + Turbulência Direcional = Ruptura (Explosão fluida)
+            if local_reynolds > 5.0: # Limiar de turbulência empírico
+                if local_velocity > 0.05:
+                    if current_regime != 2 or current_price <= r_low + atr * 0.3:
+                        return "FLUID_RUPTURE_BULL"
+                elif local_velocity < -0.05:
+                    if current_regime != 1 or current_price >= r_high - atr * 0.3:
+                        return "FLUID_RUPTURE_BEAR"
+            
+            # Alta Pressão + Escoamento Laminar (Baixo Reynolds) = Squeeze Bosônico
+            # A energia está presa, coagulando antes de explodir.
+            if local_reynolds <= 5.0 and abs(local_velocity) < 0.05:
+                return "BOSONIC_SQUEEZE"
                 
         return "LAMINAR_FLOW"
-
 
     def evaluate_viscoelastic_shock(self, anomaly_duration_seconds):
         if not self.is_active: return False
         return self.engine.is_viscoelastic_absorption(anomaly_duration_seconds)
 
-
 if __name__ == "__main__":
-    print("LBM Fluid Dynamics v2.0 module loaded.")
+    print("LBM Fluid Dynamics v5.0 (Smagorinsky/Reynolds) module loaded.")

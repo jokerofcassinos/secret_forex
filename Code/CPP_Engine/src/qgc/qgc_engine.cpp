@@ -35,27 +35,22 @@ public:
     }
 
     void update_evaporation(double current_time, double current_price, double current_atr) {
-        double safe_atr = std::max(current_atr, 1.0); // Evita divisão por zero
+        double safe_atr = std::max(current_atr, 1.0); 
         
         for (auto& zone : zones) {
-            double delta_t = current_time - zone.creation_time;
             double dist = std::abs(current_price - zone.price);
             
-            // Decaimento Hawking Relativístico: MAIOR se o preço estiver perto
-            // Proximidade escala o decaimento exponencialmente
             double proximity_factor = std::exp(-dist / safe_atr); 
-            // Constante base de decaimento por tick temporal
             double temporal_decay = 0.002; 
             
-            // A radiação Hawking evapora a zona severamente se o preço testar a região
             double radiation = temporal_decay + (0.15 * proximity_factor); 
             
-            zone.current_mass = zone.mass * std::exp(-radiation * delta_t);
+            // Integração irreversível da Termodinâmica
+            zone.current_mass = zone.current_mass * std::exp(-radiation * 1.0);
         }
         
-        // Zonas nunca morrem abruptamente em 10%, elas desvanecem organicamente
         zones.erase(std::remove_if(zones.begin(), zones.end(), [](const QuantumZone& z) {
-            return z.current_mass < 0.05; // Morte termodinâmica quase absoluta
+            return z.current_mass < 0.05; 
         }), zones.end());
     }
 
@@ -104,11 +99,11 @@ public:
             // Aplica decaimento dinâmico
             double safe_atr = std::max(a_ptr[t], 1.0);
             for (auto& z : sim_zones) {
-                double delta_t = t - z.creation_time;
                 double dist = std::abs(p_ptr[t] - z.price);
                 double proximity_factor = std::exp(-dist / safe_atr);
                 double radiation = 0.002 + (0.15 * proximity_factor); 
-                z.current_mass = z.mass * std::exp(-radiation * delta_t);
+                // Integração irreversível
+                z.current_mass = z.current_mass * std::exp(-radiation * 1.0);
             }
             
             sim_zones.erase(std::remove_if(sim_zones.begin(), sim_zones.end(), [](const QuantumZone& z) {

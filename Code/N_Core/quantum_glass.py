@@ -50,10 +50,12 @@ class QuantumGlassNode:
         active_count = len(self.engine.get_active_zones())
         if active_count == 0:
             print(f"[QGC-Node] Iniciando Scanner de Memória Histórica ASI-5...")
-            lookback = min(200, len(df))
+            lookback = min(800, len(df))
             for i in range(len(df) - lookback, len(df)):
                 if z_scores[i] > 2.0: # Threshold Dinâmico Anti-Ruído
                     self.engine.add_zone(df['close'].iloc[i], z_scores[i], float(i))
+                # Aplica a radiação de Hawking durante a passagem do tempo histórico
+                self.engine.update_evaporation(float(i), df['close'].iloc[i], atr_series[i])
         
         # Detecção de novos picos em tempo real
         last_idx = len(df) - 1
