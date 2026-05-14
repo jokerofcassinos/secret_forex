@@ -258,7 +258,8 @@ class AethelgardSwarm:
         
         try:
             import cyt_engine, qgc_engine
-            cyt_hist = cyt_engine.CYTEngine()
+            from Code.N_Core.yield_governor import YieldGovernor
+            cyt_hist_governor = YieldGovernor(danger_window=20)
             qgc_hist = qgc_engine.QGCEngine()
             has_cpp_hist = True
         except Exception:
