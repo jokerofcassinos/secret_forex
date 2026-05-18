@@ -1,11 +1,14 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#include <pybind11/pybind11.h>     
+#include <pybind11/numpy.h>        
 #include <pybind11/stl.h>
 #include <vector>
 #include <complex>
 #include <cmath>
 #include <algorithm>
-#include <random>
 #include <omp.h>
 
 namespace py = pybind11;
@@ -17,8 +20,8 @@ private:
     int num_positions;
     std::vector<Complex> state_up;
     std::vector<Complex> state_down;
-    double decoherence_factor = 0.9992;
-    static constexpr double EPSILON = 1e-18;
+    double decoherence_factor = 0.9995; // ASI-5 Low decoherence
+    static constexpr double EPSILON = 1e-15;
 
 public:
     QRWEngine(int positions = 4001) : num_positions(positions) {
@@ -34,119 +37,132 @@ public:
         int center = num_positions / 2;
         double inv_sqrt2 = 1.0 / std::sqrt(2.0);
         state_up[center] = Complex(inv_sqrt2, 0.0);
-        state_down[center] = Complex(inv_sqrt2, 0.0);
+        state_down[center] = Complex(0.0, -inv_sqrt2);
     }
 
-    // [METODO INTERNO DE STEP - Otimizado]
-    void internal_step(std::vector<Complex>& s_up, std::vector<Complex>& s_down, double bias, double dyn_deco) {
+    void internal_step(std::vector<Complex>& s_up, std::vector<Complex>& s_down, double theta, double phi, double varphi) {
         std::vector<Complex> n_up(num_positions, 0.0);
         std::vector<Complex> n_down(num_positions, 0.0);
-        double theta = M_PI / 4.0; 
-        Complex I(0.0, 1.0);
-        Complex C00(std::cos(theta), 0.0);
-        Complex C01 = I * std::sin(theta) * std::exp(I * bias);
-        Complex C10 = I * std::sin(theta) * std::exp(-I * bias);
-        Complex C11(std::cos(theta), 0.0);
-        int center = num_positions / 2;
 
+        Complex I(0.0, 1.0);
+
+        Complex C00 = std::exp(I * phi) * std::cos(theta);
+        Complex C01 = std::exp(I * varphi) * std::sin(theta);
+        Complex C10 = -std::exp(-I * varphi) * std::sin(theta);
+        Complex C11 = std::exp(-I * phi) * std::cos(theta);
+
+        #pragma omp parallel for
         for (int i = 0; i < num_positions; ++i) {
-            double dist = (double)(i - center) / (double)center;
-            double l_deco = dyn_deco * (1.0 - 0.0001 * std::pow(dist * center, 2) / (double)center);
-            Complex su = s_up[i] * l_deco;
-            Complex sd = s_down[i] * l_deco;
-            if (std::norm(su) < EPSILON && std::norm(sd) < EPSILON) continue;
-            Complex vu = C00 * su + C01 * sd;
-            Complex vd = C10 * su + C11 * sd;
-            if (i > 0) n_up[i - 1] += vu;
-            else n_down[i + 1] += vu * 0.5;
-            if (i < num_positions - 1) n_down[i + 1] += vd;
-            else n_up[i - 1] += vd * 0.5;
+            Complex u_term = 0.0;
+            Complex d_term = 0.0;
+
+            if (i < num_positions - 1) {
+                Complex su = s_up[i+1] * decoherence_factor;
+                Complex sd = s_down[i+1] * decoherence_factor;
+                u_term = C00 * su + C01 * sd;
+            } else {
+                Complex su = s_up[i-1] * decoherence_factor;
+                Complex sd = s_down[i-1] * decoherence_factor;
+                u_term = (C10 * su + C11 * sd) * 0.5;
+            }
+
+            if (i > 0) {
+                Complex su = s_up[i-1] * decoherence_factor;
+                Complex sd = s_down[i-1] * decoherence_factor;
+                d_term = C10 * su + C11 * sd;
+            } else {
+                Complex su = s_up[i+1] * decoherence_factor;
+                Complex sd = s_down[i+1] * decoherence_factor;
+                d_term = (C00 * su + C01 * sd) * 0.5;
+            }
+
+            n_up[i] = u_term;
+            n_down[i] = d_term;
         }
+
+        double norm_sum = 0.0;
+        #pragma omp parallel for reduction(+:norm_sum)
+        for (int i = 0; i < num_positions; ++i) {
+            norm_sum += std::norm(n_up[i]) + std::norm(n_down[i]);
+        }
+
+        if (norm_sum > 0) {
+            double factor = 1.0 / std::sqrt(norm_sum);
+            #pragma omp parallel for
+            for (int i = 0; i < num_positions; ++i) {
+                n_up[i] *= factor;
+                n_down[i] *= factor;
+            }
+        }
+
         s_up = std::move(n_up);
         s_down = std::move(n_down);
     }
 
-    void step(double bias, double dyn_deco) {
-        internal_step(state_up, state_down, bias, dyn_deco);
-        // Normalização
-        double norm_sum = 0.0;
-        for(int i=0; i<num_positions; ++i) norm_sum += std::norm(state_up[i]) + std::norm(state_down[i]);
-        if(norm_sum > 0) {
-            double factor = 1.0 / std::sqrt(norm_sum);
-            for(int i=0; i<num_positions; ++i) { state_up[i] *= factor; state_down[i] *= factor; }
-        }
-    }
+    py::dict step(double current_price, double atr, double current_momentum) {
+        int center = num_positions / 2;
 
-    // --- [NOVO MOTOR DE PRE-COGNITION C++] ---
-    std::vector<double> simulate_future_collapse(
-        double current_price, 
-        double atr, 
-        int steps, 
-        int simulations, 
-        double top_zone, 
-        double bottom_zone,
-        double threshold_mult
-    ) {
-        std::vector<double> breach_levels;
-        breach_levels.reserve(simulations);
+        // Amplificação Z-Score (SU(2) Gain)
+        double z_score = current_momentum;
+        double magnitude = std::abs(z_score);
+        double brutal_gain = std::tanh(magnitude * 5.0); // 0 to 1
+
+        // Theta: 0 = Balístico (Sem mistura), PI/4 = Hadamard (Máxima Difusão)
+        // Em alta volatilidade/momentum, queremos comportamento balístico direcional.
+        double theta = (M_PI / 4.0) * (1.0 - brutal_gain);
         
-        // Detectar modo de operação: Contenção ou Fuga (Escape)
-        bool is_outside_top = current_price > (top_zone - (atr * threshold_mult));
-        bool is_outside_bottom = current_price < (bottom_zone + (atr * threshold_mult));
-        bool escape_mode = is_outside_top || is_outside_bottom;
+        // Fases para interferência construtiva direcional
+        double phi = z_score * M_PI;
+        double varphi = 0.0;
 
-        #pragma omp parallel
-        {
-            std::random_device rd;
-            std::mt19937 gen(rd() ^ (omp_get_thread_num() + (int)time(NULL)));
-            std::normal_distribution<> d(0, atr * 0.5); 
-            
-            std::vector<double> local_breaches;
-            
-            #pragma omp for
-            for(int s = 0; s < simulations; ++s) {
-                double sim_p = current_price;
-                bool collapsed = false;
-                
-                for(int t = 0; t < steps; ++t) {
-                    sim_p += d(gen);
-                    
-                    if (escape_mode) {
-                        // Modo Fuga: Reversão brusca é o perigo
-                        double dynamic_boundary_bottom = current_price - (atr * threshold_mult * 1.5);
-                        double dynamic_boundary_top = current_price + (atr * threshold_mult * 3.0);
-                        
-                        if (is_outside_top && sim_p < dynamic_boundary_bottom) {
-                            local_breaches.push_back(sim_p);
-                            collapsed = true;
-                            break;
-                        }
-                        if (is_outside_bottom && sim_p > dynamic_boundary_top) {
-                            local_breaches.push_back(sim_p);
-                            collapsed = true;
-                            break;
-                        }
-                    } else {
-                        if (sim_p > top_zone - (atr * threshold_mult) || sim_p < bottom_zone + (atr * threshold_mult)) {
-                            local_breaches.push_back(sim_p);
-                            collapsed = true;
-                            break;
-                        }
-                    }
-                }
-                if (!collapsed) local_breaches.push_back(sim_p);
+        // Injeção de Estado (Inversão Corrigida):
+        // Momentum > 0 (Bull) -> Injeta no Down (que se move para a DIREITA)
+        // Momentum < 0 (Bear) -> Injeta no Up (que se move para a ESQUERDA)
+        double inject_amount = magnitude * 0.5; // Escalar injeção
+        if (z_score > 0) {
+            state_down[center] += Complex(inject_amount, 0.0);
+        } else if (z_score < 0) {
+            state_up[center] += Complex(inject_amount, 0.0);
+        }
+
+        // Executa múltiplos sub-passos internos para propagação visível (Dinamismo ASI)
+        for(int s = 0; s < 3; ++s) {
+            internal_step(state_up, state_down, theta, phi, varphi);
+        }
+
+        std::vector<double> probs(num_positions, 0.0);
+        double max_prob = 0.0;
+        double sum_right = 0.0;
+        double sum_left = 0.0;
+
+        for (int i = 0; i < num_positions; ++i) {
+            double p = std::norm(state_up[i]) + std::norm(state_down[i]);
+            probs[i] = p;
+            if (p > max_prob) {
+                max_prob = p;
             }
             
-            #pragma omp critical
-            breach_levels.insert(breach_levels.end(), local_breaches.begin(), local_breaches.end());
+            // Acumular massa de probabilidade para detecção de viés
+            if (i > center + 5) {
+                sum_right += p;
+            } else if (i < center - 5) {
+                sum_left += p;
+            }
         }
-        
-        return breach_levels;
+
+        py::dict res;
+        res["max_prob"] = max_prob;
+        res["prob_right"] = sum_right;
+        res["prob_left"] = sum_left;
+        res["distribution"] = py::array_t<double>({num_positions}, {sizeof(double)}, probs.data());
+        return res;
     }
 
     double get_skewness() {
         double exp_v = 0.0, total_p = 0.0;
         int center = num_positions / 2;
+
+        #pragma omp parallel for reduction(+:exp_v, total_p)
         for (int i = 0; i < num_positions; ++i) {
             double p = std::norm(state_up[i]) + std::norm(state_down[i]);
             total_p += p;
@@ -158,12 +174,19 @@ public:
 
     double update_and_get_skew(py::array_t<double> deltas, py::array_t<double> volumes, double scale) {
         auto r_d = deltas.unchecked<1>();
+        auto r_v = volumes.unchecked<1>();
         int size = r_d.shape(0);
+
         for (int i = 0; i < size; ++i) {
             double d = r_d(i);
-            double bias_angle = (M_PI / 4.0) - (std::tanh(d * scale * 2.0) * (M_PI / 4.0));
-            double dyn_deco = decoherence_factor * (1.0 - std::abs(std::tanh(d * scale * 0.01)));
-            step(bias_angle, std::clamp(dyn_deco, 0.99, 1.0));
+            double v = (r_v.shape(0) > i) ? r_v(i) : 1.0;
+
+            double momentum = d * v * scale;
+            double theta = (M_PI / 4.0) - (std::tanh(std::abs(momentum)) * (M_PI / 8.0));
+            double phi = momentum * M_PI;
+            double varphi = momentum * M_PI * 0.5;
+
+            internal_step(state_up, state_down, theta, phi, varphi);
         }
         return get_skewness();
     }
@@ -177,14 +200,13 @@ public:
 };
 
 PYBIND11_MODULE(qrw_engine, m) {
+    m.doc() = "QRW Engine (Quantum Random Walk - ASI-5 Adaptive Unitary Matrix with SU(2) Rotation and OMP)";
     py::class_<QRWEngine>(m, "QRWEngine")
         .def(py::init<int>(), py::arg("positions") = 401)
         .def("reset", &QRWEngine::reset)
         .def("get_skewness", &QRWEngine::get_skewness)
         .def("get_probability_distribution", &QRWEngine::get_probability_distribution)
         .def("update_and_get_skew", &QRWEngine::update_and_get_skew, py::arg("deltas"), py::arg("volumes"), py::arg("scale"))
-        .def("simulate_future_collapse", &QRWEngine::simulate_future_collapse, 
-             py::arg("current_price"), py::arg("atr"), py::arg("steps"), 
-             py::arg("simulations"), py::arg("top_zone"), py::arg("bottom_zone"), 
-             py::arg("threshold_mult"));
+        .def("step", &QRWEngine::step,
+             py::arg("current_price"), py::arg("atr"), py::arg("current_momentum"));
 }

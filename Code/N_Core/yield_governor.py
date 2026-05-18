@@ -34,17 +34,15 @@ class YieldGovernor:
         self.shield_level = 0.0
         self.cooldown_counter = 0
 
-    def monitor_topology(self, df_slice: pd.DataFrame):
+    def monitor_topology(self, df_slice: pd.DataFrame, qrw_skew: float = 0.0):
         """
-        Recebe as últimas barras, constrói a Matriz de 10 Dimensões (Features)
-        e avalia o Tensor de Ricci em tempo real.
+        Recebe as últimas barras, constrói a Matriz de 10 Dimensões (Features),
+        avalia o Tensor de Ricci em tempo real e agora integra a Entropia Estocástica do QRW.
         """
         if len(df_slice) < self.danger_window:
             return {'deformation': 0.0, 'shield_active': False, 'shield_level': 0.0, 'is_collapsed': False}
 
         # 1. Feature Matrix Extraction (10D Tensor para Ricci)
-        # 0: Open, 1: High, 2: Low, 3: Close, 4: Tick Volume, 
-        # 5: Return Close, 6: Volatility, 7: Body, 8: UpperWick, 9: LowerWick
         data_10d = np.zeros((10, len(df_slice)))
         data_10d[0, :] = df_slice['open'].values
         data_10d[1, :] = df_slice['high'].values
@@ -64,30 +62,30 @@ class YieldGovernor:
         if len(ricci_scalar) < self.danger_window:
             return {'deformation': 0.0, 'shield_active': False, 'shield_level': 0.0, 'is_collapsed': False}
 
-        # Avalia a gravidade atual baseada no Z-Score reverso dinâmico
-        recent_window = ricci_scalar[-self.danger_window:]
-        mean_ricci = np.mean(recent_window)
-        std_ricci = np.std(recent_window) + 1e-9
-        
+        # Avalia a gravidade atual
         current_ricci = ricci_scalar[-1]
         
-        # Z-Score Absoluto: Captura poços gravitacionais (negativos) e explosões na métrica (positivos)
-        z_score_absoluto = abs(current_ricci - mean_ricci) / std_ricci
+        # [v2.5] ENTROPIA ESTOCÁSTICA (QRW SKEWNESS)
+        # Uma assimetria extrema (perto de 1.0 ou -1.0) ou bimodalidade causa instabilidade na onda.
+        stochastic_entropy = abs(qrw_skew)
         
-        # O Threshold dinâmico escala com a volatilidade ATR
-        atr = data_10d[6, -self.danger_window:].mean()
-        if atr < 1e-9: atr = 1.0
+        # 3. HISTERESE TOPOLÓGICA (ASI-5)
+        # Combinamos Ricci (Curvatura) com QRW (Assimetria)
+        z_score_absoluto = abs(current_ricci) / (np.std(ricci_scalar[-self.danger_window:]) + 1e-9)
         
-        # HISTERESE TOPOLÓGICA (ASI-5)
-        # Se Z-Score > 2.5, Shield Ativa e reseta o cooldown.
-        if z_score_absoluto > 2.5:
-            self.shield_level = min(1.0, (z_score_absoluto - 2.5) / 2.0)
+        # Se Z-Score > 2.5 ou Entropia Quântica > 0.8, Shield Ativa.
+        if z_score_absoluto > 2.5 or stochastic_entropy > 0.8:
+            # Shield level escala com o maior dos perigos
+            self.shield_level = max(
+                min(1.0, (z_score_absoluto - 2.5) / 2.0),
+                min(1.0, (stochastic_entropy - 0.7) * 3.0)
+            )
             self.shield_active = True
-            self.cooldown_counter = 5 # A gravidade demora 5 barras para se curar
+            self.cooldown_counter = 5 
         else:
             if self.cooldown_counter > 0:
                 self.cooldown_counter -= 1
-                self.shield_level = self.shield_level * 0.8 # Decaimento suave do shield
+                self.shield_level = self.shield_level * 0.8 
                 self.shield_active = True
             else:
                 self.shield_level = 0.0
@@ -98,10 +96,11 @@ class YieldGovernor:
         
         return {
             'deformation': current_ricci,
-            'z_score_reverso': z_score_absoluto, # Mantido o nome da chave por compatibilidade
+            'z_score_reverso': z_score_absoluto,
             'shield_active': self.shield_active,
             'shield_level': self.shield_level,
-            'is_collapsed': is_collapsed
+            'is_collapsed': is_collapsed,
+            'qrw_entropy': stochastic_entropy
         }
 
     def analyze_historical_danger(self, df_slice: pd.DataFrame, threshold: float = 2.5):

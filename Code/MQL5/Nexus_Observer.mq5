@@ -295,8 +295,8 @@ void DrawTacticalHUD(string &parts[])
 {
    if(ArraySize(parts) < 30) return;
    
-   // Fundo translúcido do painel expandido para 200px -> agora 225px
-   int x = 20, y = 20, w = 340, h = 225;
+   // Fundo translúcido do painel expandido para 200px -> agora 250px
+   int x = 20, y = 20, w = 340, h = 250;
    m_canvas.FillRectangle(x, y, x+w, y+h, ColorToARGB(clrBlack, 180));
    m_canvas.Rectangle(x, y, x+w, y+h, ColorToARGB(clrDimGray, 200));
    
@@ -370,6 +370,17 @@ void DrawTacticalHUD(string &parts[])
    
    m_canvas.TextOut(x + 15, y + 195, "SIGNAL RMT : ", ColorToARGB(clrLightGray, 255));
    m_canvas.TextOut(x + 100, y + 195, rmt_status, rmt_clr);
+
+   // 8. QRW (QUANTUM RANDOM WALK PROBABILITY)
+   string qrw_status = (ArraySize(parts) > 14) ? parts[14] : "UNKNOWN";
+   uint qrw_clr = ColorToARGB(clrLightGray, 255);
+   if(StringFind(qrw_status, "BULLISH") >= 0) qrw_clr = ColorToARGB(clrCyan, 255);
+   else if(StringFind(qrw_status, "BEARISH") >= 0) qrw_clr = ColorToARGB(clrMagenta, 255);
+   
+   if(StringFind(qrw_status, "BIMODAL") >= 0) qrw_clr = ColorToARGB(clrGold, 255);
+
+   m_canvas.TextOut(x + 15, y + 220, "QRW PROB.  : ", ColorToARGB(clrLightGray, 255));
+   m_canvas.TextOut(x + 100, y + 220, qrw_status, qrw_clr);
 }
 
 uint GetLushColor(double val, double age) 

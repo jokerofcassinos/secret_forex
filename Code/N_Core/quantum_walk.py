@@ -1,18 +1,21 @@
 import numpy as np
 import sys
 import os
+import pandas as pd
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine', 'bin'))
 sys.path.append(os.path.join(current_dir, '..', 'CPP_Engine'))
 
 try:
-    # Adiciona diretório raiz para localizar os .pyd
     root_path = os.path.dirname(os.path.dirname(current_dir))
     if root_path not in sys.path:
         sys.path.insert(0, root_path)
     if os.name == 'nt':
         os.add_dll_directory(root_path)
+        mingw_bin = r"D:\msys64\mingw64\bin"
+        if os.path.exists(mingw_bin):
+            os.add_dll_directory(mingw_bin)
 
     import qrw_engine
 except ImportError as e:
@@ -20,13 +23,12 @@ except ImportError as e:
 
 class QRWTracker:
     """
-    N-Core Agent: Quantum Random Walk (QRW) v3.2 - Predictive Engine
-    Mapeia a densidade de probabilidade futura e detecta a exaustão quântica (Singularidade).
-    Transforma o QRW de um gerador de sinais em um motor de mapeamento de realidade.
+    N-Core Agent: Quantum Random Walk (QRW) ASI-5
+    Opera via Matriz Unitária SU(2) e Amplitudes Complexas para previsão HFT com Paralelização OMP.
+    Agora de forma Stateful com Memória Neural de Onda.
     """
     def __init__(self, positions=401):
         try:
-            # Sincronização com binário v3.5 (QRWEngine)
             self.engine = qrw_engine.QRWEngine(positions)
             self.is_active = True
         except (NameError, AttributeError) as e:
@@ -36,72 +38,67 @@ class QRWTracker:
             
         self.num_positions = positions
         self.last_skew = 0.0
-        self.last_entropy = 0.0
-        self.last_variance = 0.0
-        self.scale_factor = 0.005 # Calibração para GER40
+        self.scale_factor = 0.005
+        self.history_max_probs = []
 
     def process_market_slice(self, df_slice):
-        """
-        Evolui a função de onda com base no fluxo de preços real.
-        Extrai as métricas de assimetria e coerência.
-        """
         if not self.is_active or len(df_slice) < 50:
             return 0.0, "OFFLINE"
 
         deltas = df_slice['close'].diff().fillna(0).values[-50:]
         volumes = df_slice['tick_volume'].values[-50:]
         
-        # Evolução quântica no Metal (C++)
         self.last_skew = self.engine.update_and_get_skew(deltas, volumes, self.scale_factor)
         
-        # Mapeamento de Regimes Quânticos
-        # Skewness > 0.08 indica acúmulo Bull
-        # Skewness < -0.08 indica distribuição Bear
-        signal = "QUANTUM_STABILITY"
-        if self.last_skew > 0.08: signal = "QUANTUM_ACCUMULATION_BULL"
-        elif self.last_skew < -0.08: signal = "QUANTUM_DISTRIBUTION_BEAR"
-        
-        return self.last_skew, signal
+        return self.last_skew, "QUANTUM_STABILITY"
 
-    def project_future_horizon(self, current_price, atr, plasma_zones, simulations=500):
-        """
-        Utiliza o motor C++ para 'ver o futuro' e detectar colapsos eminentes.
-        """
-        if not self.is_active:
-            return []
+    def project_future_horizon(self, df_slice, steps=100):
+        if not self.is_active or len(df_slice) < 14:
+            return {"bias": "NEUTRAL", "max_prob": 0.0, "is_bimodal": False, "distribution": np.array([])}
 
-        # Chama a simulação de massa no C++
-        breaches = self.engine.simulate_future_collapse(
-            current_price, 
-            atr, 
-            steps=40, 
-            simulations=simulations,
-            top_zone=plasma_zones['top_level'],
-            bottom_zone=plasma_zones['bottom_level'],
-            threshold_mult=1.5
-        )
+        current_price = df_slice['close'].iloc[-1]
         
-        return breaches
+        tr = df_slice['high'] - df_slice['low']
+        atr = tr.rolling(min(14, len(df_slice))).mean().iloc[-1]
+        if pd.isna(atr) or atr < 1e-9: atr = 1.0
+
+        body = df_slice['close'].iloc[-1] - df_slice['open'].iloc[-1]
+        momentum = np.clip(body / atr, -3.0, 3.0)
+
+        # Previsão ASI-5 (Stateful Step)
+        res = self.engine.step(current_price, atr, momentum)
+        
+        prob_right = res["prob_right"]
+        prob_left = res["prob_left"]
+        max_prob = res["max_prob"]
+        dist = res["distribution"]
+
+        # Limite Dinâmico Termodinâmico (Colapso)
+        self.history_max_probs.append(max_prob)
+        if len(self.history_max_probs) > 100:
+            self.history_max_probs.pop(0)
+
+        mu = np.mean(self.history_max_probs) if len(self.history_max_probs) > 5 else 0.0
+        sigma = np.std(self.history_max_probs) if len(self.history_max_probs) > 5 else 0.0
+        threshold = mu + 1.5 * sigma
+        
+        bias_str = "NEUTRAL"
+        is_bimodal = False
+
+        if max_prob > threshold and max_prob > 0.05:
+            if prob_right > prob_left * 2.0:
+                bias_str = "BULLISH_BIAS"
+            elif prob_left > prob_right * 2.0:
+                bias_str = "BEARISH_BIAS"
+
+        if prob_right >= 0.05 and prob_left >= 0.05 and abs(prob_right - prob_left) < 0.02:
+            if bias_str == "NEUTRAL": is_bimodal = True
+
+        return {"bias": bias_str, "max_prob": max_prob, "is_bimodal": is_bimodal, "distribution": dist}
 
     def get_probability_cloud(self):
-        """
-        Retorna a nuvem de probabilidade atualizada para renderização no HUD.
-        """
         if not self.is_active: return []
         return self.engine.get_probability_distribution()
 
-    def detect_singularity_exhaustion(self, current_price):
-        """
-        Identifica se a função de onda atingiu um ponto de singularidade 
-        onde o preço deve colapsar de volta à média.
-        """
-        if not self.is_active: return "NEUTRAL"
-        
-        # Se a assimetria for extrema e a coerência cair, temos uma Singularidade
-        if self.last_skew > 0.15: return "QUANTUM_EXHAUSTION_SHORT"
-        if self.last_skew < -0.15: return "QUANTUM_EXHAUSTION_LONG"
-        
-        return "NEUTRAL"
-
 if __name__ == "__main__":
-    print("QRW Predictive Engine v3.2 - Carregado com Sucesso.")
+    print("QRW Predictive Engine ASI-5 (Adaptive SU(2) Unitary Matrix) loaded.")

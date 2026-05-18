@@ -540,7 +540,8 @@ class AethelgardSwarm:
                         self.last_time = df.iloc[-1]['time']
 
                     # 0. YIELD GOVERNOR (AdS/CFT)
-                    y_gov = self.yield_governor.monitor_topology(df.tail(20))
+                    qrw_skew = q_state.get("qrw_skew", 0.0)
+                    y_gov = self.yield_governor.monitor_topology(df.tail(20), qrw_skew=qrw_skew)
                     ricci_c = y_gov.get("deformation", 0.0)
                     coll_s = "1" if y_gov.get("is_collapsed", False) else "0"
                     
@@ -563,6 +564,12 @@ class AethelgardSwarm:
                     # Bypass Tático: Passagem direta de sinais quânticos para evitar sanitização errônea
                     qrw_h = q_state.get("qrw_history", "0")
                     qrw_s = q_state.get("qrw_signal", "NEUTRAL")
+                    
+                    # Atualiza o cache visual do QRW para o MT5
+                    if qrw_s == "BULLISH_BIAS": self.qrw_cache[-1] = "1"
+                    elif qrw_s == "BEARISH_BIAS": self.qrw_cache[-1] = "2"
+                    else: self.qrw_cache[-1] = "0"
+                    
                     rmt_s = sanitize_signal(q_state.get("rmt_signal", "NEUTRAL"))
                     z_p_s = q_state.get("z_pinch_signal", "NEUTRAL")
 
@@ -621,9 +628,9 @@ class AethelgardSwarm:
                     self.qgc_node.scan_for_condensates(df)
                     qgc_tel = self.qgc_node.get_gravity_telemetry(df['close'].iloc[-1], len(df) - 1)
                     
-                    # 7. MAGNETOHYDRODYNAMICS (MHD - FIELD STRENGTH)
-                    mhd_field = (df['close'].diff().rolling(14).std() / (df['tick_volume'].rolling(14).mean() + 1e-9)).iloc[-1]
-                    mhd_strength = min(10.0, mhd_field * 100000)
+                    # 7. MAGNETOHYDRODYNAMICS (MHD IDEAL - v3.0)
+                    mhd_stability = q_state.get("mhd_stability", 100.0)
+                    mhd_strength = mhd_stability / 10.0 # Normaliza para escala 0-10 no HUD
                     
                     # Formata as zonas QGC para o MT5: "age|price|mass|ratio"
                     q_parts = []
@@ -651,6 +658,7 @@ class AethelgardSwarm:
                         "ksi_val": q_state.get("ksi_val", 0.0),
                         "precog_sl_long": q_state.get("precog_sl_long", df['close'].iloc[-1] - 30.0),
                         "precog_sl_short": q_state.get("precog_sl_short", df['close'].iloc[-1] + 30.0),
+                        "qrw_skew": qrw_skew
                     }
                     active_setups = self.setup_engine.evaluate(setup_ctx)
                     
@@ -726,7 +734,7 @@ class AethelgardSwarm:
                     self.bridge.enforce_quantum_boundary(df, None, None, q_state.get("is_collapsed", False))
 
                     # [FULL TELEMETRY + HEATMAP ANALYSIS]
-                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{qte_prob:.4f};{qte_advice};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells};{mhd_strength:.4f};{setup_tel};{','.join(self.setup_cache)}"
+                    nexus_data_str = f"0;0;{status_final};0;{','.join(self.regimes_cache)};{inst_avg:.2f};{health/100:.2f};{','.join(self.signals_cache)};{','.join(self.dots_cache)};{inst_avg:.2f};{q_state.get('cloud_str')};{lbm_s};{z_p_s};{rmt_s};{qrw_s};{','.join(self.lbm_cache)};{ricci_c:.4f};{h_ent:.4f};{','.join(self.cyt_danger_cache)};{sec_str};{','.join(self.sec_cache)};{rht_s};{coll_s};{qcd_s};{','.join(self.qcd_cache)};{self.qgc_data_str};{w_str};{qrw_h};{rht_h};{rht_f};{rht_fh};{qdd_fidelity:.4f};{qte_prob:.4f};{qte_advice};{qho_state.get('n')};{qho_state.get('stability'):.4f};{qho_state.get('status')};{qho_shells};{mhd_strength:.4f};{setup_tel};{','.join(self.setup_cache)};{','.join(self.qrw_cache)}"
                 else: time.sleep(0.01)
         except KeyboardInterrupt: self.shutdown()
 

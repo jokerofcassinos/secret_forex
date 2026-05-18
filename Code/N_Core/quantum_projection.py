@@ -25,36 +25,32 @@ class QuantumPreCognitionNode:
     def project_containment_horizon(self, df_slice, current_price, atr):
         """
         Calcula o 'Stop Loss de Singularidade' projetando o colapso do plasma no futuro.
-        Utiliza o Kernel C++ OMP-Accelerated para 500+ simulações em sub-milissegundos.
+        Utiliza o Kernel C++ OMP-Accelerated.
         """
         # 1. Obtém as zonas de plasma atuais (MHD)
         zones = self.mhd_simulator.scan_for_plasma_zones(df_slice)
         
         # 2. Executa a Projeção de Horizonte no Metal (C++)
-        # O kernel C++ já lida com o 'Escape Mode' se o preço estiver fora das zonas
-        containment_breach_levels = self.qrw_projector.project_future_horizon(
-            current_price, 
-            atr, 
-            zones,
-            simulations=self.sim_paths
-        )
+        # Passa o df_slice com os últimos 100 períodos
+        res = self.qrw_projector.project_future_horizon(df_slice.tail(100), steps=20)
         
-        if not containment_breach_levels:
-            # Fallback seguro caso a simulação retorne vazia
-            return {
-                'sl_bull_singular': zones['bottom_level'] - (atr * 2.0),
-                'sl_bear_singular': zones['top_level'] + (atr * 2.0),
-                'breach_prob': 0.0
-            }
-            
-        # 3. Cálculo de Singularidade (Percentis de Exaustão)
-        sl_bull = np.percentile(containment_breach_levels, 5) # Piso de falha para COMPRA
-        sl_bear = np.percentile(containment_breach_levels, 95) # Teto de falha para VENDA
+        # 3. Cálculo de Singularidade (Mapeado pelo Bias Quântico)
+        bias = res.get("bias", "NEUTRAL")
+        max_prob = res.get("max_prob", 0.0)
+        
+        sl_bull = zones['bottom_level'] - (atr * 2.0)
+        sl_bear = zones['top_level'] + (atr * 2.0)
+        
+        # Se houver ruptura de probabilidade massiva, expande o SL
+        if bias == "BULLISH_BIAS" and max_prob > 0.05:
+            sl_bull = current_price - (atr * 0.5) # Fuga Bullish, corta SL Bear
+        elif bias == "BEARISH_BIAS" and max_prob > 0.05:
+            sl_bear = current_price + (atr * 0.5)
         
         return {
             'sl_bull_singular': sl_bull,
             'sl_bear_singular': sl_bear,
-            'breach_prob': 0.0 # Placeholder, a probabilidade é intrínseca à dispersão
+            'breach_prob': max_prob
         }
 
 if __name__ == "__main__":

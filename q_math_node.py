@@ -137,16 +137,9 @@ class QMathNode:
             if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-300, df['high'].max()+300, 200, smagorinsky_cs=0.15)
             if self.plasma_tracker is None: self.plasma_tracker = PlasmaMarketTracker()
             if self.rmt_tracker is None: self.rmt_tracker = RandomMatrixTracker(100)
-            if self.qrw_tracker is None:
-                try: 
-                    import qrw_engine
-                    self.qrw_engine_core = qrw_engine.QRWEngine(401)
-                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': self.qrw_engine_core})
-                except Exception as e: 
-                    print(f"⚠️ Q-MATH :: QRW Engine fail: {e}")
-                    self.qrw_tracker = type('obj', (object,), {'last_history': [], 'engine': None})
             if self.qcd_tracker is None: self.qcd_tracker = MarketQCDTracker(20)
             if self.rht_tracker is None: self.rht_tracker = LiveRHTTracker(self.current_symbol, 300)
+            if self.qrw_tracker is None: self.qrw_tracker = QRWTracker(401)
             if self.precog_node is None: self.precog_node = QuantumPreCognitionNode(self.current_symbol)
 
             def run_schrodinger():
@@ -194,6 +187,22 @@ class QMathNode:
                 except Exception as e:
                     return {"lbm_signal": "LAMINAR_FLOW"}
 
+            def run_plasma():
+                try:
+                    # [v3.0] Magnetohydrodynamics (MHD Ideal)
+                    zones = self.plasma_tracker.scan_for_plasma_zones(df.tail(150))
+                    curr_c = df.iloc[-1]
+                    prev_c = df.iloc[-2] if len(df) > 1 else curr_c
+                    stability, sig, metrics = self.plasma_tracker.process_tick(curr_c, prev_c, zones, dt=0.01)
+                    
+                    return {
+                        "z_pinch_signal": sig,
+                        "mhd_stability": stability,
+                        "mhd_beta": metrics.get('beta', 1.0)
+                    }
+                except Exception as e:
+                    return {"z_pinch_signal": "NEUTRAL", "mhd_stability": 100.0, "mhd_beta": 1.0}
+
             def run_rmt():
                 try:
                     # Necessita o velocity array do LBM, mas se for assíncrono passamos None e ele ignora
@@ -202,20 +211,56 @@ class QMathNode:
                 except Exception as e:
                     return {"rmt_signal": "NOISE_DOMINANT"}
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            def run_qrw():
+                try:
+                    pti = getattr(self, "current_pti_context", 0.0)
+                    # [v2.5] Quantum Random Walk (Stateful ASI-5)
+                    # Usamos o momentum do PTI para acoplamento de massa
+                    res = self.qrw_tracker.project_future_horizon(df.tail(100), steps=6)
+                    qrw_sig = res.get("bias", "NEUTRAL")
+                    
+                    # Extração da distribuição para o histórico (Heatmap)
+                    dist = res.get("distribution", np.array([]))
+                    s_hex = "0"
+                    if len(dist) > 0:
+                        # Selecionamos picos para o histórico resumido (MT5)
+                        v_max = np.max(dist) + 1e-9
+                        norm_dist = np.clip(dist / v_max, 0, 1.0)
+                        # Amostragem de 50 pontos para o gráfico histórico
+                        indices = np.linspace(0, len(norm_dist)-1, 50, dtype=int)
+                        s_hex = "".join([f"{int(norm_dist[i]*99):02d}" for i in indices])
+
+                    return {
+                        "qrw_signal": qrw_sig,
+                        "qrw_skew": self.qrw_tracker.engine.get_skewness() if self.qrw_tracker.engine else 0.0,
+                        "qrw_history": s_hex
+                    }
+                except Exception as e:
+                    return {"qrw_signal": "NEUTRAL", "qrw_skew": 0.0, "qrw_history": "0"}
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
                 f_sch = executor.submit(run_schrodinger)
                 f_lbm = executor.submit(run_lbm)
+                f_pla = executor.submit(run_plasma)
                 f_rmt = executor.submit(run_rmt)
+                f_qrw = executor.submit(run_qrw)
                 results = f_sch.result()
                 results.update(f_lbm.result())
+                results.update(f_pla.result())
                 results.update(f_rmt.result())
+                results.update(f_qrw.result())
 
             with self.state_lock:
                 self.current_state.update({
                     "status": "ACTIVE", "latest_price": current_close,
                     "cloud_str": results.get("cloud_str", ""),
                     "lbm_signal": results.get("lbm_signal", "LAMINAR_FLOW"),
-                    "rmt_signal": results.get("rmt_signal", "NOISE_DOMINANT")
+                    "rmt_signal": results.get("rmt_signal", "NOISE_DOMINANT"),
+                    "qrw_signal": results.get("qrw_signal", "NEUTRAL"),
+                    "qrw_skew": results.get("qrw_skew", 0.0),
+                    "qrw_history": results.get("qrw_history", "0"),
+                    "z_pinch_signal": results.get("z_pinch_signal", "NEUTRAL"),
+                    "mhd_stability": results.get("mhd_stability", 100.0)
                 })
         except Exception as e: print(f"❌ Q-MATH :: Error: {e}")
 

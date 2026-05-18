@@ -33,6 +33,7 @@ class QuantumGlassNode:
     """
     def __init__(self):
         self.engine = qgc_engine.QGCEngine()
+        self.history_scanned = False
         
     def scan_for_condensates(self, df):
         if len(df) < 50: return
@@ -46,9 +47,8 @@ class QuantumGlassNode:
         # ATR Dinâmico para Decaimento de Hawking
         atr_series = (df['high'] - df['low']).rolling(14, min_periods=1).mean().fillna(10.0).values
         
-        # SCANNER HISTÓRICO: Na primeira execução ou em picos novos, popula o engine
-        active_count = len(self.engine.get_active_zones())
-        if active_count == 0:
+        # SCANNER HISTÓRICO: Executa apenas uma vez por inicialização/timeframe
+        if not self.history_scanned:
             print(f"[QGC-Node] Iniciando Scanner de Memória Histórica ASI-5...")
             lookback = min(800, len(df))
             for i in range(len(df) - lookback, len(df)):
@@ -56,6 +56,7 @@ class QuantumGlassNode:
                     self.engine.add_zone(df['close'].iloc[i], z_scores[i], float(i))
                 # Aplica a radiação de Hawking durante a passagem do tempo histórico
                 self.engine.update_evaporation(float(i), df['close'].iloc[i], atr_series[i])
+            self.history_scanned = True
         
         # Detecção de novos picos em tempo real
         last_idx = len(df) - 1
