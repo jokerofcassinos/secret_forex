@@ -70,14 +70,27 @@ class QMathNode:
             df = payload.get("data")
             if df is None or df.empty: return
             
+            data_mtf = payload.get("data_mtf", {})
+            df_h4 = data_mtf.get("h4", df)
+            df_m15 = data_mtf.get("m15", df)
+            df_m1 = data_mtf.get("m1", df)
+            
             tf = payload.get("timeframe")
             payload_sym = payload.get("symbol", self.current_symbol)
 
-            if (tf is not None and self.active_tf != tf) or (self.last_processed_symbol != payload_sym):
-                print(f"\n⚛️ Q-MATH :: Reset Dimensional para {payload_sym} ({tf})")
-                self.active_tf = tf; self.last_processed_symbol = payload_sym; self.current_symbol = payload_sym
+            tf_changed = (tf is not None and self.active_tf != tf)
+            sym_changed = (self.last_processed_symbol != payload_sym)
+
+            if sym_changed:
+                print(f"\n⚛️ Q-MATH :: Reset de Símbolo Absoluto para {payload_sym}")
+                self.last_processed_symbol = payload_sym; self.current_symbol = payload_sym
+                self.active_tf = tf
                 self.cloud_tracker = None; self.lbm_tracker = None; self.plasma_tracker = None
                 self.rmt_tracker = None; self.qrw_tracker = None; self.rht_tracker = None; self.qcd_tracker = None; self.precog_node = None
+            elif tf_changed:
+                print(f"\n⚛️ Q-MATH :: Salto Holográfico (Focus TF) para {tf}. Preservando tensores estruturais (D1/H4/M15).")
+                self.active_tf = tf
+                self.cloud_tracker = None  # Apenas a nuvem visual precisa de realinhamento de bounds
 
             current_close = df['close'].iloc[-1]
             # [v71.1] Global Re-anchoring: Absolute Reference Manifold recalculated every tick
@@ -134,7 +147,7 @@ class QMathNode:
                             self.cloud_trail.insert(0, f"{w_p_min:.2f}|{w_p_max:.2f}|{s_hex}")
                     print(f"✅ Q-MATH :: Campo Espectral v71.1 Materializado.")
 
-            if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df['low'].min()-300, df['high'].max()+300, 200, smagorinsky_cs=0.15)
+            if self.lbm_tracker is None: self.lbm_tracker = LBMFluidDynamics(df_m1['low'].min()-300, df_m1['high'].max()+300, 200, smagorinsky_cs=0.15)
             if self.plasma_tracker is None: self.plasma_tracker = PlasmaMarketTracker()
             if self.rmt_tracker is None: self.rmt_tracker = RandomMatrixTracker(100)
             if self.qcd_tracker is None: self.qcd_tracker = MarketQCDTracker(20)
@@ -181,18 +194,19 @@ class QMathNode:
                 
             def run_lbm():
                 try:
-                    l_den, l_vel, l_press, l_rey = self.lbm_tracker.process_tick_stream(df.tail(5), steps=2)
-                    lbm_sig = self.lbm_tracker.detect_squeeze_rupture(df.tail(150), l_den, l_vel, l_press, l_rey, current_regime=self.current_regime_context)
+                    # LBM no DataFrame MICRO (M1 - Gatilho Cinético)
+                    l_den, l_vel, l_press, l_rey = self.lbm_tracker.process_tick_stream(df_m1.tail(5), steps=2)
+                    lbm_sig = self.lbm_tracker.detect_squeeze_rupture(df_m1.tail(150), l_den, l_vel, l_press, l_rey, current_regime=self.current_regime_context)
                     return {"lbm_signal": lbm_sig}
                 except Exception as e:
                     return {"lbm_signal": "LAMINAR_FLOW"}
 
             def run_plasma():
                 try:
-                    # [v3.0] Magnetohydrodynamics (MHD Ideal)
-                    zones = self.plasma_tracker.scan_for_plasma_zones(df.tail(150))
-                    curr_c = df.iloc[-1]
-                    prev_c = df.iloc[-2] if len(df) > 1 else curr_c
+                    # [v3.0] Magnetohydrodynamics (MHD Ideal) no DataFrame MICRO (M1 - Reconexões Rápidas)
+                    zones = self.plasma_tracker.scan_for_plasma_zones(df_m1.tail(150))
+                    curr_c = df_m1.iloc[-1]
+                    prev_c = df_m1.iloc[-2] if len(df_m1) > 1 else curr_c
                     stability, sig, metrics = self.plasma_tracker.process_tick(curr_c, prev_c, zones, dt=0.01)
                     
                     return {
@@ -205,8 +219,8 @@ class QMathNode:
 
             def run_rmt():
                 try:
-                    # Necessita o velocity array do LBM, mas se for assíncrono passamos None e ele ignora
-                    rmt_sig = self.rmt_tracker.process_spectral_filter(df.tail(150), None)
+                    # RMT (Random Matrix Theory) no DataFrame MACRO ESTRUTURAL (H4)
+                    rmt_sig = self.rmt_tracker.process_spectral_filter(df_h4.tail(150), None)
                     return {"rmt_signal": rmt_sig}
                 except Exception as e:
                     return {"rmt_signal": "NOISE_DOMINANT"}
@@ -214,19 +228,16 @@ class QMathNode:
             def run_qrw():
                 try:
                     pti = getattr(self, "current_pti_context", 0.0)
-                    # [v2.5] Quantum Random Walk (Stateful ASI-5)
-                    # Usamos o momentum do PTI para acoplamento de massa
-                    res = self.qrw_tracker.project_future_horizon(df.tail(100), steps=6)
+                    # [v2.5] Quantum Random Walk no DataFrame MESO / TOPOLÓGICO (M15)
+                    res = self.qrw_tracker.project_future_horizon(df_m15.tail(100), steps=6)
                     qrw_sig = res.get("bias", "NEUTRAL")
                     
                     # Extração da distribuição para o histórico (Heatmap)
                     dist = res.get("distribution", np.array([]))
                     s_hex = "0"
                     if len(dist) > 0:
-                        # Selecionamos picos para o histórico resumido (MT5)
                         v_max = np.max(dist) + 1e-9
                         norm_dist = np.clip(dist / v_max, 0, 1.0)
-                        # Amostragem de 50 pontos para o gráfico histórico
                         indices = np.linspace(0, len(norm_dist)-1, 50, dtype=int)
                         s_hex = "".join([f"{int(norm_dist[i]*99):02d}" for i in indices])
 

@@ -266,13 +266,13 @@ void DrawQGCZones(string &parts[])
       StringSplit(zones[i], '|', sub);
       if(ArraySize(sub) < 4) continue; // age|price|mass|ratio
       
-      int age_bars = (int)StringToInteger(sub[0]); // Relative bars
+      datetime start_time = (datetime)StringToInteger(sub[0]); // Tempo Absoluto TQFM
       double price = StringToDouble(sub[1]);
       double mass = StringToDouble(sub[2]);
       double ratio = StringToDouble(sub[3]);
       
       int x1, y_start;
-      ChartTimePriceToXY(0, 0, iTime(_Symbol, _Period, age_bars), price, x1, y_start);
+      ChartTimePriceToXY(0, 0, start_time, price, x1, y_start);
       int x2, y_end;
       ChartTimePriceToXY(0, 0, iTime(_Symbol, _Period, 0), price, x2, y_end);
       

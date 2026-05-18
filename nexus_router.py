@@ -88,17 +88,42 @@ class NexusRouter:
                     time.sleep(1)
                     continue
 
-                # Extrai barras
-                rates = mt5.copy_rates_from_pos(self.symbol, self.timeframe, 0, 1000)
-                if rates is not None and len(rates) > 0:
-                    df = pd.DataFrame(rates)
+                # Extrai barras do TF principal e das Âncoras Dimensionais (Quadri-Dimensional TQFM)
+                payload_data = {}
+                
+                # 0. Focus TF (O gráfico atual do usuário - para renderização holográfica)
+                rates_focus = mt5.copy_rates_from_pos(self.symbol, self.timeframe, 0, 1000)
+                if rates_focus is not None and len(rates_focus) > 0:
+                    payload_data['focus'] = pd.DataFrame(rates_focus)
                     
-                    # Cria o pacote de dados com o timeframe novo embutido
+                # 1. Espectro DEEP MACRO (D1) - Curvatura do Universo e Gravidade Secular
+                rates_d1 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_D1, 0, 500)
+                if rates_d1 is not None and len(rates_d1) > 0:
+                    payload_data['d1'] = pd.DataFrame(rates_d1)
+                    
+                # 2. Espectro MACRO ESTRUTURAL (H4) - Memória de Longo Prazo e Marés
+                rates_h4 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_H4, 0, 800)
+                if rates_h4 is not None and len(rates_h4) > 0:
+                    payload_data['h4'] = pd.DataFrame(rates_h4)
+                    
+                # 3. Espectro MESO / TOPOLÓGICO (M15) - Alinhamento e Direção Tática
+                rates_m15 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M15, 0, 1000)
+                if rates_m15 is not None and len(rates_m15) > 0:
+                    payload_data['m15'] = pd.DataFrame(rates_m15)
+                    
+                # 4. Espectro MICRO / CINÉTICO (M1) - Gatilho, Turbulência e Execução HFT
+                rates_m1 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M1, 0, 1000)
+                if rates_m1 is not None and len(rates_m1) > 0:
+                    payload_data['m1'] = pd.DataFrame(rates_m1)
+
+                if 'focus' in payload_data:
+                    # Cria o pacote de dados estendido
                     payload = {
                         "symbol": self.symbol,
                         "timeframe": self.timeframe,
                         "timestamp": time.time(),
-                        "data": df
+                        "data": payload_data['focus'],  # Retrocompatibilidade
+                        "data_mtf": payload_data       # Arquitetura Quadri-Dimensional TQFM
                     }
                     
                     serialized = pickle.dumps(payload)

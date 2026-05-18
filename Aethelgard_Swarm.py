@@ -246,9 +246,13 @@ class AethelgardSwarm:
         except Exception:
             return None
 
-    def initialize_caches(self, df):
-        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando Malha Neural N-Core...")
+    def initialize_caches(self, df, data_mtf=None):
+        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] Sincronizando Malha Neural N-Core (Multi-Dimensional)...")
         window_calc = 200
+        
+        if data_mtf is None: data_mtf = {}
+        df_m15 = data_mtf.get("m15", df)
+        df_m1 = data_mtf.get("m1", df)
         
         high_low = df['high'] - df['low']
         high_close = np.abs(df['high'] - df['close'].shift(1))
@@ -266,7 +270,7 @@ class AethelgardSwarm:
             has_cpp_hist = False
 
         from Code.N_Core.fluid_dynamics import LBMFluidDynamics
-        p_min_global, p_max_global = df['low'].min() - 100, df['high'].max() + 100
+        p_min_global, p_max_global = df_m1['low'].min() - 100, df_m1['high'].max() + 100
         lbm_boot = LBMFluidDynamics(p_min_global, p_max_global, bins=100)
         
         from Code.N_Core.market_qcd import MarketQCDTracker
@@ -278,49 +282,51 @@ class AethelgardSwarm:
         from Code.N_Core.quantum_setups import QuantumSetupEngine
         setup_boot = QuantumSetupEngine()
         
-        self.regimes_cache = []
-        self.signals_cache = []
-        self.lbm_cache = []
-        self.z_pinch_cache = []
-        self.qrw_cache = []
-        self.qcd_cache = []
-        self.cyt_danger_cache = []
-        self.sec_cache = []
-        self.setup_cache = []
+        self.regimes_cache = ["0|0"] * len(df)
+        self.signals_cache = ["0"] * len(df)
+        self.lbm_cache = ["0"] * len(df)
+        self.z_pinch_cache = ["0"] * len(df)
+        self.qrw_cache = ["0"] * len(df)
+        self.qcd_cache = ["0"] * len(df)
+        self.cyt_danger_cache = ["0"] * len(df)
+        self.sec_cache = ["0|0|0"] * len(df)
+        self.setup_cache = ["0"] * len(df)
         
-        scores_hist = []
+        scores_hist = [0] * len(df)
         self.prev_s, self.prev_c = 0, 0
         
-        for i in range(len(df)):
+        # Pré-calcula os regimes no M15
+        m15_scores = []
+        ps, pc = 0, 0
+        print("⏳ Calculando Histórico de Regimes no M15 (Meso)...")
+        for i in range(len(df_m15)):
             if i < window_calc:
-                self.regimes_cache.append("0|0")
-                self.signals_cache.append("0")
-                self.lbm_cache.append("0")
-                self.z_pinch_cache.append("0")
-                self.qrw_cache.append("0")
-                self.setup_cache.append("0")
-                self.cyt_danger_cache.append("0")
-                scores_hist.append(0)
+                m15_scores.append((df_m15.iloc[i]['time'], 0, 0, 0.0))
                 continue
+            slice_m15 = df_m15.iloc[:i+1]
+            rs, conf, pti = self.q_logic.advanced_regime_score(slice_m15.tail(200), ps, pc)
+            m15_scores.append((df_m15.iloc[i]['time'], rs, conf, pti))
+            ps, pc = rs, conf
+        
+        # Indexa por tempo para interpolação rápida
+        m15_times = np.array([x[0] for x in m15_scores])
+        
+        print("⏳ Mapeando Dimensões (M15 -> Focus) e Calculando Cinética (M1)...")
+        for i in range(window_calc, len(df)):
+            curr_time = df.iloc[i]['time']
+            # Encontra o regime M15 mais recente até o tempo atual do Focus
+            idx_m15 = np.searchsorted(m15_times, curr_time, side='right') - 1
+            if idx_m15 >= 0:
+                _, r_score, conf, pti = m15_scores[idx_m15]
+            else:
+                r_score, conf, pti = 0, 0, 0.0
+                
+            self.last_pti = pti
+            self.prev_s, self.prev_c = r_score, conf
+            self.regimes_cache[i] = f"{r_score}|{conf}"
+            scores_hist[i] = r_score
             
             slice_df = df.iloc[:i+1]
-            curr_h = df.iloc[i]
-            r_score, conf, pti = self.q_logic.advanced_regime_score(slice_df.tail(200), self.prev_s, self.prev_c)
-            self.last_pti = pti # Feedback Loop v25.0
-            
-            # Bridge Padding Logic (v22.1)
-            norm_r = r_score % 10 if r_score > 10 else r_score
-            if norm_r != 0 and self.prev_s == 0:
-                last_p = self.prev_c // 100000000
-                gap_n = self.prev_c % 100
-                if last_p == norm_r and 0 < gap_n < 5:
-                    for j in range(1, gap_n + 1):
-                        if len(self.regimes_cache) >= j:
-                            self.regimes_cache[-j] = f"{r_score}|{conf}"
-            
-            self.prev_s, self.prev_c = r_score, conf
-            self.regimes_cache.append(f"{r_score}|{conf}")
-            self.signals_cache.append("0")
             
             lbm_sig_hist, cyt_danger_hist = "0", "0"
             if has_cpp_hist:
@@ -335,6 +341,7 @@ class AethelgardSwarm:
                     ricci_h = float(def_arr[-1]) if len(def_arr) > 0 else 0.0
                     if ricci_h >= 1.5: cyt_danger_hist = str(int(ricci_h * 100))
                     
+                    # Idealmente seria no M1, mas para inicialização usamos o Focus com lookback menor
                     l_den, l_vel = lbm_boot.process_tick_stream(slice_df.tail(5), steps=2)
                     if l_den is not None:
                         res_lbm = lbm_boot.detect_squeeze_rupture(slice_df.tail(150), l_den, l_vel, current_regime=r_score)
@@ -343,64 +350,58 @@ class AethelgardSwarm:
                         elif res_lbm == "FLUID_RUPTURE_BEAR": lbm_sig_hist = "2"
                 except: pass
             
-            self.lbm_cache.append(lbm_sig_hist)
-            self.cyt_danger_cache.append(cyt_danger_hist)
-            self.z_pinch_cache.append("0"); self.qrw_cache.append("0")
+            self.lbm_cache[i] = lbm_sig_hist
+            self.cyt_danger_cache[i] = cyt_danger_hist
             
+            curr_h = df.iloc[i]
             qcd_sig = qcd_hist_tracker.detect_fission(slice_df)
-            if "FISSION_EXPANSION_UP" in qcd_sig: self.qcd_cache.append("1")
-            elif "FISSION_EXPANSION_DOWN" in qcd_sig: self.qcd_cache.append("2")
-            elif "FISSION" in qcd_sig: self.qcd_cache.append("1" if curr_h['close'] > curr_h['open'] else "2")
-            else: self.qcd_cache.append("0")
-            
-            self.sec_cache.append("0|0|0")
-            if len(self.sec_cache) > 300: self.sec_cache.pop(0)
-            scores_hist.append(r_score)
+            if "FISSION_EXPANSION_UP" in qcd_sig: self.qcd_cache[i] = "1"
+            elif "FISSION_EXPANSION_DOWN" in qcd_sig: self.qcd_cache[i] = "2"
+            elif "FISSION" in qcd_sig: self.qcd_cache[i] = "1" if curr_h['close'] > curr_h['open'] else "2"
             
             # --- SETUP ENGINE BACKFILL ---
             try:
                 qho_h = qho_boot.calculate_quantum_state(slice_df)
-                ricci_h_val = 0.0
-                if has_cpp_hist:
-                    try: ricci_h_val = float(def_arr[-1]) if len(def_arr) > 0 else 0.0
-                    except: pass
                 lbm_sig_str = "LAMINAR_FLOW"
                 if lbm_sig_hist == "1": lbm_sig_str = "FLUID_RUPTURE_BULL"
                 elif lbm_sig_hist == "2": lbm_sig_str = "FLUID_RUPTURE_BEAR"
                 elif lbm_sig_hist == "3": lbm_sig_str = "BOSONIC_SQUEEZE"
                 
                 qcd_sig_str = "CONFINED"
-                if "FISSION_EXPANSION_UP" in qcd_sig: qcd_sig_str = "FISSION_EXPANSION_UP"
-                elif "FISSION_EXPANSION_DOWN" in qcd_sig: qcd_sig_str = "FISSION_EXPANSION_DOWN"
+                if self.qcd_cache[i] == "1": qcd_sig_str = "FISSION_EXPANSION_UP"
+                elif self.qcd_cache[i] == "2": qcd_sig_str = "FISSION_EXPANSION_DOWN"
                 
                 setup_ctx_h = {
-                    "regime": r_score, "conf": conf, "prev_regime": scores_hist[-2] if len(scores_hist) > 1 else 0,
+                    "regime": r_score, "conf": conf, "prev_regime": scores_hist[i-1] if i > 0 else 0,
                     "lbm_signal": lbm_sig_str, "qcd_signal": qcd_sig_str,
                     "rht_flash": 0.0, "rmt_signal": "NOISE_x1.0",
                     "qrw_signal": "NEUTRAL", "z_pinch_signal": "NEUTRAL",
                     "qgc_pull": 0.0, "qho_n": qho_h.get('n', 0), "qho_status": qho_h.get('status', ''),
                     "qte_prob": 0.0, "qte_advice": "STABLE_ORBIT",
-                    "qdd_fidelity": 0.0, "ricci": ricci_h_val,
+                    "qdd_fidelity": 0.0, "ricci": float(self.cyt_danger_cache[i])/100.0,
                     "is_collapsed": False, "sec_metrics": None,
                 }
                 hist_setups = setup_boot.evaluate(setup_ctx_h, backfill=True)
                 if hist_setups:
                     best = max(hist_setups, key=lambda s: s.get('confidence', 0))
-                    # Encode: setup number (1-7) * direction sign
-                    snum = int(best['setup'][1])  # S1..S7 → 1..7
+                    snum = int(best['setup'][1])
                     sdir = 1 if best['direction'] == 'LONG' else -1
-                    self.setup_cache.append(str(snum * sdir))
-                else:
-                    self.setup_cache.append("0")
-            except Exception:
-                self.setup_cache.append("0")
+                    self.setup_cache[i] = str(snum * sdir)
+            except Exception: pass
             
             if i == len(df) - 1 and has_cpp_hist:
                 try:
                     q_slc = df.tail(500)
                     m_thr = q_slc['tick_volume'].mean() * 2.0
                     res = qgc_hist.compute_hawking_decay(q_slc['close'].values, q_slc['tick_volume'].values, q_slc['atr_static'].fillna(0).values, m_thr)
-                    q_parts = [f"{int(a)}|{p:.2f}|{min(10.0, (m/m_thr)*2):.1f}" for m, p, a in zip(res.get("residual_masses", []), res.get("centers_of_mass", []), res.get("ages", [])) if m > 0]
+                    q_parts = []
+                    # Sincronização Absoluta de Eixo Temporal (Mapeia Index Histórico para Tempo Absoluto)
+                    for m, p, a in zip(res.get("residual_masses", []), res.get("centers_of_mass", []), res.get("ages", [])):
+                        if m > 0:
+                            z_idx = int(len(q_slc) - 1 - a)
+                            if 0 <= z_idx < len(q_slc):
+                                z_time = int(q_slc['time'].iloc[z_idx])
+                                q_parts.append(f"{z_time}|{p:.2f}|{min(10.0, (m/m_thr)*2):.1f}|1.0")
                     self.qgc_data_str = ",".join(q_parts)
                 except: pass
         
@@ -429,6 +430,7 @@ class AethelgardSwarm:
                 if self.symbol is None or mt5_sym != self.symbol or (current_mt5_tf is not None and self.active_tf != current_mt5_tf):
                     print(f"📡 SWARM :: {'Sintonização Inicial' if self.symbol is None else 'Salto Dimensional'} detectado! Símbolo: {mt5_sym} | TF: {current_mt5_tf}")
                     
+                    symbol_changed = (self.symbol != mt5_sym)
                     self.symbol = mt5_sym
                     self.active_tf = current_mt5_tf if current_mt5_tf is not None else self.active_tf
                     
@@ -437,8 +439,10 @@ class AethelgardSwarm:
                     self.bridge.initialize()
                     self.rht_tracker.symbol = self.symbol
                     self.pre_cognition.symbol = self.symbol
-                    self.qgc_node = QuantumGlassNode() # Reset QGC on TF Change
-                    self.qgc_data_str = ""
+                    
+                    if symbol_changed or self.qgc_node is None:
+                        self.qgc_node = QuantumGlassNode() # Reset QGC apenas se o símbolo mudar
+                        self.qgc_data_str = ""
                     
                     self.regimes_cache.clear(); self.sec_cache.clear(); self.dots_cache.clear()
                     self.qcd_cache.clear(); self.cyt_danger_cache.clear(); self.last_time = 0
@@ -451,17 +455,23 @@ class AethelgardSwarm:
                     
                     time.sleep(0.5)
 
-                latest_df = None
+                latest_payload = None
                 while True:
                     try:
                         msg = self.sub_socket.recv_multipart(flags=zmq.NOBLOCK)
                         if msg[0].decode('utf-8') == TOPIC_MARKET_BAR:
-                            latest_df = pickle.loads(msg[1]).get("data")
+                            latest_payload = pickle.loads(msg[1])
                     except zmq.Again: break
                     except: break
                         
-                if latest_df is not None:
-                    df = latest_df
+                if latest_payload is not None:
+                    df = latest_payload.get("data")
+                    data_mtf = latest_payload.get("data_mtf", {})
+                    df_d1 = data_mtf.get("d1", df)
+                    df_h4 = data_mtf.get("h4", df)
+                    df_m15 = data_mtf.get("m15", df)
+                    df_m1 = data_mtf.get("m1", df)
+                    
                     if not self.regimes_cache: self.initialize_caches(df)
                     
                     # 1. CONSULTA À FÍSICA (REQ-REP) - ANTES DO SCORE DE REGIME
@@ -469,7 +479,8 @@ class AethelgardSwarm:
                     q_state = self.fetch_quantum_state(current_regime=self.prev_s)
                     
                     window_calc = 200
-                    r_score, conf, pti = self.q_logic.advanced_regime_score(df.tail(window_calc), self.prev_s, self.prev_c, q_math_data=q_state)
+                    # REGIME SCORE opera no MESO / TOPOLÓGICO (M15)
+                    r_score, conf, pti = self.q_logic.advanced_regime_score(df_m15.tail(window_calc), self.prev_s, self.prev_c, q_math_data=q_state)
                     self.last_pti = pti # Atualiza para o próximo ciclo (Superfluidez v25.0)
                     
                     if q_state and q_state.get("status") == "ACTIVE":
@@ -539,9 +550,9 @@ class AethelgardSwarm:
                         self.prev_s, self.prev_c = r_score, conf
                         self.last_time = df.iloc[-1]['time']
 
-                    # 0. YIELD GOVERNOR (AdS/CFT)
+                    # 0. YIELD GOVERNOR (AdS/CFT) opera no DEEP MACRO (D1)
                     qrw_skew = q_state.get("qrw_skew", 0.0)
-                    y_gov = self.yield_governor.monitor_topology(df.tail(20), qrw_skew=qrw_skew)
+                    y_gov = self.yield_governor.monitor_topology(df_d1.tail(20), qrw_skew=qrw_skew)
                     ricci_c = y_gov.get("deformation", 0.0)
                     coll_s = "1" if y_gov.get("is_collapsed", False) else "0"
                     
@@ -595,10 +606,11 @@ class AethelgardSwarm:
 
                     rht_f = q_state.get("rht_flash", 0.0)
                     rht_fh = q_state.get("rht_flash_history", "")
-                    # 8. GESTÃO DE SINGULARIDADE (R-EXEC)
+                    
+                    # 8. GESTÃO DE SINGULARIDADE (R-EXEC) opera no MICRO (M1)
                     # Calcula o Horizonte de Singularidade e atualiza os SLs no MT5
-                    tr_recent = (df['high'] - df['low']).tail(14).mean()
-                    precog_res = self.pre_cognition.project_containment_horizon(df, df['close'].iloc[-1], tr_recent)
+                    tr_recent = (df_m1['high'] - df_m1['low']).tail(14).mean()
+                    precog_res = self.pre_cognition.project_containment_horizon(df_m1, df['close'].iloc[-1], tr_recent)
                     
                     self.bridge.thermodynamic_sl_tp(
                         r_score, 
@@ -614,19 +626,19 @@ class AethelgardSwarm:
                     sync_data = self.bridge.fetch_sync_multi_tf(count=self.tensor_network.lookback + 20)
                     qdd_fidelity = self.tensor_network.calculate_global_alignment(sync_data)
                     
-                    # 4. CÁLCULO DE TUNELAMENTO (QTE - TAKE PROFIT QUÂNTICO)
+                    # 4. CÁLCULO DE TUNELAMENTO (QTE - TAKE PROFIT QUÂNTICO) no MICRO (M1)
                     # Sincronização: O Q-Math envia como 'cloud_prob'
                     q_density = q_state.get("cloud_prob", [])
-                    qte_prob = self.qte_engine.calculate_exit_probability(df, df['close'].iloc[-1], q_density)
+                    qte_prob = self.qte_engine.calculate_exit_probability(df_m1, df['close'].iloc[-1], q_density)
                     qte_advice = self.qte_engine.get_tp_advice(qte_prob)
                     
-                    # 5. CÁLCULO DE OSCILAÇÃO (QHO - ESTABILIDADE QUÂNTICA)
-                    qho_state = self.qho_engine.calculate_quantum_state(df)
+                    # 5. CÁLCULO DE OSCILAÇÃO (QHO - ESTABILIDADE QUÂNTICA) no MESO (M15)
+                    qho_state = self.qho_engine.calculate_quantum_state(df_m15)
                     qho_shells = ",".join([f"{p:.2f}" for p in qho_state.get('shells', [])])
                     
-                    # 6. CÁLCULO DE GRAVIDADE (QGC - REAL TIME SCAN)
-                    self.qgc_node.scan_for_condensates(df)
-                    qgc_tel = self.qgc_node.get_gravity_telemetry(df['close'].iloc[-1], len(df) - 1)
+                    # 6. CÁLCULO DE GRAVIDADE (QGC - REAL TIME SCAN) no MACRO (H4)
+                    self.qgc_node.scan_for_condensates(df_h4)
+                    qgc_tel = self.qgc_node.get_gravity_telemetry(df['close'].iloc[-1], len(df_h4) - 1)
                     
                     # 7. MAGNETOHYDRODYNAMICS (MHD IDEAL - v3.0)
                     mhd_stability = q_state.get("mhd_stability", 100.0)
