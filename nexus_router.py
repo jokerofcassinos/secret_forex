@@ -73,6 +73,8 @@ class NexusRouter:
                         if new_sym and new_sym != self.symbol:
                             self.symbol = new_sym
                             self.bridge.symbol = new_sym
+                            self.bridge.initialize() # Força seleção no Market Watch
+                            self.bridge.fetch_full_history(count=1000) # Força o MT5 a baixar os dados para a RAM
                             print(f"\n📡 NEXUS ROUTER :: Ativo sintonizado: {self.symbol}")
                             
                         # Sincronização de Timeframe
@@ -92,26 +94,33 @@ class NexusRouter:
                 payload_data = {}
                 
                 # 0. Focus TF (O gráfico atual do usuário - para renderização holográfica)
+                # print(f"DEBUG: Fetching Focus TF {self.timeframe}")
                 rates_focus = mt5.copy_rates_from_pos(self.symbol, self.timeframe, 0, 1000)
                 if rates_focus is not None and len(rates_focus) > 0:
                     payload_data['focus'] = pd.DataFrame(rates_focus)
+                else:
+                    print(f"⚠️ NEXUS ROUTER :: Falha ao extrair Focus TF ({self.timeframe}) para {self.symbol}. Terminal ocupado ou sem dados.")
                     
                 # 1. Espectro DEEP MACRO (D1) - Curvatura do Universo e Gravidade Secular
+                # print("DEBUG: Fetching D1")
                 rates_d1 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_D1, 0, 500)
                 if rates_d1 is not None and len(rates_d1) > 0:
                     payload_data['d1'] = pd.DataFrame(rates_d1)
                     
                 # 2. Espectro MACRO ESTRUTURAL (H4) - Memória de Longo Prazo e Marés
+                # print("DEBUG: Fetching H4")
                 rates_h4 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_H4, 0, 800)
                 if rates_h4 is not None and len(rates_h4) > 0:
                     payload_data['h4'] = pd.DataFrame(rates_h4)
                     
                 # 3. Espectro MESO / TOPOLÓGICO (M15) - Alinhamento e Direção Tática
+                # print("DEBUG: Fetching M15")
                 rates_m15 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M15, 0, 1000)
                 if rates_m15 is not None and len(rates_m15) > 0:
                     payload_data['m15'] = pd.DataFrame(rates_m15)
                     
                 # 4. Espectro MICRO / CINÉTICO (M1) - Gatilho, Turbulência e Execução HFT
+                # print("DEBUG: Fetching M1")
                 rates_m1 = mt5.copy_rates_from_pos(self.symbol, mt5.TIMEFRAME_M1, 0, 1000)
                 if rates_m1 is not None and len(rates_m1) > 0:
                     payload_data['m1'] = pd.DataFrame(rates_m1)

@@ -150,6 +150,8 @@ class AethelgardSwarm:
         self.is_sovereign = False
         self.qgc_data_str = ""
         self.last_pti = 0.0 # Feedback Loop v25.0
+        self.tf_change_pending = None
+        self.tf_change_time = 0.0
         
         self.sub_context, self.sub_socket = create_subscriber(PORT_TICK_FEED, TOPIC_MARKET_BAR)
         self.req_context, self.req_socket = create_request_client(PORT_Q_MATH)
@@ -426,35 +428,50 @@ class AethelgardSwarm:
                     time.sleep(1)
                     continue
 
-                # Sintonização Inicial ou Mudança Detectada
-                if self.symbol is None or mt5_sym != self.symbol or (current_mt5_tf is not None and self.active_tf != current_mt5_tf):
+                # Sintonização Inicial ou Mudança de Símbolo
+                symbol_changed = (mt5_sym is not None and self.symbol != mt5_sym)
+
+                # Lógica de Debounce para Timeframe (Anti-Oscilação para múltiplos gráficos)
+                tf_changed_now = (current_mt5_tf is not None and self.active_tf != current_mt5_tf)
+
+                tf_ready = False
+                if tf_changed_now and not symbol_changed:
+                    if self.tf_change_pending != current_mt5_tf:
+                        self.tf_change_pending = current_mt5_tf
+                        self.tf_change_time = time.time()
+                    elif time.time() - self.tf_change_time > 2.0:
+                        # TF estabilizou por 2 segundos.
+                        tf_ready = True
+                        self.tf_change_pending = None
+                else:
+                    self.tf_change_pending = None
+
+                if self.symbol is None or symbol_changed or tf_ready:
                     print(f"📡 SWARM :: {'Sintonização Inicial' if self.symbol is None else 'Salto Dimensional'} detectado! Símbolo: {mt5_sym} | TF: {current_mt5_tf}")
-                    
-                    symbol_changed = (self.symbol != mt5_sym)
+
                     self.symbol = mt5_sym
                     self.active_tf = current_mt5_tf if current_mt5_tf is not None else self.active_tf
-                    
+
                     # Atualiza pontes e trackers
                     self.bridge.symbol = self.symbol
                     self.bridge.initialize()
                     self.rht_tracker.symbol = self.symbol
                     self.pre_cognition.symbol = self.symbol
-                    
-                    if symbol_changed or self.qgc_node is None:
-                        self.qgc_node = QuantumGlassNode() # Reset QGC apenas se o símbolo mudar
+
+                    if symbol_changed or self.symbol is None:
+                        if self.qgc_node is None: self.qgc_node = QuantumGlassNode()
                         self.qgc_data_str = ""
-                    
-                    self.regimes_cache.clear(); self.sec_cache.clear(); self.dots_cache.clear()
-                    self.qcd_cache.clear(); self.cyt_danger_cache.clear(); self.last_time = 0
-                    
+                        self.regimes_cache.clear(); self.sec_cache.clear(); self.dots_cache.clear()
+                        self.qcd_cache.clear(); self.cyt_danger_cache.clear(); self.last_time = 0
+                        self.setup_cache.clear()
+
                     ctrl_payload = pickle.dumps({"action": "CHANGE_TF", "timeframe": self.active_tf, "symbol": self.symbol})
                     self.ctrl_socket.send_multipart([TOPIC_CONTROL.encode('utf-8'), ctrl_payload])
-                    
-                    # Temporal Manifold Reconstruction Trigger (Reactivated for Zero-Lag HFT v71.1)
-                    self.sync_history(self.symbol, self.active_tf, count=801)
-                    
-                    time.sleep(0.5)
 
+                    # Temporal Manifold Reconstruction Trigger em Thread Separada (Non-Blocking)
+                    threading.Thread(target=self.sync_history, args=(self.symbol, self.active_tf, 801), daemon=True).start()
+
+                    time.sleep(0.5)
                 latest_payload = None
                 while True:
                     try:
@@ -472,7 +489,7 @@ class AethelgardSwarm:
                     df_m15 = data_mtf.get("m15", df)
                     df_m1 = data_mtf.get("m1", df)
                     
-                    if not self.regimes_cache: self.initialize_caches(df)
+                    if not self.regimes_cache: self.initialize_caches(df, data_mtf)
                     
                     # 1. CONSULTA À FÍSICA (REQ-REP) - ANTES DO SCORE DE REGIME
                     # Buscamos os tensores de criticalidade para o QPT (Quantum Phase Transition)
@@ -644,13 +661,17 @@ class AethelgardSwarm:
                     mhd_stability = q_state.get("mhd_stability", 100.0)
                     mhd_strength = mhd_stability / 10.0 # Normaliza para escala 0-10 no HUD
                     
-                    # Formata as zonas QGC para o MT5: "age|price|mass|ratio"
+                    # Formata as zonas QGC para o MT5 usando Timestamp Absoluto
                     q_parts = []
                     for z in qgc_tel['active_zones']:
                         v_mass = max(2.0, z.get('mass', 2.0) * 1.5)
-                        z_age = int(z.get('age', 0))
                         z_ratio = z.get('ratio', 1.0)
-                        q_parts.append(f"{z_age}|{z.get('price', 0.0):.2f}|{v_mass:.2f}|{z_ratio:.2f}")
+                        
+                        # Converte a idade em barras relativas de volta para o Index original no df_h4
+                        z_idx = int(len(df_h4) - 1 - z.get('age', 0))
+                        if 0 <= z_idx < len(df_h4):
+                            z_time = int(df_h4['time'].iloc[z_idx])
+                            q_parts.append(f"{z_time}|{z.get('price', 0.0):.2f}|{v_mass:.2f}|{z_ratio:.2f}")
                     
                     self.qgc_data_str = ",".join(q_parts)
 
@@ -664,7 +685,8 @@ class AethelgardSwarm:
                         "qho_n": qho_state.get('n', 0), "qho_status": qho_state.get('status', ''),
                         "qho_shells": qho_state.get('shells', []), "atr": df['high'].iloc[-20:].max() - df['low'].iloc[-20:].min() if len(df) > 20 else 10.0,
                         "qte_prob": qte_prob, "qte_advice": qte_advice,
-                        "qdd_fidelity": qdd_fidelity, "ricci": ricci_c,
+                        "qdd_fidelity": 0.0, # qdd_fidelity será atualizado abaixo
+                        "ricci": ricci_c,
                         "is_collapsed": q_state.get("is_collapsed", False),
                         "sec_metrics": q_state.get("sec_metrics"),
                         "ksi_val": q_state.get("ksi_val", 0.0),
@@ -672,6 +694,19 @@ class AethelgardSwarm:
                         "precog_sl_short": q_state.get("precog_sl_short", df['close'].iloc[-1] + 30.0),
                         "qrw_skew": qrw_skew
                     }
+                    
+                    # 3. EXTRAÇÃO MULTI-TIMEFRAME PARA QDD (Sem calls bloqueantes ao MT5)
+                    # O QDD precisa de M1, M5, M15 com datetime index
+                    sync_data = {}
+                    for name, d_mtf in [("M1", df_m1), ("M15", df_m15), ("H4", df_h4)]:
+                        df_qdd = d_mtf.copy()
+                        df_qdd['time'] = pd.to_datetime(df_qdd['time'], unit='s')
+                        df_qdd.set_index('time', inplace=True)
+                        sync_data[name] = df_qdd[['close']]
+                        
+                    qdd_fidelity = self.tensor_network.calculate_global_alignment(sync_data)
+                    setup_ctx["qdd_fidelity"] = qdd_fidelity
+                    
                     active_setups = self.setup_engine.evaluate(setup_ctx)
                     
                     # 9. ADAPTIVE NEURAL ZONES (ANZ) - Gestão de Risco Híbrida

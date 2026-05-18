@@ -53,16 +53,11 @@ class MT5NeuralBridge:
         return sync_data
 
     def fetch_full_history(self, count=10000):
-        import gc
-        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🧠 Iniciando Brain Scan Estrutural...")
+        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] 🧠 Iniciando Aquecimento de Cache Dimensional (MTF)...")
         for name, tf in self.timeframes.items():
-            rates = mt5.copy_rates_from_pos(self.symbol, tf, 0, count)
-            if rates is None or len(rates) == 0: continue
-            df = pd.DataFrame(rates)
-            df['time'] = pd.to_datetime(df['time'], unit='s')
-            file_name = f"{self.data_path}{self.symbol}_{name}.parquet"
-            df.to_parquet(file_name)
-            del df; del rates; gc.collect() 
+            # Realiza um fetch leve apenas para forçar o MetaTrader a baixar os dados do servidor (Cache Warm-Up)
+            mt5.copy_rates_from_pos(self.symbol, tf, 0, count)
+        print(f"[{pd.Timestamp.now().strftime('%H:%M:%S')}] ✅ Cache Dimensional Aquecido.")
         return True
 
     def thermodynamic_sl_tp(self, r_score, current_price, atr, plasma_zones, schrodinger_density, cloud_tracker, precog_res=None):

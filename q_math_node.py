@@ -88,9 +88,9 @@ class QMathNode:
                 self.cloud_tracker = None; self.lbm_tracker = None; self.plasma_tracker = None
                 self.rmt_tracker = None; self.qrw_tracker = None; self.rht_tracker = None; self.qcd_tracker = None; self.precog_node = None
             elif tf_changed:
-                print(f"\n⚛️ Q-MATH :: Salto Holográfico (Focus TF) para {tf}. Preservando tensores estruturais (D1/H4/M15).")
+                print(f"\n⚛️ Q-MATH :: Salto Holográfico (Focus TF) para {tf}. Nenhuma física foi alterada.")
                 self.active_tf = tf
-                self.cloud_tracker = None  # Apenas a nuvem visual precisa de realinhamento de bounds
+                # NÃO reseta o cloud_tracker. O re-anchoring dinâmico na linha 85 cuidará do reposicionamento.
 
             current_close = df['close'].iloc[-1]
             # [v71.1] Global Re-anchoring: Absolute Reference Manifold recalculated every tick
